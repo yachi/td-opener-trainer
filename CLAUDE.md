@@ -77,10 +77,10 @@
 **Correction**: "check the screen" (repeatedly)
 **Rule**: Playwright sessions have their own localStorage. Changes made in headless Playwright don't affect the user's browser. To change user's state, either add a UI feature (skip button) or instruct them clearly.
 
-### 16. "check the screen" means actually look at what was rendered
-**Mistake**: Multiple times I told the user what they "should see" without verifying via screenshot.
-**Correction**: "check the screen" / "show me" / "prove it" / "did you verify in browser"
-**Rule**: Every time UI changes, screenshot → read → confirm before responding. The user should never have to ask me to check.
+### 16. "check the screen" — verify the FULL flow, not just one screenshot
+**Mistake**: Multiple times I told the user what they "should see" without verifying via screenshot. Even when I did screenshot, I only checked one step — not the full user journey.
+**Correction**: "check the screen" / "show me" / "prove it" / "can you try all the new flow yourself, dont waste my time"
+**Rule**: After any UI change, test the ENTIRE flow end-to-end with Playwright (start → navigate → interact → verify each screen). Screenshot and READ every step. The user should never have to ask me to check.
 
 ### 17. Check local files the user gave you before searching the web
 **Mistake**: User saved the Hard Drop wiki page to `/tmp/Honey Cup - Hard Drop Tetris Wiki.mhtml`. I kept trying to WebFetch harddrop.com (403 errors) and searching the web repeatedly instead of reading the file the user already provided.
@@ -91,6 +91,11 @@
 **Mistake**: Multiple times I jumped into implementation or spawned agents without considering whether the approach was right. Built a quiz before teaching. Built a visualizer with wrong data. Researched for hours before delivering value.
 **Correction**: "step back and think about the big picture and what you should do" (said twice)
 **Rule**: Before spawning agents or writing code, ask: "Does this actually help the user learn the 4 openers they asked about?" If the answer is unclear, stop and ask — or just teach them directly.
+
+### 19. UI instructions must be clearly visible, not faint
+**Mistake**: The celebration screen showed "[Space] to continue" in faint gray (#666688). User asked "how to go to next after ms2" because they couldn't see the instruction.
+**Correction**: "how to go to next after ms2"
+**Rule**: Any actionable instruction (press Space, press N to skip) must be clearly visible — use a contrasting color, not faint gray. If a user asks "how do I go to the next screen," the UI has failed.
 
 ## Technical Reference
 
