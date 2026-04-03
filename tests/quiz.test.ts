@@ -157,9 +157,10 @@ describe('canBuild() conditions', () => {
     expect(OPENERS.ms2.canBuild(bag)).toBe(true);
   });
 
-  test('MS2: S before J → NOT buildable', () => {
-    const bag: PieceType[] = ['S', 'I', 'J', 'O', 'T', 'Z', 'L'];
-    expect(OPENERS.ms2.canBuild(bag)).toBe(false);
+  test('MS2: L before J → normal side NOT buildable (use mirror)', () => {
+    const bag: PieceType[] = ['L', 'I', 'J', 'O', 'T', 'Z', 'S'];
+    expect(OPENERS.ms2.canBuild(bag)).toBe(false);     // normal fails
+    expect(OPENERS.ms2.canBuildMirror(bag)).toBe(true); // mirror works
   });
 
   test('MS2 mirror: L before Z → buildable', () => {

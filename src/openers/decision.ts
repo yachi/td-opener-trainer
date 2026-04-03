@@ -34,16 +34,16 @@ function appearsBefore(bag: PieceType[], a: PieceType, b: PieceType): boolean {
 
 export const DECISION_PIECES: Record<OpenerID, { pieces: PieceType[]; rule: string }> = {
   honey_cup: { pieces: ['L', 'O', 'T'], rule: 'L must NOT be last among L/O/T' },
-  ms2: { pieces: ['J', 'S'], rule: 'J must appear before S' },
-  gamushiro: { pieces: ['J', 'S'], rule: 'J must appear before S' },
+  ms2: { pieces: ['J', 'L'], rule: 'J must appear before L (hold L)' },
+  gamushiro: { pieces: ['J', 'L'], rule: 'J must appear before L (hold L)' },
   stray_cannon: { pieces: ['L', 'J', 'S'], rule: 'L must NOT be last among L/J/S' },
 };
 
 /** Mirror-side decision piece groups. */
 const DECISION_PIECES_MIRROR: Record<OpenerID, { pieces: PieceType[]; rule: string }> = {
   honey_cup: { pieces: ['J', 'O', 'T'], rule: 'J must NOT be last among J/O/T' },
-  ms2: { pieces: ['L', 'Z'], rule: 'L must appear before Z' },
-  gamushiro: { pieces: ['L', 'Z'], rule: 'L must appear before Z' },
+  ms2: { pieces: ['L', 'J'], rule: 'L must appear before J (hold J)' },
+  gamushiro: { pieces: ['L', 'J'], rule: 'L must appear before J (hold J)' },
   stray_cannon: { pieces: ['J', 'L', 'Z'], rule: 'J must NOT be last among J/L/Z' },
 };
 
@@ -70,9 +70,9 @@ export const OPENERS: Record<OpenerID, OpenerDefinition> = {
     nameCn: '山岳炮',
     holdPiece: 'L',
     holdPieceMirror: 'J',
-    setupRate: { oneSide: 0.50, withMirror: 0.75 },
-    canBuild: (bag) => appearsBefore(bag, 'J', 'S'),
-    canBuildMirror: (bag) => appearsBefore(bag, 'L', 'Z'),
+    setupRate: { oneSide: 0.50, withMirror: 1.0 },
+    canBuild: (bag) => appearsBefore(bag, 'J', 'L'),
+    canBuildMirror: (bag) => appearsBefore(bag, 'L', 'J'),
     priority: 2,
   },
 
@@ -83,9 +83,9 @@ export const OPENERS: Record<OpenerID, OpenerDefinition> = {
     nameCn: '糖漿炮',
     holdPiece: 'L',
     holdPieceMirror: 'J',
-    setupRate: { oneSide: 0.50, withMirror: 0.75 },
-    canBuild: (bag) => appearsBefore(bag, 'J', 'S'),
-    canBuildMirror: (bag) => appearsBefore(bag, 'L', 'Z'),
+    setupRate: { oneSide: 0.50, withMirror: 1.0 },
+    canBuild: (bag) => appearsBefore(bag, 'J', 'L'),
+    canBuildMirror: (bag) => appearsBefore(bag, 'L', 'J'),
     priority: 3,
   },
 

@@ -157,7 +157,12 @@ export function recordDrillAnswer(
 
   if (bag) {
     const def = OPENERS[openerId];
-    const actuallyBuildable = def.canBuild(bag) || def.canBuildMirror(bag);
+    // For openers always buildable with mirror (MS2, Stray Cannon),
+    // drill checks normal-side only to create meaningful yes/no variation
+    const alwaysWithMirror = def.setupRate.withMirror >= 1.0;
+    const actuallyBuildable = alwaysWithMirror
+      ? def.canBuild(bag)
+      : def.canBuild(bag) || def.canBuildMirror(bag);
     isCorrect = answer === actuallyBuildable;
   } else {
     // No bag provided — treat the answer as pre-computed correctness
@@ -179,29 +184,30 @@ export function recordDrillAnswer(
 const WORKED_EXAMPLES: Record<string, WorkedExample[]> = {
   ms2: [
     {
-      // Positive: J before S → buildable
+      // Positive: J before L → hold L, build normal side
       bag: ['J', 'I', 'S', 'O', 'T', 'Z', 'L'] as PieceType[],
       expectedAnswer: true,
       explanation:
-        'J appears at position 1 and S at position 3. Since J comes before S, MS2 is buildable.',
-      decisionPieces: ['J', 'S'] as PieceType[],
+        'J appears at position 1 and L at position 7. J comes first → hold L, build normal side.',
+      decisionPieces: ['J', 'L'] as PieceType[],
       steps: [
-        { instruction: 'Find J and S in the bag', highlight: ['J', 'S'] as PieceType[] },
-        { instruction: 'Check their order: J is at position 1, S is at position 3' },
-        { instruction: 'J comes before S → MS2 is buildable ✓' },
+        { instruction: 'Find J and L in the bag', highlight: ['J', 'L'] as PieceType[] },
+        { instruction: 'Check their order: J is at position 1, L is at position 7' },
+        { instruction: 'J comes first → hold L → MS2 buildable (normal side) ✓' },
       ],
     },
     {
-      // Negative: S before J → not buildable, and Z before L → mirror not buildable
-      bag: ['S', 'Z', 'I', 'J', 'L', 'O', 'T'] as PieceType[],
+      // Negative (normal side): L before J → normal side doesn't work
+      // (mirror side works, but we teach normal first)
+      bag: ['L', 'I', 'S', 'O', 'T', 'Z', 'J'] as PieceType[],
       expectedAnswer: false,
       explanation:
-        'S appears at position 1 and J at position 4. Since S comes before J, MS2 is NOT buildable. Mirror: Z(2) before L(5), also not buildable.',
-      decisionPieces: ['J', 'S'] as PieceType[],
+        'L appears at position 1 and J at position 7. L comes first → normal side (hold L) doesn\'t work. You\'d use the mirror side instead (hold J).',
+      decisionPieces: ['J', 'L'] as PieceType[],
       steps: [
-        { instruction: 'Find J and S in the bag', highlight: ['J', 'S'] as PieceType[] },
-        { instruction: 'Check their order: S is at position 1, J is at position 4' },
-        { instruction: 'S comes before J → MS2 is NOT buildable ✗' },
+        { instruction: 'Find J and L in the bag', highlight: ['J', 'L'] as PieceType[] },
+        { instruction: 'Check their order: L is at position 1, J is at position 7' },
+        { instruction: 'L comes first → normal side NOT buildable ✗ (use mirror instead)' },
       ],
     },
     {
@@ -209,12 +215,12 @@ const WORKED_EXAMPLES: Record<string, WorkedExample[]> = {
       bag: ['T', 'J', 'O', 'I', 'S', 'L', 'Z'] as PieceType[],
       expectedAnswer: true,
       explanation:
-        'J appears at position 2 and S at position 5. J comes before S, so MS2 is buildable.',
-      decisionPieces: ['J', 'S'] as PieceType[],
+        'J appears at position 2 and L at position 6. J comes first → hold L, build normal side.',
+      decisionPieces: ['J', 'L'] as PieceType[],
       steps: [
-        { instruction: 'Find J and S in the bag', highlight: ['J', 'S'] as PieceType[] },
-        { instruction: 'Check their order: J is at position 2, S is at position 5' },
-        { instruction: 'J comes before S → MS2 is buildable ✓' },
+        { instruction: 'Find J and L in the bag', highlight: ['J', 'L'] as PieceType[] },
+        { instruction: 'Check their order: J is at position 2, L is at position 6' },
+        { instruction: 'J comes first → hold L → MS2 buildable ✓' },
       ],
     },
   ],
@@ -319,7 +325,11 @@ export function generateDrillBag(openerId: OpenerID): PieceType[] {
 
   for (let attempt = 0; attempt < 200; attempt++) {
     const bag = generateBag();
-    const buildable = def.canBuild(bag) || def.canBuildMirror(bag);
+    // For openers always buildable with mirror, check normal-side only
+    const alwaysWithMirror = def.setupRate.withMirror >= 1.0;
+    const buildable = alwaysWithMirror
+      ? def.canBuild(bag)
+      : def.canBuild(bag) || def.canBuildMirror(bag);
 
     if (wantNonBuildable && !buildable) return bag;
     if (!wantNonBuildable && buildable) return bag;
@@ -339,9 +349,13 @@ export function runPlacementTest(
   const questions: PlacementQuestion[] = [];
   let correctCount = 0;
 
+  const alwaysWithMirror = def.setupRate.withMirror >= 1.0;
+
   for (let i = 0; i < 5; i++) {
-    const bag = generateBag();
-    const actuallyBuildable = def.canBuild(bag) || def.canBuildMirror(bag);
+    const bag = generateDrillBag(openerId);
+    const actuallyBuildable = alwaysWithMirror
+      ? def.canBuild(bag)
+      : def.canBuild(bag) || def.canBuildMirror(bag);
     // answers[i] represents whether the user answered correctly (true = correct)
     const isCorrect = answers[i] ?? false;
     if (isCorrect) correctCount++;
