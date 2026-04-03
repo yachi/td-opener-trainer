@@ -57,7 +57,7 @@ export const OPENERS: Record<OpenerID, OpenerDefinition> = {
     nameCn: '蜜蜂炮',
     holdPiece: 'L',
     holdPieceMirror: 'J',
-    setupRate: { oneSide: 0.5, withMirror: 0.6556 },
+    setupRate: { oneSide: 0.667, withMirror: 0.833 }, // verified: P(either) = 1 - (1/3)^2 = 8/9 ≈ 83.3%
     canBuild: (bag) => isNotLast(bag, 'L', ['L', 'O', 'T']),
     canBuildMirror: (bag) => isNotLast(bag, 'J', ['J', 'O', 'T']),
     priority: 1,
@@ -96,7 +96,7 @@ export const OPENERS: Record<OpenerID, OpenerDefinition> = {
     nameCn: '迷走炮',
     holdPiece: 'Z',
     holdPieceMirror: 'S',
-    setupRate: { oneSide: 0.6667, withMirror: 0.8333 },
+    setupRate: { oneSide: 0.667, withMirror: 1.0 }, // verified: always buildable (if L last of {L,J,S} then J not last of {J,L,Z})
     canBuild: (bag) => isNotLast(bag, 'L', ['L', 'J', 'S']),
     canBuildMirror: (bag) => isNotLast(bag, 'J', ['J', 'L', 'Z']),
     priority: 4,

@@ -15,7 +15,7 @@ const CARD_BG = '#0F0F25';
 const CARD_BORDER = '#3A3A5C';
 const CARD_RADIUS = 12;
 const MUTED = '#8888AA';
-const HINT_COLOR = '#666688';
+const HINT_COLOR = '#9999BB'; // was #666688 — too faint, user couldn't see "[Space] to continue"
 
 const OPENER_DISPLAY: Record<OpenerID, { en: string; cn: string }> = {
   ms2: { en: 'MS2 / Gamushiro', cn: '山岳·糖漿炮' },
