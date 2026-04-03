@@ -57,287 +57,300 @@ interface OpenerPlacementData {
 }
 
 // MS2 — Normal side, Hold L
-// Layout (bottom rows, row 19 = bottom):
-// Row 16: OO...T....
-// Row 17: OO..TTT...
-// Row 18: J..SSZZ...
-// Row 19: JJJ.SZ.IIII
+// Correct TD shape (from fumen v115@9gB8HeC8DeA8BeC8AeJ8AeE8JeAgH):
+// Row 16: IS........
+// Row 17: ISS....T..
+// Row 18: IJS.ZZTTOO
+// Row 19: IJJJ.ZZTOO
 const MS2_DATA: OpenerPlacementData = {
   placements: [
     {
       piece: 'J',
       cells: [
-        { col: 0, row: 18 },
-        { col: 0, row: 19 },
+        { col: 1, row: 18 },
         { col: 1, row: 19 },
         { col: 2, row: 19 },
+        { col: 3, row: 19 },
       ],
-      hint: 'J spawn, cols 0-2, bottom-left',
+      hint: 'J spawn, cols 1-3, bottom-left foundation',
     },
     {
       piece: 'I',
       cells: [
-        { col: 7, row: 19 },
-        { col: 8, row: 19 },
-        { col: 9, row: 19 },
-        { col: 6, row: 19 },
+        { col: 0, row: 16 },
+        { col: 0, row: 17 },
+        { col: 0, row: 18 },
+        { col: 0, row: 19 },
       ],
-      hint: 'I flat, cols 6-9, bottom-right',
+      hint: 'I vertical, col 0, left wall',
     },
     {
       piece: 'O',
       cells: [
-        { col: 0, row: 16 },
-        { col: 1, row: 16 },
-        { col: 0, row: 17 },
-        { col: 1, row: 17 },
+        { col: 8, row: 18 },
+        { col: 9, row: 18 },
+        { col: 8, row: 19 },
+        { col: 9, row: 19 },
       ],
-      hint: 'O stacked on J, cols 0-1',
-    },
-    {
-      piece: 'S',
-      cells: [
-        { col: 3, row: 18 },
-        { col: 4, row: 18 },
-        { col: 3, row: 19 },
-        { col: 4, row: 19 },
-      ],
-      hint: 'S spawn, cols 3-4, rows 18-19',
+      hint: 'O bottom-right, cols 8-9',
     },
     {
       piece: 'Z',
       cells: [
-        { col: 4, row: 17 },
-        { col: 5, row: 17 },
-        { col: 5, row: 18 },
         { col: 5, row: 19 },
+        { col: 6, row: 19 },
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
       ],
-      hint: 'Z rotated, cols 4-5, rows 17-19',
+      hint: 'Z flat, cols 4-6, center',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 16 },
+        { col: 1, row: 17 },
+        { col: 2, row: 17 },
+        { col: 2, row: 18 },
+      ],
+      hint: 'S vertical, cols 1-2, left-center stack',
     },
     {
       piece: 'T',
       cells: [
-        { col: 5, row: 16 },
-        { col: 4, row: 16 },
-        { col: 6, row: 16 },
-        { col: 5, row: 15 },
+        { col: 7, row: 19 },
+        { col: 6, row: 18 },
+        { col: 7, row: 18 },
+        { col: 7, row: 17 },
       ],
-      hint: 'T spawn (pointing up), cols 4-6, creates TST overhang',
+      hint: 'T CW rotation, col 7, creates TST overhang',
     },
   ],
   tSpinSlots: {
-    tst: { col: 5, row: 18, rotation: 2 },
-    tsd: { col: 2, row: 17, rotation: 0 },
+    tst: { col: 4, row: 18, rotation: 2 },
+    tsd: { col: 2, row: 19, rotation: 0 },
   },
 };
 
-// Gamushiro — similar to MS2, Hold L
+// Gamushiro — same TD shape as MS2, Hold L
+// Row 16: IS........
+// Row 17: ISS....T..
+// Row 18: IJS.ZZTTOO
+// Row 19: IJJJ.ZZTOO
 const GAMUSHIRO_DATA: OpenerPlacementData = {
   placements: [
     {
       piece: 'J',
       cells: [
-        { col: 0, row: 18 },
-        { col: 0, row: 19 },
+        { col: 1, row: 18 },
         { col: 1, row: 19 },
         { col: 2, row: 19 },
+        { col: 3, row: 19 },
       ],
-      hint: 'J spawn, cols 0-2, bottom-left',
+      hint: 'J spawn, cols 1-3, bottom-left foundation',
     },
     {
       piece: 'I',
       cells: [
-        { col: 6, row: 19 },
-        { col: 7, row: 19 },
-        { col: 8, row: 19 },
-        { col: 9, row: 19 },
+        { col: 0, row: 16 },
+        { col: 0, row: 17 },
+        { col: 0, row: 18 },
+        { col: 0, row: 19 },
       ],
-      hint: 'I flat, cols 6-9, bottom-right',
+      hint: 'I vertical, col 0, left wall',
     },
     {
       piece: 'O',
       cells: [
-        { col: 0, row: 16 },
-        { col: 1, row: 16 },
-        { col: 0, row: 17 },
-        { col: 1, row: 17 },
+        { col: 8, row: 18 },
+        { col: 9, row: 18 },
+        { col: 8, row: 19 },
+        { col: 9, row: 19 },
       ],
-      hint: 'O stacked on J, cols 0-1',
-    },
-    {
-      piece: 'S',
-      cells: [
-        { col: 3, row: 18 },
-        { col: 4, row: 18 },
-        { col: 3, row: 19 },
-        { col: 4, row: 19 },
-      ],
-      hint: 'S spawn, cols 3-4, rows 18-19',
+      hint: 'O bottom-right, cols 8-9',
     },
     {
       piece: 'Z',
       cells: [
-        { col: 4, row: 17 },
-        { col: 5, row: 17 },
-        { col: 5, row: 18 },
         { col: 5, row: 19 },
+        { col: 6, row: 19 },
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
       ],
-      hint: 'Z rotated, cols 4-5, rows 17-19',
+      hint: 'Z flat, cols 4-6, center',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 16 },
+        { col: 1, row: 17 },
+        { col: 2, row: 17 },
+        { col: 2, row: 18 },
+      ],
+      hint: 'S vertical, cols 1-2, left-center stack',
     },
     {
       piece: 'T',
       cells: [
-        { col: 4, row: 16 },
-        { col: 5, row: 16 },
-        { col: 6, row: 16 },
-        { col: 5, row: 15 },
+        { col: 7, row: 19 },
+        { col: 6, row: 18 },
+        { col: 7, row: 18 },
+        { col: 7, row: 17 },
       ],
-      hint: 'T spawn (pointing up), cols 4-6, creates TST overhang',
+      hint: 'T CW rotation, col 7, creates TST overhang',
     },
   ],
   tSpinSlots: {
-    tst: { col: 5, row: 18, rotation: 2 },
-    tsd: { col: 2, row: 17, rotation: 0 },
+    tst: { col: 4, row: 18, rotation: 2 },
+    tsd: { col: 2, row: 19, rotation: 0 },
   },
 };
 
-// Honey Cup — Normal side, Hold L
+// Honey Cup — Normal side, Hold L (same TD shape as MS2/Gamushiro)
+// Row 16: IS........
+// Row 17: ISS....T..
+// Row 18: IJS.ZZTTOO
+// Row 19: IJJJ.ZZTOO
 const HONEY_CUP_DATA: OpenerPlacementData = {
   placements: [
     {
       piece: 'J',
       cells: [
-        { col: 0, row: 18 },
-        { col: 0, row: 19 },
+        { col: 1, row: 18 },
         { col: 1, row: 19 },
         { col: 2, row: 19 },
+        { col: 3, row: 19 },
       ],
-      hint: 'J spawn, cols 0-2, bottom-left',
+      hint: 'J spawn, cols 1-3, bottom-left foundation',
     },
     {
       piece: 'I',
       cells: [
-        { col: 6, row: 19 },
-        { col: 7, row: 19 },
-        { col: 8, row: 19 },
-        { col: 9, row: 19 },
+        { col: 0, row: 16 },
+        { col: 0, row: 17 },
+        { col: 0, row: 18 },
+        { col: 0, row: 19 },
       ],
-      hint: 'I flat, cols 6-9, bottom-right',
+      hint: 'I vertical, col 0, left wall',
     },
     {
       piece: 'O',
       cells: [
-        { col: 0, row: 16 },
-        { col: 1, row: 16 },
-        { col: 0, row: 17 },
-        { col: 1, row: 17 },
+        { col: 8, row: 18 },
+        { col: 9, row: 18 },
+        { col: 8, row: 19 },
+        { col: 9, row: 19 },
       ],
-      hint: 'O stacked on J, cols 0-1',
-    },
-    {
-      piece: 'S',
-      cells: [
-        { col: 3, row: 18 },
-        { col: 4, row: 18 },
-        { col: 3, row: 19 },
-        { col: 4, row: 19 },
-      ],
-      hint: 'S spawn, cols 3-4, rows 18-19',
+      hint: 'O bottom-right, cols 8-9',
     },
     {
       piece: 'Z',
       cells: [
-        { col: 4, row: 17 },
-        { col: 5, row: 17 },
-        { col: 5, row: 18 },
         { col: 5, row: 19 },
-      ],
-      hint: 'Z rotated, cols 4-5, center',
-    },
-    {
-      piece: 'T',
-      cells: [
-        { col: 4, row: 16 },
-        { col: 5, row: 16 },
-        { col: 6, row: 16 },
-        { col: 5, row: 15 },
-      ],
-      hint: 'T upside-down, cols 4-6, creates overhang',
-    },
-  ],
-  tSpinSlots: {
-    tst: { col: 5, row: 18, rotation: 1 },
-    tsd: { col: 3, row: 17, rotation: 0 },
-  },
-};
-
-// Stray Cannon — Normal side, Hold Z
-const STRAY_CANNON_DATA: OpenerPlacementData = {
-  placements: [
-    {
-      piece: 'L',
-      cells: [
-        { col: 2, row: 18 },
-        { col: 0, row: 19 },
-        { col: 1, row: 19 },
-        { col: 2, row: 19 },
-      ],
-      hint: 'L spawn, cols 0-2, bottom-left',
-    },
-    {
-      piece: 'I',
-      cells: [
         { col: 6, row: 19 },
-        { col: 7, row: 19 },
-        { col: 8, row: 19 },
-        { col: 9, row: 19 },
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
       ],
-      hint: 'I flat, cols 6-9, bottom-right',
-    },
-    {
-      piece: 'O',
-      cells: [
-        { col: 0, row: 16 },
-        { col: 1, row: 16 },
-        { col: 0, row: 17 },
-        { col: 1, row: 17 },
-      ],
-      hint: 'O stacked on L, cols 0-1',
-    },
-    {
-      piece: 'J',
-      cells: [
-        { col: 2, row: 17 },
-        { col: 3, row: 17 },
-        { col: 3, row: 18 },
-        { col: 3, row: 19 },
-      ],
-      hint: 'J CW rotation, cols 2-3, vertical',
+      hint: 'Z flat, cols 4-6, center',
     },
     {
       piece: 'S',
       cells: [
-        { col: 4, row: 18 },
-        { col: 5, row: 18 },
-        { col: 4, row: 19 },
-        { col: 5, row: 19 },
+        { col: 1, row: 16 },
+        { col: 1, row: 17 },
+        { col: 2, row: 17 },
+        { col: 2, row: 18 },
       ],
-      hint: 'S spawn, cols 4-5, rows 18-19',
+      hint: 'S vertical, cols 1-2, left-center stack',
     },
     {
       piece: 'T',
       cells: [
-        { col: 4, row: 16 },
-        { col: 5, row: 16 },
-        { col: 6, row: 16 },
-        { col: 5, row: 15 },
+        { col: 7, row: 19 },
+        { col: 6, row: 18 },
+        { col: 7, row: 18 },
+        { col: 7, row: 17 },
       ],
-      hint: 'T spawn (pointing up), cols 4-6, creates overhang',
+      hint: 'T CW rotation, col 7, creates TST overhang',
     },
   ],
   tSpinSlots: {
-    tst: { col: 5, row: 18, rotation: 2 },
-    tsd: { col: 4, row: 17, rotation: 0 },
+    tst: { col: 4, row: 18, rotation: 2 },
+    tsd: { col: 2, row: 19, rotation: 0 },
+  },
+};
+
+// Stray Cannon — Normal side, Hold Z
+// Correct TD shape (Hold Z variant):
+// Row 16: LS........
+// Row 17: LSS....J..
+// Row 18: LLS.TTTJOO
+// Row 19: IIII.TJJOO
+const STRAY_CANNON_DATA: OpenerPlacementData = {
+  placements: [
+    {
+      piece: 'I',
+      cells: [
+        { col: 0, row: 19 },
+        { col: 1, row: 19 },
+        { col: 2, row: 19 },
+        { col: 3, row: 19 },
+      ],
+      hint: 'I flat, cols 0-3, bottom-left',
+    },
+    {
+      piece: 'L',
+      cells: [
+        { col: 0, row: 16 },
+        { col: 0, row: 17 },
+        { col: 0, row: 18 },
+        { col: 1, row: 18 },
+      ],
+      hint: 'L CCW rotation, col 0-1, left wall',
+    },
+    {
+      piece: 'O',
+      cells: [
+        { col: 8, row: 18 },
+        { col: 9, row: 18 },
+        { col: 8, row: 19 },
+        { col: 9, row: 19 },
+      ],
+      hint: 'O bottom-right, cols 8-9',
+    },
+    {
+      piece: 'T',
+      cells: [
+        { col: 5, row: 19 },
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
+        { col: 6, row: 18 },
+      ],
+      hint: 'T pointing down, cols 4-6, center',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 16 },
+        { col: 1, row: 17 },
+        { col: 2, row: 17 },
+        { col: 2, row: 18 },
+      ],
+      hint: 'S vertical, cols 1-2, left-center stack',
+    },
+    {
+      piece: 'J',
+      cells: [
+        { col: 7, row: 17 },
+        { col: 7, row: 18 },
+        { col: 6, row: 19 },
+        { col: 7, row: 19 },
+      ],
+      hint: 'J CW rotation, cols 6-7, creates TST overhang',
+    },
+  ],
+  tSpinSlots: {
+    tst: { col: 4, row: 18, rotation: 2 },
+    tsd: { col: 2, row: 19, rotation: 0 },
   },
 };
 
