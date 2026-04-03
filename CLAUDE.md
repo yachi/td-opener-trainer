@@ -57,6 +57,31 @@
 **Correction**: "what i want to learn is like how to actually build the opener for like stray opener, the app never teach me that"
 **Rule**: The visualizer (step-by-step board shapes) is more important than the quiz for a learner. Prioritize showing where pieces go over testing bag recognition.
 
+### 12. Write acceptance criteria tests BEFORE implementation
+**Mistake**: Built the onboarding module without tests first. Had to retrofit tests after the fact, missing edge cases.
+**Correction**: "do we have acceptance criteria yet" / "opus agents start with writing acceptance criteria first"
+**Rule**: TDD — write the test file first, define the API contract, then implement to pass. The tests ARE the spec.
+
+### 13. Don't waste the user's time with manual steps
+**Mistake**: Told the user to open DevTools and paste JavaScript to skip onboarding stages. That's my job, not theirs.
+**Correction**: "add first" (when I suggested a workaround instead of building the skip feature)
+**Rule**: If the user needs a feature to use the tool, build it. Don't offer workarounds, console commands, or manual steps. A keyboard shortcut takes 5 minutes to add.
+
+### 14. 糖漿炮 is Gamushiro (ガムシロ積み), not MS1/Syrup Stacking
+**Mistake**: Initially identified 糖漿炮 as MS1/Syrup Stacking (hold J, 53% setup rate). Wrong opener entirely.
+**Correction**: Discovered through convergence research that ガムシロ = ガムシロップ = Gum Syrup = 糖漿 (syrup in Chinese).
+**Rule**: 糖漿炮 = ガムシロ積み (Gamushiro Stacking). Hold L, 100% setup with mirror, 99% PC rate. Verify Chinese↔Japanese↔English opener name mappings against community sources before coding.
+
+### 15. Headed browser sessions don't share localStorage with Playwright headless sessions
+**Mistake**: Set localStorage in Playwright, told user "you should see Honey Cup", but user's browser showed MS2 because Playwright sessions are isolated.
+**Correction**: "check the screen" (repeatedly)
+**Rule**: Playwright sessions have their own localStorage. Changes made in headless Playwright don't affect the user's browser. To change user's state, either add a UI feature (skip button) or instruct them clearly.
+
+### 16. "check the screen" means actually look at what was rendered
+**Mistake**: Multiple times I told the user what they "should see" without verifying via screenshot.
+**Correction**: "check the screen" / "show me" / "prove it" / "did you verify in browser"
+**Rule**: Every time UI changes, screenshot → read → confirm before responding. The user should never have to ask me to check.
+
 ## Technical Reference
 
 ### localStorage Keys
