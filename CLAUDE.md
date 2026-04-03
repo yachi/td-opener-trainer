@@ -92,7 +92,12 @@
 **Correction**: "step back and think about the big picture and what you should do" (said twice)
 **Rule**: Before spawning agents or writing code, ask: "Does this actually help the user learn the 4 openers they asked about?" If the answer is unclear, stop and ask — or just teach them directly.
 
-### 19. UI instructions must be clearly visible, not faint
+### 19. Don't trust the agent's output — verify parsed data matches the source
+**Mistake**: Agent parsed the MS2 wiki page and wrote code with `I horizontal` and `L on left wall`. But the wiki clearly shows `I vertical` and `J on bottom`. The parser read the correct text (`IS..`, `ISS..`) but the agent encoded the wrong piece positions.
+**Correction**: "why ms2 and honey the same opening" / user showed Hard Drop screenshot proving I is vertical
+**Rule**: After an agent writes piece placement data, always: (1) print the board as ASCII, (2) compare character-by-character against the wiki source, (3) screenshot the result. Don't trust that the agent correctly translated parsed data into code.
+
+### 20. UI instructions must be clearly visible, not faint
 **Mistake**: The celebration screen showed "[Space] to continue" in faint gray (#666688). User asked "how to go to next after ms2" because they couldn't see the instruction.
 **Correction**: "how to go to next after ms2"
 **Rule**: Any actionable instruction (press Space, press N to skip) must be clearly visible — use a contrasting color, not faint gray. If a user asks "how do I go to the next screen," the UI has failed.
