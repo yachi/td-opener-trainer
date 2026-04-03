@@ -82,6 +82,16 @@
 **Correction**: "check the screen" / "show me" / "prove it" / "did you verify in browser"
 **Rule**: Every time UI changes, screenshot → read → confirm before responding. The user should never have to ask me to check.
 
+### 17. Check local files the user gave you before searching the web
+**Mistake**: User saved the Hard Drop wiki page to `/tmp/Honey Cup - Hard Drop Tetris Wiki.mhtml`. I kept trying to WebFetch harddrop.com (403 errors) and searching the web repeatedly instead of reading the file the user already provided.
+**Correction**: "check /tmp/Honey Cup - Hard Drop Tetris Wiki" / "i have shared to you before"
+**Rule**: When the user says they've already shared something, check local files first (`/tmp/`, working directory, recent file paths). Don't re-search the web for data the user already downloaded for you.
+
+### 18. Step back and think about the big picture before acting
+**Mistake**: Multiple times I jumped into implementation or spawned agents without considering whether the approach was right. Built a quiz before teaching. Built a visualizer with wrong data. Researched for hours before delivering value.
+**Correction**: "step back and think about the big picture and what you should do" (said twice)
+**Rule**: Before spawning agents or writing code, ask: "Does this actually help the user learn the 4 openers they asked about?" If the answer is unclear, stop and ask — or just teach them directly.
+
 ## Technical Reference
 
 ### localStorage Keys
