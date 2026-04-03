@@ -386,4 +386,39 @@ if (state.appMode === 'quiz') {
 
 dirty = true;
 const cleanup = setupKeyboard(dispatch);
+
+// Tab click handling — click Quiz/Visualizer/Drill tabs to switch modes
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  // Tab bar: y 0-40, three equal tabs across 640px
+  if (y <= 40) {
+    const tabIndex = Math.floor(x / (640 / 3));
+    if (tabIndex === 0) {
+      // Quiz tab
+      if (state.appMode !== 'quiz') {
+        if (state.onboarding.currentStage === 'complete') {
+          state.appMode = 'quiz';
+          state.mode = 'quiz' as any;
+          if (state.quiz.currentBag.length === 0) nextQuestion(state.quiz);
+        } else {
+          state.appMode = 'onboarding';
+          state.mode = 'onboarding' as any;
+        }
+        dirty = true;
+      }
+    } else if (tabIndex === 1) {
+      // Visualizer tab
+      if (state.appMode !== 'visualizer') {
+        state.appMode = 'visualizer' as any;
+        state.mode = 'visualizer';
+        dirty = true;
+      }
+    }
+    // tabIndex === 2 → Drill (not implemented yet)
+  }
+});
+
 requestAnimationFrame(frame);
