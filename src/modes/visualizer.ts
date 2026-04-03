@@ -56,52 +56,22 @@ interface OpenerPlacementData {
   };
 }
 
-// MS2 — Normal side, Hold J (wiki: L placed, J held)
-// Row 16: LS........
-// Row 17: LSS....T..
-// Row 18: LLS.ZZTTOO
-// Row 19: IIII.ZZTOO
+// MS2 — Normal side, Hold L
+// Row 16: IS........
+// Row 17: ISS....T..
+// Row 18: IJS.ZZTTOO
+// Row 19: IJJJ.ZZTOO
 const MS2_DATA: OpenerPlacementData = {
   placements: [
     {
       piece: 'I',
       cells: [
-        { col: 0, row: 19 },
-        { col: 1, row: 19 },
-        { col: 2, row: 19 },
-        { col: 3, row: 19 },
-      ],
-      hint: 'I flat, cols 0-3, bottom-left foundation',
-    },
-    {
-      piece: 'L',
-      cells: [
         { col: 0, row: 16 },
         { col: 0, row: 17 },
         { col: 0, row: 18 },
-        { col: 1, row: 18 },
+        { col: 0, row: 19 },
       ],
-      hint: 'L CCW rotation, cols 0-1, left wall',
-    },
-    {
-      piece: 'S',
-      cells: [
-        { col: 1, row: 16 },
-        { col: 1, row: 17 },
-        { col: 2, row: 17 },
-        { col: 2, row: 18 },
-      ],
-      hint: 'S vertical, cols 1-2, left-center stack',
-    },
-    {
-      piece: 'Z',
-      cells: [
-        { col: 4, row: 18 },
-        { col: 5, row: 18 },
-        { col: 5, row: 19 },
-        { col: 6, row: 19 },
-      ],
-      hint: 'Z flat, cols 4-6, center',
+      hint: 'I vertical, col 0, left wall',
     },
     {
       piece: 'T',
@@ -112,6 +82,36 @@ const MS2_DATA: OpenerPlacementData = {
         { col: 7, row: 19 },
       ],
       hint: 'T CW rotation, col 7, creates TST overhang',
+    },
+    {
+      piece: 'J',
+      cells: [
+        { col: 1, row: 18 },
+        { col: 1, row: 19 },
+        { col: 2, row: 19 },
+        { col: 3, row: 19 },
+      ],
+      hint: 'J spawn, cols 1-3, bottom-left foundation',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 16 },
+        { col: 1, row: 17 },
+        { col: 2, row: 17 },
+        { col: 2, row: 18 },
+      ],
+      hint: 'S vertical, cols 1-2, stacks on I and J',
+    },
+    {
+      piece: 'Z',
+      cells: [
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
+        { col: 5, row: 19 },
+        { col: 6, row: 19 },
+      ],
+      hint: 'Z flat, cols 4-6, center',
     },
     {
       piece: 'O',
