@@ -387,7 +387,7 @@ if (state.appMode === 'quiz') {
 dirty = true;
 const cleanup = setupKeyboard(dispatch);
 
-// Tab click handling — click Quiz/Visualizer/Drill tabs to switch modes
+// Click handling — tabs, buttons, opener selectors
 canvas.addEventListener('click', (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -397,27 +397,76 @@ canvas.addEventListener('click', (e) => {
   if (y <= 40) {
     const tabIndex = Math.floor(x / (640 / 3));
     if (tabIndex === 0) {
-      // Quiz tab
-      if (state.appMode !== 'quiz') {
-        if (state.onboarding.currentStage === 'complete') {
-          state.appMode = 'quiz';
-          state.mode = 'quiz' as any;
-          if (state.quiz.currentBag.length === 0) nextQuestion(state.quiz);
-        } else {
-          state.appMode = 'onboarding';
-          state.mode = 'onboarding' as any;
-        }
-        dirty = true;
+      // Quiz tab — goes to quiz (if complete) or onboarding
+      if (state.onboarding.currentStage === 'complete') {
+        state.appMode = 'quiz';
+        state.mode = 'quiz' as any;
+        if (state.quiz.currentBag.length === 0) nextQuestion(state.quiz);
+      } else {
+        state.appMode = 'onboarding';
+        state.mode = 'onboarding' as any;
       }
+      dirty = true;
     } else if (tabIndex === 1) {
-      // Visualizer tab
-      if (state.appMode !== 'visualizer') {
-        state.appMode = 'visualizer' as any;
-        state.mode = 'visualizer';
-        dirty = true;
-      }
+      // Visualizer tab — always accessible
+      state.appMode = 'visualizer' as any;
+      state.mode = 'visualizer';
+      dirty = true;
     }
     // tabIndex === 2 → Drill (not implemented yet)
+    return;
+  }
+
+  // Visualizer mode: opener selector buttons
+  if (state.appMode === 'visualizer') {
+    // Buttons at y=454, h=32, 4 buttons each 130px wide, 8px gap, centered
+    const btnY = 454;
+    const btnH = 32;
+    const btnW = 130;
+    const totalW = 4 * btnW + 3 * 8;
+    const startX = (640 - totalW) / 2;
+
+    if (y >= btnY && y <= btnY + btnH) {
+      const openerIds: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+      for (let i = 0; i < 4; i++) {
+        const bx = startX + i * (btnW + 8);
+        if (x >= bx && x <= bx + btnW) {
+          const viz = state.visualizer!;
+          state.visualizer = createVisualizerState(
+            getOpenerSequence(openerIds[i]!, viz.sequence.mirror)
+          );
+          dirty = true;
+          return;
+        }
+      }
+    }
+  }
+
+  // Quiz mode: answer buttons
+  if (state.appMode === 'quiz' && state.quiz.phase === 'showing') {
+    // Button 1 (Stray): x=120, y=410, 180×44
+    // Button 2 (Honey): x=320, y=410, 180×44
+    // Button 3 (MS2):   x=170, y=464, 280×44
+    if (y >= 410 && y <= 454 && x >= 120 && x <= 300) {
+      dispatch('option_1'); return;
+    }
+    if (y >= 410 && y <= 454 && x >= 320 && x <= 500) {
+      dispatch('option_2'); return;
+    }
+    if (y >= 464 && y <= 508 && x >= 170 && x <= 450) {
+      dispatch('option_3'); return;
+    }
+  }
+
+  // Onboarding drill: Yes/No buttons (same positions as quiz roughly)
+  if (state.appMode === 'onboarding' && state.onboarding.stagePhase === 'drill') {
+    // Yes button: roughly left half of button area
+    // No button: roughly right half
+    // From hud: Yes at ~x=120-300, No at ~x=320-500, y=470-514
+    if (y >= 470 && y <= 514) {
+      if (x >= 120 && x <= 300) { dispatch('option_1'); return; }
+      if (x >= 320 && x <= 500) { dispatch('option_2'); return; }
+    }
   }
 });
 
