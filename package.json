@@ -1,0 +1,16 @@
+{
+  "name": "tetris-practice",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vite": "^8.0.3"
+  },
+  "peerDependencies": {
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "tetris-fumen": "^1.1.3"
+  }
+}
