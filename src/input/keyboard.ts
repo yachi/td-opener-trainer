@@ -1,9 +1,9 @@
 export function setupKeyboard(dispatch: (action: string) => void): () => void {
   const keyMap: Record<string, string> = {
-    Digit1: 'pick_stray_cannon',
-    Digit2: 'pick_honey_cup',
-    Digit3: 'pick_ms2',
-    Space: 'next_question',
+    Space: 'advance',
+    Digit1: 'option_1',
+    Digit2: 'option_2',
+    Digit3: 'option_3',
     KeyR: 'reset_stats',
     KeyS: 'toggle_mode',
   };
