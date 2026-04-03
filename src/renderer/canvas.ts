@@ -1,10 +1,12 @@
 import type { PieceType } from '../core/types';
 import type { OpenerID } from '../openers/types';
 import type { QuizHUDData } from './hud';
+import type { QuizQueueOptions } from './queue';
 import { CANVAS_W, CANVAS_H, COLORS, LAYOUT, CELL_SIZE } from './board';
 import { drawBoard, drawFilledCells, drawPiecePreview } from './board';
-import { drawHoldPiece, drawQueue } from './queue';
+import { drawHoldPiece, drawQueue, drawQuizQueue } from './queue';
 import { drawQuizHUD, drawTabs, drawStatusBar } from './hud';
+import { OPENERS } from '../openers/decision';
 
 export interface QuizStatsData {
   total: number;
@@ -17,7 +19,7 @@ export interface QuizStatsData {
 export interface AppState {
   mode: 'quiz' | 'visualizer' | 'drill';
   quiz: {
-    phase: 'showing' | 'answered';
+    phase: 'showing' | 'answered' | 'transitioning';
     currentBag: PieceType[];
     correctOpener: OpenerID;
     alternatives: OpenerID[];
@@ -25,6 +27,11 @@ export interface AppState {
     isCorrect: boolean | null;
     questionStartTime: number;
     responseTimeMs: number | null;
+    mirror: boolean;
+    decisionPieces: PieceType[];
+    explanation: string;
+    autoAdvanceAt: number | null;
+    mode: 'learning' | 'speed';
   };
   stats: QuizStatsData;
 }
@@ -58,9 +65,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
       // Status bar
       const statusText = state.mode === 'quiz'
-        ? 'Identify the correct TD opener for the given bag'
+        ? 'Press 1-3 \u00b7 Space: skip \u00b7 S: mode \u00b7 R: reset'
         : `${state.mode.charAt(0).toUpperCase() + state.mode.slice(1)} mode`;
-      drawStatusBar(ctx, statusText);
+
+      drawStatusBar(ctx, statusText, state.mode === 'quiz' ? state.quiz.mode : undefined);
     },
   };
 }
@@ -68,27 +76,23 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 function renderQuizMode(ctx: CanvasRenderingContext2D, state: AppState): void {
   const { quiz, stats } = state;
 
-  // 3. Board background + grid
-  drawBoard(ctx);
+  // Determine hold piece: show after answering
+  const isAnswered = quiz.phase === 'answered' || quiz.phase === 'transitioning';
+  const openerDef = OPENERS[quiz.correctOpener];
+  const holdPiece = isAnswered
+    ? (quiz.mirror ? openerDef.holdPieceMirror : openerDef.holdPiece)
+    : null;
 
-  // 4. Draw the 7-bag pieces across the board center area
-  const boardCenterY = LAYOUT.board.y + LAYOUT.board.h / 2 - CELL_SIZE;
-  const previewCellSize = 18;
+  // 3. Draw quiz queue (vertical layout)
+  const queueOptions: QuizQueueOptions = {
+    decisionPieces: quiz.decisionPieces,
+    showHighlights: isAnswered,
+    holdPiece,
+    mirror: quiz.mirror,
+  };
+  drawQuizQueue(ctx, quiz.currentBag, queueOptions);
 
-  // Calculate total width to center the bag on the board
-  const bagPieces = quiz.currentBag;
-  // Estimate total width for centering
-  let totalW = 0;
-  for (const p of bagPieces) {
-    const slotW = (p === 'I' ? 4 : p === 'O' ? 4 : 3) * previewCellSize;
-    totalW += slotW + previewCellSize * 0.5;
-  }
-  totalW -= previewCellSize * 0.5; // remove trailing gap
-
-  const startX = LAYOUT.board.x + (LAYOUT.board.w - totalW) / 2;
-  drawPiecePreview(ctx, bagPieces, startX, boardCenterY, previewCellSize);
-
-  // 5. Quiz HUD
+  // 4. Draw HUD (buttons, feedback, stats)
   const hudData: QuizHUDData = {
     phase: quiz.phase,
     selectedOpener: quiz.selectedOpener,
@@ -96,6 +100,8 @@ function renderQuizMode(ctx: CanvasRenderingContext2D, state: AppState): void {
     alternatives: quiz.alternatives,
     isCorrect: quiz.isCorrect,
     responseTimeMs: quiz.responseTimeMs,
+    explanation: quiz.explanation,
+    quizMode: quiz.mode,
     stats: {
       total: stats.total,
       correct: stats.correct,

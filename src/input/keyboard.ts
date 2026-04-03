@@ -2,10 +2,10 @@ export function setupKeyboard(dispatch: (action: string) => void): () => void {
   const keyMap: Record<string, string> = {
     Digit1: 'pick_stray_cannon',
     Digit2: 'pick_honey_cup',
-    Digit3: 'pick_gamushiro',
-    Digit4: 'pick_ms2',
+    Digit3: 'pick_ms2',
     Space: 'next_question',
     KeyR: 'reset_stats',
+    KeyS: 'toggle_mode',
   };
 
   function onKeyDown(e: KeyboardEvent): void {

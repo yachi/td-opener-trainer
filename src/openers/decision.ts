@@ -30,6 +30,23 @@ function appearsBefore(bag: PieceType[], a: PieceType, b: PieceType): boolean {
   return indexOf(bag, a) < indexOf(bag, b);
 }
 
+// ── Decision Piece Groups ──
+
+export const DECISION_PIECES: Record<OpenerID, { pieces: PieceType[]; rule: string }> = {
+  honey_cup: { pieces: ['L', 'O', 'T'], rule: 'L must NOT be last among L/O/T' },
+  ms2: { pieces: ['J', 'S'], rule: 'J must appear before S' },
+  gamushiro: { pieces: ['J', 'S'], rule: 'J must appear before S' },
+  stray_cannon: { pieces: ['L', 'J', 'S'], rule: 'L must NOT be last among L/J/S' },
+};
+
+/** Mirror-side decision piece groups. */
+const DECISION_PIECES_MIRROR: Record<OpenerID, { pieces: PieceType[]; rule: string }> = {
+  honey_cup: { pieces: ['J', 'O', 'T'], rule: 'J must NOT be last among J/O/T' },
+  ms2: { pieces: ['L', 'Z'], rule: 'L must appear before Z' },
+  gamushiro: { pieces: ['L', 'Z'], rule: 'L must appear before Z' },
+  stray_cannon: { pieces: ['J', 'L', 'Z'], rule: 'J must NOT be last among J/L/Z' },
+};
+
 // ── Opener Definitions ──
 
 export const OPENERS: Record<OpenerID, OpenerDefinition> = {
@@ -89,14 +106,72 @@ export const OPENERS: Record<OpenerID, OpenerDefinition> = {
 /** Priority-sorted list of opener IDs (lowest priority number = highest priority). */
 const PRIORITY_ORDER: OpenerID[] = (['honey_cup', 'ms2', 'gamushiro', 'stray_cannon'] as const).slice();
 
+// ── Explanation Generator ──
+
+function ordinal(n: number): string {
+  const pos = n + 1; // 0-indexed to 1-indexed
+  if (pos === 1) return '1st';
+  if (pos === 2) return '2nd';
+  if (pos === 3) return '3rd';
+  return `${pos}th`;
+}
+
+function generateExplanation(
+  bag: PieceType[],
+  id: OpenerID,
+  mirror: boolean,
+  alternatives: OpenerID[],
+): string {
+  const info = mirror ? DECISION_PIECES_MIRROR[id] : DECISION_PIECES[id];
+  const def = OPENERS[id];
+  const positions = info.pieces.map((p) => ({ piece: p, idx: indexOf(bag, p) }));
+
+  // Build the position string like "J(2nd)" or "L(3rd)/O(5th)/T(7th)"
+  const posStr = positions
+    .map((p) => `${p.piece}(${ordinal(p.idx)})`)
+    .join('/');
+
+  // Determine the label
+  let label = def.nameEn;
+  // If MS2 is the winner and Gamushiro is in alternatives (or vice versa), show both
+  if (id === 'ms2' && alternatives.includes('gamushiro')) {
+    label = 'MS2 / Gamushiro';
+  } else if (id === 'gamushiro' && alternatives.includes('ms2')) {
+    label = 'MS2 / Gamushiro';
+  }
+
+  // For "before" rules (ms2, gamushiro): "J(2nd) before S(5th) → MS2 ✓"
+  if (id === 'ms2' || id === 'gamushiro') {
+    const a = positions[0]!;
+    const b = positions[1]!;
+    return `${a.piece}(${ordinal(a.idx)}) before ${b.piece}(${ordinal(b.idx)}) → ${label} ✓`;
+  }
+
+  // For "not last" rules (honey_cup, stray_cannon): "L(3rd) not last of L/O(5th)/T(7th) → Honey Cup ✓"
+  const keyPiece = positions[0]!;
+  const othersStr = positions
+    .slice(1)
+    .map((p) => `${p.piece}(${ordinal(p.idx)})`)
+    .join('/');
+  return `${keyPiece.piece}(${ordinal(keyPiece.idx)}) not last of ${othersStr} → ${label} ✓`;
+}
+
+// ── Best Opener Selection ──
+
+export interface BestOpenerResult {
+  opener: OpenerDefinition;
+  mirror: boolean;
+  alternatives: OpenerID[];
+  decisionPieces: PieceType[];
+  explanation: string;
+}
+
 /**
  * Select the best opener for a given bag, checking in priority order.
  * Also collects all alternative openers that could be built from this bag.
  * When Gamushiro and MS2 are both buildable, both appear as alternatives to each other.
  */
-export function bestOpener(
-  bag: PieceType[],
-): { opener: OpenerDefinition; mirror: boolean; alternatives: OpenerID[] } {
+export function bestOpener(bag: PieceType[]): BestOpenerResult {
   // Collect all buildable openers (id + mirror flag)
   const buildable: { id: OpenerID; mirror: boolean }[] = [];
 
@@ -112,7 +187,13 @@ export function bestOpener(
   if (buildable.length === 0) {
     // Fallback: return the lowest-priority opener as non-mirror with empty alternatives
     const fallback = OPENERS.stray_cannon;
-    return { opener: fallback, mirror: false, alternatives: [] };
+    return {
+      opener: fallback,
+      mirror: false,
+      alternatives: [],
+      decisionPieces: DECISION_PIECES.stray_cannon.pieces,
+      explanation: 'No opener buildable — fallback to Stray Cannon',
+    };
   }
 
   const best = buildable[0]!;
@@ -120,9 +201,15 @@ export function bestOpener(
     .filter((b) => b.id !== best.id)
     .map((b) => b.id);
 
+  const info = best.mirror
+    ? DECISION_PIECES_MIRROR[best.id]
+    : DECISION_PIECES[best.id];
+
   return {
     opener: OPENERS[best.id],
     mirror: best.mirror,
     alternatives,
+    decisionPieces: info.pieces,
+    explanation: generateExplanation(bag, best.id, best.mirror, alternatives),
   };
 }
