@@ -330,15 +330,25 @@ describe('O4: Worked Example Data', () => {
     }
   });
 
-  test('example 2 is a negative case (opener is NOT buildable)', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+  test('example 2 is a negative case (opener is NOT buildable) — except stray_cannon which is always buildable with mirror', () => {
+    // MS2 and Honey Cup can be non-buildable
+    for (const openerId of ['ms2', 'honey_cup'] as OpenerID[]) {
       const examples = getWorkedExamples(openerId);
-      const ex2 = examples[1];
+      const ex2 = examples[1]!;
       const def = OPENERS[openerId];
       const buildable = def.canBuild(ex2.bag) || def.canBuildMirror(ex2.bag);
       expect(buildable).toBe(false);
       expect(ex2.expectedAnswer).toBe(false);
     }
+    // Stray Cannon is always buildable on at least one side (mathematically proven:
+    // if L is last of {L,J,S} then J<L, so J is not last of {J,L,Z} → mirror works)
+    // Example 2 for stray shows a bag where normal side fails (but mirror works)
+    const strayExamples = getWorkedExamples('stray_cannon');
+    const ex2 = strayExamples[1]!;
+    // Normal side should fail
+    expect(OPENERS.stray_cannon.canBuild(ex2.bag)).toBe(false);
+    // But expectedAnswer reflects normal-side-only check
+    expect(ex2.expectedAnswer).toBe(false);
   });
 
   test('example 3 is a guided fill-in (can be either)', () => {
@@ -643,27 +653,31 @@ describe('O8: Stage-Specific Bag Generation', () => {
     expect(notBuildableCount).toBeGreaterThan(0);
   });
 
-  test('Stray Cannon drill generates bags where Stray Cannon buildability varies', () => {
-    let buildableCount = 0;
-    let notBuildableCount = 0;
+  test('Stray Cannon drill generates bags where NORMAL-SIDE buildability varies', () => {
+    // Stray Cannon is always buildable with mirror, but the drill tests
+    // normal-side only (canBuild, not canBuildMirror) to create meaningful yes/no variation
+    let normalBuildable = 0;
+    let normalNotBuildable = 0;
     const N = 100;
 
     for (let i = 0; i < N; i++) {
       const bag = generateDrillBag('stray_cannon');
       expect(bag).toHaveLength(7);
-      if (OPENERS.stray_cannon.canBuild(bag) || OPENERS.stray_cannon.canBuildMirror(bag)) {
-        buildableCount++;
+      if (OPENERS.stray_cannon.canBuild(bag)) {
+        normalBuildable++;
       } else {
-        notBuildableCount++;
+        normalNotBuildable++;
       }
     }
 
-    expect(buildableCount).toBeGreaterThan(0);
-    expect(notBuildableCount).toBeGreaterThan(0);
+    // Both outcomes should appear for the normal side
+    expect(normalBuildable).toBeGreaterThan(0);
+    expect(normalNotBuildable).toBeGreaterThan(0);
   });
 
-  test('at least 30% of generated bags should be "not buildable" for each opener', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+  test('at least 30% of generated bags should be "not buildable" for ms2 and honey_cup', () => {
+    // Stray Cannon excluded: always buildable on at least one side
+    for (const openerId of ['ms2', 'honey_cup'] as OpenerID[]) {
       let notBuildableCount = 0;
       const N = 200;
 
