@@ -1,6 +1,30 @@
 # Project: Tetris TD Opener Practice Tool
 
-## Lessons Learned (from user corrections)
+## 5 Principles (generalized from 20 mistakes)
+
+### P1. Deliver value before engineering
+Answer the user's actual question first. A 3-row table beats 2,000 lines of unshipped code. Build tools only after the user has the knowledge they need. Don't research for hours when 5 minutes of teaching would suffice.
+*Lessons: #1, #8, #11, #13, #18*
+
+### P2. Verify with evidence, not reasoning
+Never say "X should work" — run it, screenshot it, read the output. Test the FULL flow end-to-end, not just one step. Compare outputs character-by-character against authoritative sources. Use exhaustive enumeration (all 5040 permutations) over probabilistic arguments. Use gravity simulation over manual inspection.
+*Lessons: #2, #3, #4, #5, #6, #7, #16, #20*
+
+### P3. Don't trust intermediaries
+Agent output can be wrong even when the parsed data was correct. localStorage keys can differ from what you assume. Playwright sessions don't share state with the user's browser. Fumen strings might encode a different variant than expected. Always verify the final output against the original source yourself.
+*Lessons: #9, #14, #15, #17, #19*
+
+### P4. Build what the user needs, not what's interesting
+If something looks interactive, make it interactive. If the user can't figure out how to proceed, the UI has failed. Don't make the user do manual steps you could automate. Write tests before code. Prioritize showing over testing — a learner needs to SEE the board before being quizzed.
+*Lessons: #8, #10, #11, #12, #13, #20*
+
+### P5. When corrected, internalize immediately
+If the user says "check the screen" once, check the screen every time going forward — don't wait to be told again. If the user says "step back," actually pause and reconsider the whole approach. A correction given twice means it wasn't internalized the first time.
+*Lessons: #3, #16, #18 (all were repeated corrections)*
+
+---
+
+## Detailed Lessons (from user corrections)
 
 ### 1. Don't over-engineer before delivering value
 **Mistake**: User asked "help me memorize and practice 4 openers." I spawned 20+ agents, wrote 2,100 lines of code, 6 rounds of UX research — and the user still hadn't learned a single opener.
