@@ -1,5 +1,23 @@
 # Project: Tetris TD Opener Practice Tool
 
+## What the user wants to learn
+
+Four Tetris TD (Triple-Double) openers:
+
+| Chinese | Japanese | English | Hold | Rule |
+|---------|----------|---------|------|------|
+| 迷走炮 | 迷走砲 | Stray Cannon | Z | L not last of {L,J,S} |
+| 蜜蜂炮 | はちみつ砲 | Honey Cup | L | L not last of {L,O,T} |
+| 糖漿炮 | ガムシロ積み | Gamushiro | L | J before L (always works) |
+| 山岳炮 | 山岳積み2号 | MS2 | L | J before L (always works) |
+
+The user wants to:
+1. **See** how each opener is built on the board (piece by piece)
+2. **Memorize** which piece to hold and the decision rule for each
+3. **Practice** recognizing which opener to use from a given bag
+
+Priority: seeing the board shapes > memorizing rules > speed drilling
+
 ## 5 Principles (generalized from 20 mistakes)
 
 ### P1. Deliver value before engineering
