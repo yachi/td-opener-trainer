@@ -205,33 +205,15 @@ const GAMUSHIRO_DATA: OpenerPlacementData = {
   },
 };
 
-// Honey Cup — Normal side, Hold L (same TD shape as MS2/Gamushiro)
-// Row 16: IS........
-// Row 17: ISS....T..
-// Row 18: IJS.ZZTTOO
-// Row 19: IJJJ.ZZTOO
+// Honey Cup — Normal side, Hold L
+// Different shape from MS2/Gamushiro: I is horizontal, J is on the right
+// Row 15: .........J
+// Row 16: .SS......J
+// Row 17: SS.....TJJ
+// Row 18: ....ZZTTOO
+// Row 19: IIII.ZZTOO
 const HONEY_CUP_DATA: OpenerPlacementData = {
   placements: [
-    {
-      piece: 'J',
-      cells: [
-        { col: 1, row: 18 },
-        { col: 1, row: 19 },
-        { col: 2, row: 19 },
-        { col: 3, row: 19 },
-      ],
-      hint: 'J spawn, cols 1-3, bottom-left foundation',
-    },
-    {
-      piece: 'I',
-      cells: [
-        { col: 0, row: 16 },
-        { col: 0, row: 17 },
-        { col: 0, row: 18 },
-        { col: 0, row: 19 },
-      ],
-      hint: 'I vertical, col 0, left wall',
-    },
     {
       piece: 'O',
       cells: [
@@ -243,12 +225,22 @@ const HONEY_CUP_DATA: OpenerPlacementData = {
       hint: 'O bottom-right, cols 8-9',
     },
     {
+      piece: 'I',
+      cells: [
+        { col: 0, row: 19 },
+        { col: 1, row: 19 },
+        { col: 2, row: 19 },
+        { col: 3, row: 19 },
+      ],
+      hint: 'I flat, cols 0-3, bottom-left',
+    },
+    {
       piece: 'Z',
       cells: [
-        { col: 5, row: 19 },
-        { col: 6, row: 19 },
         { col: 4, row: 18 },
         { col: 5, row: 18 },
+        { col: 5, row: 19 },
+        { col: 6, row: 19 },
       ],
       hint: 'Z flat, cols 4-6, center',
     },
@@ -256,21 +248,31 @@ const HONEY_CUP_DATA: OpenerPlacementData = {
       piece: 'S',
       cells: [
         { col: 1, row: 16 },
+        { col: 2, row: 16 },
+        { col: 0, row: 17 },
         { col: 1, row: 17 },
-        { col: 2, row: 17 },
-        { col: 2, row: 18 },
       ],
-      hint: 'S vertical, cols 1-2, left-center stack',
+      hint: 'S flat, cols 0-2, top-left overhang',
     },
     {
       piece: 'T',
       cells: [
-        { col: 7, row: 19 },
+        { col: 7, row: 17 },
         { col: 6, row: 18 },
         { col: 7, row: 18 },
-        { col: 7, row: 17 },
+        { col: 7, row: 19 },
       ],
       hint: 'T CW rotation, col 7, creates TST overhang',
+    },
+    {
+      piece: 'J',
+      cells: [
+        { col: 9, row: 15 },
+        { col: 9, row: 16 },
+        { col: 8, row: 17 },
+        { col: 9, row: 17 },
+      ],
+      hint: 'J CCW rotation, cols 8-9, right wall overhang',
     },
   ],
   tSpinSlots: {
