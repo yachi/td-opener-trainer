@@ -4,12 +4,14 @@ import type { OnboardingProgress } from '../modes/onboarding';
 import type { QuizHUDData } from './hud';
 import type { QuizQueueOptions } from './queue';
 import type { OnboardingRenderState } from './onboarding';
-import { CANVAS_W, CANVAS_H, COLORS, LAYOUT, CELL_SIZE } from './board';
+import type { VisualizerState } from '../modes/visualizer';
+import { CANVAS_W, CANVAS_H, COLORS, LAYOUT, CELL_SIZE, drawCell, drawPieceInBox, roundRect } from './board';
 import { drawBoard, drawFilledCells, drawPiecePreview } from './board';
 import { drawHoldPiece, drawQueue, drawQuizQueue } from './queue';
 import { drawQuizHUD, drawTabs, drawStatusBar } from './hud';
 import { renderOnboardingMode } from './onboarding';
 import { OPENERS } from '../openers/decision';
+import { PIECE_DEFINITIONS } from '../core/pieces';
 
 export interface QuizStatsData {
   total: number;
@@ -44,6 +46,7 @@ export interface AppState {
     mode: 'learning' | 'speed';
   };
   stats: QuizStatsData;
+  visualizer?: VisualizerState;
 }
 
 export interface Renderer {
@@ -75,8 +78,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       } else if (state.mode === 'quiz') {
         renderQuizMode(ctx, state);
         drawStatusBar(ctx, 'Press 1-3 \u00b7 Space: skip \u00b7 S: mode \u00b7 R: reset', state.quiz.mode);
+      } else if (state.mode === 'visualizer' && state.visualizer) {
+        renderVisualizerMode(ctx, state.visualizer);
       } else {
-        // Future: visualizer and drill modes
         const statusText = `${state.mode.charAt(0).toUpperCase() + state.mode.slice(1)} mode`;
         drawStatusBar(ctx, statusText);
       }
@@ -179,4 +183,176 @@ function buildOnboardingRenderState(state: AppState): OnboardingRenderState {
   }
 
   return result;
+}
+
+// ── Visualizer Mode Renderer ──
+
+function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: VisualizerState): void {
+  const { sequence, currentStep } = vizState;
+  const FONT = '-apple-system, sans-serif';
+  const boardX = 120;
+  const boardY = 60;
+  const cellSz = 28;
+  const boardW = 10 * cellSz;  // 280
+  const boardH = 8 * cellSz;   // only show bottom 8 rows (where pieces are)
+  const visibleRows = 8;
+
+  // Title
+  const openerDef = OPENERS[sequence.openerId];
+  const title = `${openerDef.nameEn} ${sequence.mirror ? '(Mirror)' : ''}`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 20px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(title, CANVAS_W / 2, 50);
+
+  ctx.fillStyle = '#8888AA';
+  ctx.font = `14px ${FONT}`;
+  ctx.fillText(`(${openerDef.nameCn})`, CANVAS_W / 2, 75);
+
+  // Step indicator
+  ctx.fillStyle = '#B0B0D0';
+  ctx.font = `14px ${FONT}`;
+  ctx.fillText(`Step ${currentStep} / ${sequence.steps.length}`, CANVAS_W / 2, 95);
+
+  // Board background
+  const boardTopY = 120;
+  ctx.fillStyle = COLORS.boardBg;
+  ctx.fillRect(boardX, boardTopY, boardW, boardH);
+
+  // Grid lines
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= visibleRows; r++) {
+    const y = boardTopY + r * cellSz;
+    ctx.beginPath();
+    ctx.moveTo(boardX, y);
+    ctx.lineTo(boardX + boardW, y);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= 10; c++) {
+    const x = boardX + c * cellSz;
+    ctx.beginPath();
+    ctx.moveTo(x, boardTopY);
+    ctx.lineTo(x, boardTopY + boardH);
+    ctx.stroke();
+  }
+
+  // Board border
+  ctx.strokeStyle = COLORS.boardBorder;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boardX, boardTopY, boardW, boardH);
+
+  // Get the current board state
+  const board = currentStep === 0
+    ? Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null))
+    : sequence.steps[currentStep - 1]!.board;
+
+  // Get new cells for highlighting (only when step > 0)
+  const newCells = currentStep > 0 ? sequence.steps[currentStep - 1]!.newCells : [];
+
+  // Draw filled cells (bottom 8 rows = rows 12-19)
+  for (let r = 0; r < visibleRows; r++) {
+    const boardRow = 20 - visibleRows + r; // map to board coordinates
+    for (let c = 0; c < 10; c++) {
+      const cell = board[boardRow]?.[c];
+      if (cell) {
+        const px = boardX + c * cellSz;
+        const py = boardTopY + r * cellSz;
+        const color = COLORS.pieces[cell] ?? '#888888';
+
+        // Check if this is a newly placed cell
+        const isNew = newCells.some(nc => nc.row === boardRow && nc.col === c);
+
+        if (isNew) {
+          // Bright highlight for new piece
+          drawCell(ctx, px, py, cellSz, color);
+          // Add glow border
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px + 1, py + 1, cellSz - 2, cellSz - 2);
+        } else {
+          // Dimmed for previously placed pieces
+          ctx.globalAlpha = 0.5;
+          drawCell(ctx, px, py, cellSz, color);
+          ctx.globalAlpha = 1.0;
+        }
+      }
+    }
+  }
+
+  // Hold piece display
+  const holdX = 20;
+  const holdY = 140;
+  ctx.fillStyle = '#B0B0D0';
+  ctx.font = `bold 11px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('HOLD', holdX + 40, holdY - 4);
+
+  ctx.strokeStyle = COLORS.boardBorder;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(holdX, holdY, 80, 72);
+  drawPieceInBox(ctx, sequence.holdPiece, holdX, holdY, 80, 72, 14);
+
+  // Current step hint
+  if (currentStep > 0) {
+    const step = sequence.steps[currentStep - 1]!;
+    const hintY = boardTopY + boardH + 20;
+
+    // Piece being placed
+    ctx.fillStyle = COLORS.pieces[step.piece] ?? '#FFFFFF';
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`Piece ${currentStep}: ${step.piece}`, CANVAS_W / 2, hintY);
+
+    // Hint text
+    ctx.fillStyle = '#B0B0D0';
+    ctx.font = `14px ${FONT}`;
+    ctx.fillText(step.hint, CANVAS_W / 2, hintY + 24);
+  } else {
+    ctx.fillStyle = '#666688';
+    ctx.font = `14px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Empty board — press → to place first piece', CANVAS_W / 2, boardTopY + boardH + 30);
+  }
+
+  // Navigation controls
+  const navY = boardTopY + boardH + 80;
+  ctx.fillStyle = '#555577';
+  ctx.font = `13px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.fillText('← prev · → next · 1-4: switch opener · M: mirror', CANVAS_W / 2, navY);
+
+  // Opener selector buttons (bottom)
+  const btnY = navY + 30;
+  const openerIds: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+  const btnLabels = ['1:MS2', '2:Honey', '3:Stray', '4:Gamushiro'];
+  const btnW = 130;
+  const totalBtnW = openerIds.length * btnW + (openerIds.length - 1) * 8;
+  let btnX = (CANVAS_W - totalBtnW) / 2;
+
+  for (let i = 0; i < openerIds.length; i++) {
+    const isActive = openerIds[i] === sequence.openerId;
+    ctx.fillStyle = isActive ? '#2A2A5C' : '#1A1A3A';
+    roundRect(ctx, btnX, btnY, btnW, 32, 6);
+    ctx.fill();
+    ctx.strokeStyle = isActive ? '#6A6AAC' : '#3A3A5C';
+    ctx.lineWidth = 1;
+    roundRect(ctx, btnX, btnY, btnW, 32, 6);
+    ctx.stroke();
+
+    ctx.fillStyle = isActive ? '#FFFFFF' : '#9999BB';
+    ctx.font = `bold 12px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(btnLabels[i]!, btnX + btnW / 2, btnY + 16);
+
+    btnX += btnW + 8;
+  }
+
+  // Status bar
+  drawStatusBar(ctx, `${title} · Step ${currentStep}/${sequence.steps.length} · ←→: step · M: mirror`);
 }

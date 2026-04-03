@@ -17,6 +17,13 @@ import {
 } from './modes/onboarding.ts';
 import type { OnboardingProgress } from './modes/onboarding.ts';
 import { OPENERS } from './openers/decision.ts';
+import {
+  getOpenerSequence,
+  createVisualizerState,
+  stepForward,
+  stepBackward,
+} from './modes/visualizer.ts';
+import type { VisualizerState } from './modes/visualizer.ts';
 
 // ── Extended State ──
 
@@ -28,7 +35,7 @@ interface OnboardingDrill {
 }
 
 interface FullAppState extends AppState {
-  appMode: 'onboarding' | 'quiz';
+  appMode: 'onboarding' | 'quiz' | 'visualizer';
   onboarding: OnboardingProgress;
   onboardingDrill: OnboardingDrill;
 }
@@ -54,6 +61,7 @@ const state: FullAppState = {
   stats: getDisplayStats(loadQuizStats()),
   onboarding: onboardingProgress,
   onboardingDrill: createOnboardingDrill(),
+  visualizer: createVisualizerState(getOpenerSequence('ms2', false)),
 };
 
 // Debug: expose state to window for inspection
@@ -106,10 +114,64 @@ if (
 // ── Dispatcher ──
 
 function dispatch(action: string): void {
-  if (state.appMode === 'onboarding') {
+  // V key: toggle visualizer mode from anywhere
+  if (action === 'toggle_visualizer') {
+    if (state.appMode === 'visualizer') {
+      // Return to previous mode
+      state.appMode = state.onboarding.currentStage === 'complete' ? 'quiz' : 'onboarding';
+      state.mode = state.appMode as any;
+    } else {
+      state.appMode = 'visualizer';
+      state.mode = 'visualizer';
+    }
+    dirty = true;
+    return;
+  }
+
+  if (state.appMode === 'visualizer') {
+    dispatchVisualizer(action);
+  } else if (state.appMode === 'onboarding') {
     dispatchOnboarding(action);
   } else {
     dispatchQuiz(action);
+  }
+}
+
+function dispatchVisualizer(action: string): void {
+  const viz = state.visualizer!;
+  const openerIds: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+
+  switch (action) {
+    case 'advance': // → next step
+      stepForward(viz);
+      dirty = true;
+      break;
+    case 'step_back': // ← prev step
+      stepBackward(viz);
+      dirty = true;
+      break;
+    case 'option_1': // 1 = MS2
+    case 'option_2': // 2 = Honey Cup
+    case 'option_3': // 3 = Stray
+    case 'option_4': { // 4 = Gamushiro
+      const idx = action === 'option_1' ? 0 : action === 'option_2' ? 1 : action === 'option_3' ? 2 : 3;
+      const id = openerIds[idx]!;
+      state.visualizer = createVisualizerState(getOpenerSequence(id, viz.sequence.mirror));
+      dirty = true;
+      break;
+    }
+    case 'toggle_mode': { // M = toggle mirror (reuse S key or add M)
+      const seq = getOpenerSequence(viz.sequence.openerId, !viz.sequence.mirror);
+      state.visualizer = createVisualizerState(seq);
+      dirty = true;
+      break;
+    }
+    case 'reset_stats': // R = reset to step 0
+      state.visualizer = createVisualizerState(
+        getOpenerSequence(viz.sequence.openerId, viz.sequence.mirror)
+      );
+      dirty = true;
+      break;
   }
 }
 
