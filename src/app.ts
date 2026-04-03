@@ -56,6 +56,9 @@ const state: FullAppState = {
   onboardingDrill: createOnboardingDrill(),
 };
 
+// Debug: expose state to window for inspection
+(window as any).__appState = state;
+
 let storedStats = loadQuizStats();
 let dirty = true;
 
@@ -110,8 +113,30 @@ function dispatch(action: string): void {
   }
 }
 
+function skipCurrentStage(): void {
+  const { onboarding } = state;
+  const stage = onboarding.currentStage;
+  if (stage === 'full_quiz' || stage === 'complete') return;
+
+  // Mark current stage as completed and jump to celebration
+  const mastery = onboarding.mastery[stage as OpenerID];
+  if (mastery) {
+    mastery.completed = true;
+  }
+  onboarding.stagePhase = 'celebration';
+  saveOnboardingProgress(onboarding);
+  dirty = true;
+}
+
 function dispatchOnboarding(action: string): void {
   const { onboarding } = state;
+
+  // Skip stage works from any phase (press N)
+  if (action === 'skip_stage') {
+    skipCurrentStage();
+    return;
+  }
+
   const phase = onboarding.stagePhase;
 
   switch (phase) {

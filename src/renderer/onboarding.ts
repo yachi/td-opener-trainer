@@ -473,5 +473,6 @@ export function renderOnboardingMode(
     celebration: `${stageLabel(openerId)} complete`,
   };
 
-  drawStatusBar(ctx, phaseLabels[progress.stagePhase] ?? '');
+  const statusText = (phaseLabels[progress.stagePhase] ?? '') + ' · N: skip';
+  drawStatusBar(ctx, statusText);
 }

@@ -6,6 +6,7 @@ export function setupKeyboard(dispatch: (action: string) => void): () => void {
     Digit3: 'option_3',
     KeyR: 'reset_stats',
     KeyS: 'toggle_mode',
+    KeyN: 'skip_stage',
   };
 
   function onKeyDown(e: KeyboardEvent): void {
