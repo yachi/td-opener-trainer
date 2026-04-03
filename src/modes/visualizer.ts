@@ -242,17 +242,7 @@ const HONEY_CUP_DATA: OpenerPlacementData = {
         { col: 5, row: 19 },
         { col: 6, row: 19 },
       ],
-      hint: 'Z flat, cols 4-6, center',
-    },
-    {
-      piece: 'S',
-      cells: [
-        { col: 1, row: 16 },
-        { col: 2, row: 16 },
-        { col: 0, row: 17 },
-        { col: 1, row: 17 },
-      ],
-      hint: 'S flat, cols 0-2, top-left overhang',
+      hint: 'Z flat, cols 4-6, bridges the gap',
     },
     {
       piece: 'T',
@@ -272,7 +262,17 @@ const HONEY_CUP_DATA: OpenerPlacementData = {
         { col: 2, row: 18 },
         { col: 2, row: 17 },
       ],
-      hint: 'L spawn, cols 0-2, supports S piece above',
+      hint: 'L spawn, cols 0-2, on top of I piece',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 16 },
+        { col: 2, row: 16 },
+        { col: 0, row: 17 },
+        { col: 1, row: 17 },
+      ],
+      hint: 'S spawn, tucks on top of L piece',
     },
     {
       piece: 'J',
@@ -282,7 +282,7 @@ const HONEY_CUP_DATA: OpenerPlacementData = {
         { col: 8, row: 17 },
         { col: 9, row: 17 },
       ],
-      hint: 'J CCW rotation, cols 8-9, right wall overhang',
+      hint: 'J CCW rotation, right wall overhang',
     },
   ],
   tSpinSlots: {
