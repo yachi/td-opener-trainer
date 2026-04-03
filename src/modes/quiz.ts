@@ -59,8 +59,12 @@ export function submitAnswer(state: QuizState, opener: OpenerID): void {
   if (state.phase !== 'showing') return;
 
   state.selectedOpener = opener;
-  state.isCorrect =
-    opener === state.correctOpener || state.alternatives.includes(opener);
+  // Only the primary (highest-priority) opener counts as correct.
+  // MS2 and Gamushiro are interchangeable (same build condition).
+  const isMs2Match =
+    (opener === 'ms2' && state.correctOpener === 'gamushiro') ||
+    (opener === 'gamushiro' && state.correctOpener === 'ms2');
+  state.isCorrect = opener === state.correctOpener || isMs2Match;
   state.responseTimeMs = performance.now() - state.questionStartTime;
   state.phase = 'answered';
 
