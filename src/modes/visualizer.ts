@@ -265,6 +265,16 @@ const HONEY_CUP_DATA: OpenerPlacementData = {
       hint: 'T CW rotation, col 7, creates TST overhang',
     },
     {
+      piece: 'L',
+      cells: [
+        { col: 0, row: 18 },
+        { col: 1, row: 18 },
+        { col: 2, row: 18 },
+        { col: 2, row: 17 },
+      ],
+      hint: 'L spawn, cols 0-2, supports S piece above',
+    },
+    {
       piece: 'J',
       cells: [
         { col: 9, row: 15 },
