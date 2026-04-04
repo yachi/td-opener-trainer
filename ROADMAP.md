@@ -56,10 +56,12 @@ Must establish canonical mapping before building.
 
 ### Current Status
 - Framework built (types, navigation, rendering, 11 tests) — committed
-- MS2 Route C has placeholder data — needs real placements
-- Fumen strings found for Honey Cup (main + compromise), Gamushiro (default)
-- Need to decode fumen strings into step-by-step placement order (not just final board)
-- Missing: MS2 Route C/D fumens, Stray Cannon Route A/D fumens
+- Wiki source parser built — extracts boards from Hard Drop {{pfrow}} markup via Playwright
+- All 4 openers' wiki sources cached at /tmp/ and parsed into Bag 2 boards
+- Placement data extracted and gravity-verified for 8 routes (2 per opener)
+- **BLOCKER**: Bag 2 boards show post-TST residual (after 3 lines clear), not pre-TST. The visualizer needs to handle: (1) T enters TST slot, (2) 3 lines clear, (3) residual drops, (4) remaining 6 pieces placed. This requires line-clear logic in the visualizer.
+- Previous attempt with johnbeak.cz fumen data REVERTED — their Bag 1 shapes differ from ours
+- Hard Drop wiki data is compatible — Bag 1 shapes match confirmed
 
 ## Backlog
 - [ ] Adaptive quiz weighting (replay wrong bags more often — data model exists)
