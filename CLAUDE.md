@@ -26,7 +26,7 @@ Answer the user's actual question first. A 3-row table beats 2,000 lines of unsh
 
 ### P2. Verify with evidence, not reasoning
 Never say "X should work" — run it, screenshot it, read the output. Test the FULL flow end-to-end, not just one step. Compare outputs character-by-character against authoritative sources. Use exhaustive enumeration (all 5040 permutations) over probabilistic arguments. Use gravity simulation over manual inspection. Write the RED test first — a test that passes without seeing it fail proves nothing.
-*Lessons: #2, #3, #4, #5, #6, #7, #16, #20, #21, #22*
+*Lessons: #2, #3, #4, #5, #6, #7, #16, #20, #21, #22, #26*
 
 ### P3. Don't trust intermediaries
 Agent output can be wrong even when the parsed data was correct. localStorage keys can differ from what you assume. Playwright sessions don't share state with the user's browser. Fumen strings might encode a different variant than expected. Always verify the final output against the original source yourself.
@@ -38,7 +38,7 @@ If something looks interactive, make it interactive. If the user can't figure ou
 
 ### P5. When corrected, internalize immediately
 If the user says "check the screen" once, check the screen every time going forward — don't wait to be told again. If the user says "step back," actually pause and reconsider the whole approach. A correction given twice means it wasn't internalized the first time.
-*Lessons: #3, #16, #18, #21, #23 (all were repeated corrections)*
+*Lessons: #3, #16, #18, #21, #23, #24, #25 (all were repeated corrections)*
 
 ---
 
@@ -158,6 +158,21 @@ If the user says "check the screen" once, check the screen every time going forw
 **Mistake**: Hint text rendered at y=684, behind the status bar at y=672. All unit tests passed because they test logic (getTargetPlacement returns correct data), not rendering (where text appears on canvas).
 **Correction**: "why you cannot reproduce it in test"
 **Rule**: For canvas rendering, add layout constraint tests that assert Y positions don't overlap reserved regions (status bar, tab bar). Unit tests cover logic; layout tests cover positioning; Playwright covers visual verification. All three layers are needed.
+
+### 24. Record every correction as a lesson — don't wait to be told twice
+**Mistake**: Throughout this session, user had to explicitly ask me to write down lessons. I should have captured each correction immediately: "translucent should not float" → lesson. "show all placeholders" → lesson. "red tests first" → lesson. Instead I implemented fixes without documenting what I learned.
+**Correction**: "can you literally writing down learnings for every interaction with me"
+**Rule**: After EVERY user correction — no matter how small — immediately add a numbered lesson to CLAUDE.md BEFORE continuing implementation. The lesson documents: what I did wrong, the user's exact words, and the rule to follow going forward. This is the FIRST action after a correction, not an afterthought.
+
+### 25. "Show all" means ALL — don't interpret narrowly
+**Mistake**: User asked "should we show all by default." I interpreted "all" as "show the target even when unsupported" (for the current piece only). User corrected — they meant show ALL piece targets simultaneously (the entire opener shape), not just the active piece.
+**Correction**: "did i say show all placeholders?"
+**Rule**: When the user says "all", they mean ALL. Don't narrow the scope based on what's easiest to implement. Ask for clarification if unsure, but default to the broader interpretation.
+
+### 26. User's screenshot IS the red test — reproduce the exact scenario
+**Mistake**: User showed a screenshot of the exact unplayable state (Honey Cup, S held, L active, I in queue). I wrote a generic playability check and generic tests. The user wanted me to reproduce THEIR exact scenario as a failing test first.
+**Correction**: "industrial standard how to do it, also you should add red tests first"
+**Rule**: When the user reports a bug with a screenshot: (1) extract the exact state (bag order, piece, hold, board), (2) write a test that creates that EXACT state, (3) assert it fails, (4) THEN fix. The user's reproduction case is sacred — it's the acceptance test.
 
 ## Technical Reference
 
