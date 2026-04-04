@@ -547,6 +547,92 @@ describe('D9: checkOpenerMatch', () => {
   });
 });
 
+// ── D9b: Honey Cup / Gamushiro 7-step openers with hold piece in steps ──
+
+describe('D9b: openers with hold piece in placement steps (7 steps, 6 placeable)', () => {
+  test('RED TEST: Honey Cup — place 6 pieces correctly, should be success not mismatch', () => {
+    // Honey Cup has 7 steps: O, I, Z, T, L, S, J. Hold piece = L.
+    // With 7-bag + hold, only 6 pieces end up on board. J stays in hold (or whatever was swapped).
+    // Build the board with the first 6 steps (O, I, Z, T, L, S) — this is what a correct 6-piece play looks like.
+    const sequence = getOpenerSequence('honey_cup', false);
+    const board: (PieceType | null)[][] = Array.from({ length: 20 }, () => Array(10).fill(null));
+
+    // Place first 6 steps (all except the last one, J)
+    for (let i = 0; i < 6; i++) {
+      const step = sequence.steps[i]!;
+      for (const { col, row } of step.newCells) {
+        board[row]![col] = step.piece;
+      }
+    }
+
+    const state: DrillState = {
+      phase: 'playing',
+      openerId: 'honey_cup',
+      mirror: false,
+      board,
+      activePiece: null,
+      holdPiece: 'J', // J ended up in hold (couldn't place it, no queue left)
+      holdUsed: false,
+      queue: [],
+      piecesPlaced: 6,
+      bagPieces: ['O', 'I', 'Z', 'T', 'L', 'S', 'J'],
+      guided: true,
+    };
+
+    // This SHOULD match — the user placed 6 pieces correctly
+    expect(checkOpenerMatch(state)).toBe(true);
+  });
+
+  test('RED TEST: Gamushiro — place 6 pieces correctly, should be success not mismatch', () => {
+    // Gamushiro has 7 steps: J, S, I, T, Z, O, L. Hold piece = L.
+    // Place first 6 (J, S, I, T, Z, O), L stays in hold.
+    const sequence = getOpenerSequence('gamushiro', false);
+    const board: (PieceType | null)[][] = Array.from({ length: 20 }, () => Array(10).fill(null));
+
+    for (let i = 0; i < 6; i++) {
+      const step = sequence.steps[i]!;
+      for (const { col, row } of step.newCells) {
+        board[row]![col] = step.piece;
+      }
+    }
+
+    const state: DrillState = {
+      phase: 'playing',
+      openerId: 'gamushiro',
+      mirror: false,
+      board,
+      activePiece: null,
+      holdPiece: 'L',
+      holdUsed: false,
+      queue: [],
+      piecesPlaced: 6,
+      bagPieces: ['J', 'S', 'I', 'T', 'Z', 'O', 'L'],
+      guided: true,
+    };
+
+    expect(checkOpenerMatch(state)).toBe(true);
+  });
+
+  test('RED TEST: MS2 — 6 steps, no hold in steps, should still work', () => {
+    // MS2 has 6 steps, hold L not in steps. Sanity check — this should pass as before.
+    const expected = getExpectedBoard('ms2', false);
+    const state: DrillState = {
+      phase: 'playing',
+      openerId: 'ms2',
+      mirror: false,
+      board: expected,
+      activePiece: null,
+      holdPiece: 'L',
+      holdUsed: false,
+      queue: [],
+      piecesPlaced: 6,
+      bagPieces: MS2_BAG,
+      guided: true,
+    };
+    expect(checkOpenerMatch(state)).toBe(true);
+  });
+});
+
 // ── D10: getExpectedBoard ──
 
 describe('D10: getExpectedBoard', () => {

@@ -367,10 +367,17 @@ export function getHoldSuggestion(state: DrillState): PieceType | null {
   return null;
 }
 
+/**
+ * Get the expected board for comparison after a 7-bag drill.
+ * With 7 bag pieces and 1 hold, only 6 end up on the board.
+ * For openers with 7 placement steps (hold piece also placed via swap),
+ * use the board after step 6 (not 7).
+ */
 export function getExpectedBoard(openerId: OpenerID, mirror: boolean): Board {
   const seq = getOpenerSequence(openerId, mirror);
-  const lastStep = seq.steps[seq.steps.length - 1];
-  if (!lastStep) return createBoard();
-  // Convert (PieceType | null)[][] to Board (same type)
-  return lastStep.board.map((row) => [...row]);
+  // Max 6 pieces can be placed from a 7-bag with hold
+  const stepIndex = Math.min(seq.steps.length, 6) - 1;
+  const step = seq.steps[stepIndex];
+  if (!step) return createBoard();
+  return step.board.map((row) => [...row]);
 }
