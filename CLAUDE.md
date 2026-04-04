@@ -179,6 +179,17 @@ If the user says "check the screen" once, check the screen every time going forw
 **Correction**: User screenshot showing "Shape mismatch" with J missing from their build but present in expected.
 **Rule**: The completion check must account for the hold piece. For openers where the hold piece is also in the placement steps (Honey Cup, Gamushiro), the expected board for comparison should exclude the piece that ends up in hold. Never hardcode piece counts — derive from the opener data.
 
+### 33. Lessons don't prevent bugs — tests do. Run findFloatingCells BEFORE claiming anything works.
+**Pattern**: 4 separate floating-piece incidents in one session. Each time I added a lesson. Each time the next incident happened anyway. I have 32 lessons but lessons are instructions I must remember — I don't reliably remember. Tests are instructions the computer remembers.
+**Root cause**: I verify what I built (does it render?) not what could go wrong (does it obey physics?). I have `findFloatingCells()` but never run it before claiming things work. I eyeball screenshots instead of running code.
+**Permanent fix**: Before writing ANY board data, write the gravity test FIRST. Not after. Not "I'll verify with Playwright." The test runs `findFloatingCells()` on EVERY board state (Bag 1 AND Bag 2, every step, normal + mirror). If ANY cell floats unexpectedly, the test fails. This is the V1b pattern extended to all board data. No board data enters the codebase without passing this gate.
+**The meta-rule**: When I find myself writing a lesson that says "remember to check X" — instead write a TEST that checks X. The lesson says what to do. The test actually does it.
+
+### 32. Wiki pfrow cells can be multi-character — parser must handle composites
+**Mistake**: The wiki uses multi-char cell names like `LZ`, `SZ` in pfrow templates. These represent Bag 1 piece overlap markers (residual). Our parser only handled single-char cells, dropping multi-char cells from the residual. This produced an incomplete residual with gaps, causing ALL Bag 2 pieces to float.
+**Correction**: User screenshot of Stray Cannon J piece floating at step 6/7.
+**Rule**: When parsing wiki pfrow templates: (1) ANY non-empty, non-dot cell in the residual zone is a G cell, regardless of character count. (2) Use the wiki's "clean residual" board (shows only G cells, no Bag 2 overlay) as the authoritative source. (3) After extracting, verify cell count matches expected (24 or 28 per opener).
+
 ### 31. Check EVERY step, not just the final state — intermediate steps can float
 **Mistake**: Verified Stray Cannon Bag 2 by screenshotting only the final step (7/7). Said "no floating." But at step 6/7, J piece is clearly floating with a gap below it. The final O piece on top of J made the final state look connected, masking the intermediate float.
 **Correction**: User screenshot of step 6/7 showing J floating.
