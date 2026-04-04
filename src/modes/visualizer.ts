@@ -1,6 +1,7 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { OPENERS } from '../openers/decision.ts';
+import { computePostTst } from '../core/field-engine.ts';
 
 // ── Types ──
 
@@ -474,8 +475,9 @@ function buildSequence(
 
 /**
  * Compute the board state after TST fires and lines clear.
- * TST clears the bottom 3 filled rows (17, 18, 19 for standard TD openers).
- * Remaining rows above drop down by the number of cleared rows (gravity).
+ * Delegates to field-engine's computePostTst which uses tetris-fumen's
+ * Field.fill() + Field.clearLine() for proper line-clear simulation
+ * instead of hardcoding rows 17-19.
  */
 export function computePostTstBoard(openerId: OpenerID, mirror: boolean): (PieceType | null)[][] {
   const bag1Seq = getOpenerSequence(openerId, mirror);
@@ -484,34 +486,17 @@ export function computePostTstBoard(openerId: OpenerID, mirror: boolean): (Piece
       ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
       : emptyBoard();
 
-  const board = cloneBoard(bag1Board);
-
-  // Find full or nearly-full rows (the TST clears the 3 bottom-most rows
-  // that become full when the T piece enters the TST slot).
-  // In standard TD openers, these are rows 17, 18, 19.
-  // We clear rows 17-19 and apply gravity.
-  const rowsToClear = [17, 18, 19];
-
-  // Remove the cleared rows
-  for (const r of rowsToClear) {
-    for (let c = 0; c < 10; c++) {
-      board[r]![c] = null;
-    }
+  const tst = bag1Seq.tSpinSlots.tst;
+  if (!tst) {
+    // No TST slot defined — return the board as-is
+    return cloneBoard(bag1Board);
   }
 
-  // Apply gravity: shift all rows down to fill the gaps
-  const clearedCount = rowsToClear.length;
-  const result = emptyBoard();
-  let destRow = 19;
-  for (let srcRow = 19; srcRow >= 0; srcRow--) {
-    if (rowsToClear.includes(srcRow)) continue;
-    for (let c = 0; c < 10; c++) {
-      result[destRow]![c] = board[srcRow]![c];
-    }
-    destRow--;
-  }
-
-  return result;
+  return computePostTst(bag1Board, {
+    col: tst.col,
+    row: tst.row,
+    rotation: tst.rotation as 0 | 1 | 2 | 3,
+  });
 }
 
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
