@@ -12,6 +12,8 @@ import { drawQuizHUD, drawTabs, drawStatusBar } from './hud';
 import { renderOnboardingMode } from './onboarding';
 import { OPENERS } from '../openers/decision';
 import { PIECE_DEFINITIONS } from '../core/pieces';
+import { renderDrillMode, renderDrillSelector } from './drill';
+import type { DrillState } from '../modes/drill';
 
 export interface QuizStatsData {
   total: number;
@@ -47,6 +49,8 @@ export interface AppState {
   };
   stats: QuizStatsData;
   visualizer?: VisualizerState;
+  drill?: DrillState | null;
+  drillSelector?: { selectedIndex: number };
 }
 
 export interface Renderer {
@@ -80,6 +84,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         drawStatusBar(ctx, 'Press 1-3 \u00b7 Space: skip \u00b7 S: mode \u00b7 R: reset', state.quiz.mode);
       } else if (state.mode === 'visualizer' && state.visualizer) {
         renderVisualizerMode(ctx, state.visualizer);
+      } else if (state.mode === 'drill') {
+        if (state.drill) {
+          renderDrillMode(ctx, state.drill);
+        } else {
+          renderDrillSelector(ctx, state.drillSelector?.selectedIndex ?? 0);
+        }
       } else {
         const statusText = `${state.mode.charAt(0).toUpperCase() + state.mode.slice(1)} mode`;
         drawStatusBar(ctx, statusText);

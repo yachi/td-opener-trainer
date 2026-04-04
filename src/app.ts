@@ -24,6 +24,18 @@ import {
   stepBackward,
 } from './modes/visualizer.ts';
 import type { VisualizerState } from './modes/visualizer.ts';
+import {
+  createDrillState,
+  movePiece,
+  rotatePiece,
+  hardDropPiece,
+  holdCurrentPiece,
+  softDropPiece,
+  resetDrill,
+} from './modes/drill.ts';
+import type { DrillState } from './modes/drill.ts';
+import { setupDrillInput } from './input/drill-keyboard.ts';
+import type { DrillInputHandler } from './input/drill-keyboard.ts';
 
 // ── Extended State ──
 
@@ -35,9 +47,11 @@ interface OnboardingDrill {
 }
 
 interface FullAppState extends AppState {
-  appMode: 'onboarding' | 'quiz' | 'visualizer';
+  appMode: 'onboarding' | 'quiz' | 'visualizer' | 'drill';
   onboarding: OnboardingProgress;
   onboardingDrill: OnboardingDrill;
+  drill: DrillState | null;
+  drillSelector: { selectedIndex: number };
 }
 
 function createOnboardingDrill(): OnboardingDrill {
@@ -62,6 +76,8 @@ const state: FullAppState = {
   onboarding: onboardingProgress,
   onboardingDrill: createOnboardingDrill(),
   visualizer: createVisualizerState(getOpenerSequence('ms2', false)),
+  drill: null,
+  drillSelector: { selectedIndex: 0 },
 };
 
 // Debug: expose state to window for inspection
@@ -69,6 +85,26 @@ const state: FullAppState = {
 
 let storedStats = loadQuizStats();
 let dirty = true;
+let drillInput: DrillInputHandler | null = null;
+let prevAppMode: 'onboarding' | 'quiz' | 'drill' = isOnboardingComplete ? 'quiz' : 'onboarding';
+
+function enterDrillMode(): void {
+  state.appMode = 'drill';
+  state.mode = 'drill';
+  state.drill = null; // start in selecting phase
+  state.drillSelector = { selectedIndex: 0 };
+  if (!drillInput) {
+    drillInput = setupDrillInput();
+  }
+  dirty = true;
+}
+
+function leaveDrillMode(): void {
+  if (drillInput) {
+    drillInput.destroy();
+    drillInput = null;
+  }
+}
 
 // ── Onboarding Helpers ──
 
@@ -118,13 +154,25 @@ function dispatch(action: string): void {
   if (action === 'toggle_visualizer') {
     if (state.appMode === 'visualizer') {
       // Return to previous mode
-      state.appMode = state.onboarding.currentStage === 'complete' ? 'quiz' : 'onboarding';
-      state.mode = state.appMode as any;
+      if (prevAppMode === 'drill') {
+        enterDrillMode();
+      } else {
+        const returnMode = state.onboarding.currentStage === 'complete' ? 'quiz' : 'onboarding';
+        state.appMode = returnMode;
+        state.mode = returnMode as any;
+      }
     } else {
+      prevAppMode = state.appMode === 'drill' ? 'drill' : (state.appMode as any);
+      if (state.appMode === 'drill') leaveDrillMode();
       state.appMode = 'visualizer';
       state.mode = 'visualizer';
     }
     dirty = true;
+    return;
+  }
+
+  // In drill mode, only handle V (above) from main dispatcher — everything else goes through drillInput
+  if (state.appMode === 'drill') {
     return;
   }
 
@@ -346,9 +394,110 @@ function dispatchQuiz(action: string): void {
   }
 }
 
+// ── Drill Dispatcher ──
+
+const DRILL_OPENER_IDS: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+
+function dispatchDrill(action: string): void {
+  // Selecting phase
+  if (state.drill === null) {
+    switch (action) {
+      case 'select_1':
+      case 'select_2':
+      case 'select_3':
+      case 'select_4': {
+        const idx = parseInt(action.slice(-1)) - 1;
+        state.drillSelector.selectedIndex = idx;
+        state.drill = createDrillState(DRILL_OPENER_IDS[idx]!);
+        dirty = true;
+        break;
+      }
+      case 'confirm': {
+        const id = DRILL_OPENER_IDS[state.drillSelector.selectedIndex]!;
+        state.drill = createDrillState(id);
+        dirty = true;
+        break;
+      }
+      case 'move_left': // repurpose as selector nav
+        state.drillSelector.selectedIndex = Math.max(0, state.drillSelector.selectedIndex - 1);
+        dirty = true;
+        break;
+      case 'move_right':
+        state.drillSelector.selectedIndex = Math.min(3, state.drillSelector.selectedIndex + 1);
+        dirty = true;
+        break;
+      case 'soft_drop':
+        state.drillSelector.selectedIndex = Math.min(3, state.drillSelector.selectedIndex + 1);
+        dirty = true;
+        break;
+    }
+    return;
+  }
+
+  const drill = state.drill;
+
+  // Playing phase
+  if (drill.phase === 'playing') {
+    switch (action) {
+      case 'move_left':
+        state.drill = movePiece(drill, -1, 0);
+        dirty = true;
+        break;
+      case 'move_right':
+        state.drill = movePiece(drill, 1, 0);
+        dirty = true;
+        break;
+      case 'soft_drop':
+        state.drill = softDropPiece(drill);
+        dirty = true;
+        break;
+      case 'rotate_cw':
+        state.drill = rotatePiece(drill, 1);
+        dirty = true;
+        break;
+      case 'rotate_ccw':
+        state.drill = rotatePiece(drill, -1);
+        dirty = true;
+        break;
+      case 'hard_drop':
+        state.drill = hardDropPiece(drill);
+        dirty = true;
+        break;
+      case 'hold':
+        state.drill = holdCurrentPiece(drill);
+        dirty = true;
+        break;
+    }
+    return;
+  }
+
+  // Success or Failed phase
+  if (drill.phase === 'success' || drill.phase === 'failed') {
+    switch (action) {
+      case 'retry':
+        state.drill = resetDrill(drill);
+        dirty = true;
+        break;
+      case 'hard_drop': // Space = new bag
+        state.drill = createDrillState(drill.openerId);
+        dirty = true;
+        break;
+      case 'select_1':
+      case 'select_2':
+      case 'select_3':
+      case 'select_4': {
+        const idx = parseInt(action.slice(-1)) - 1;
+        state.drill = createDrillState(DRILL_OPENER_IDS[idx]!);
+        dirty = true;
+        break;
+      }
+    }
+  }
+}
+
 // ── Render Loop ──
 
-function frame(): void {
+function frame(now: number): void {
   // Auto-advance for quiz answers
   if (state.appMode === 'quiz' && state.quiz.phase === 'answered') {
     if (tickQuiz(state.quiz)) {
@@ -365,6 +514,14 @@ function frame(): void {
     if (performance.now() >= state.onboardingDrill.autoAdvanceAt) {
       advanceDrill();
       dirty = true;
+    }
+  }
+
+  // Process drill input (DAS/ARR)
+  if (state.appMode === 'drill' && drillInput) {
+    const actions = drillInput.update(now);
+    for (const action of actions) {
+      dispatchDrill(action);
     }
   }
 
@@ -385,7 +542,16 @@ if (state.appMode === 'quiz') {
 }
 
 dirty = true;
-const cleanup = setupKeyboard(dispatch);
+
+// In drill mode, only let V (toggle_visualizer) through the main keyboard handler.
+// All other keys are handled by the drill input handler.
+const cleanup = setupKeyboard(dispatch, {
+  shouldHandle(code: string): boolean {
+    if (state.appMode !== 'drill') return true;
+    // Only V passes through to main dispatch in drill mode
+    return code === 'KeyV';
+  },
+});
 
 // Click handling — tabs, buttons, opener selectors
 canvas.addEventListener('click', (e) => {
@@ -398,6 +564,7 @@ canvas.addEventListener('click', (e) => {
     const tabIndex = Math.floor(x / (640 / 3));
     if (tabIndex === 0) {
       // Quiz tab — goes to quiz (if complete) or onboarding
+      if (state.appMode === 'drill') leaveDrillMode();
       if (state.onboarding.currentStage === 'complete') {
         state.appMode = 'quiz';
         state.mode = 'quiz' as any;
@@ -409,11 +576,16 @@ canvas.addEventListener('click', (e) => {
       dirty = true;
     } else if (tabIndex === 1) {
       // Visualizer tab — always accessible
+      if (state.appMode === 'drill') leaveDrillMode();
       state.appMode = 'visualizer' as any;
       state.mode = 'visualizer';
       dirty = true;
+    } else if (tabIndex === 2) {
+      // Drill tab
+      if (state.appMode !== 'drill') {
+        enterDrillMode();
+      }
     }
-    // tabIndex === 2 → Drill (not implemented yet)
     return;
   }
 

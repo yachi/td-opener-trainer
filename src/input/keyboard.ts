@@ -1,4 +1,7 @@
-export function setupKeyboard(dispatch: (action: string) => void): () => void {
+export function setupKeyboard(
+  dispatch: (action: string) => void,
+  options?: { shouldHandle?: (code: string) => boolean },
+): () => void {
   const keyMap: Record<string, string> = {
     Space: 'advance',
     Digit1: 'option_1',
@@ -16,6 +19,9 @@ export function setupKeyboard(dispatch: (action: string) => void): () => void {
 
   function onKeyDown(e: KeyboardEvent): void {
     if (e.repeat) return;
+
+    // If shouldHandle is provided and returns false, skip this key
+    if (options?.shouldHandle && !options.shouldHandle(e.code)) return;
 
     const action = keyMap[e.code];
     if (action) {
