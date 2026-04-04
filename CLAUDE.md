@@ -179,6 +179,11 @@ If the user says "check the screen" once, check the screen every time going forw
 **Correction**: User screenshot showing "Shape mismatch" with J missing from their build but present in expected.
 **Rule**: The completion check must account for the hold piece. For openers where the hold piece is also in the placement steps (Honey Cup, Gamushiro), the expected board for comparison should exclude the piece that ends up in hold. Never hardcode piece counts — derive from the opener data.
 
+### 30. The TST fires DURING Bag 2, not at the Bag 1/2 boundary — Bag 2 pieces fill gaps first
+**Mistake**: Assumed the T-Spin Triple fires immediately after Bag 1 is complete. Wrote `computePostTst` that places T directly on the unfilled Bag 1 board. But Bag 1 rows are only 4-9/10 filled — the TST can't fire yet. The correct flow: (1) place some Bag 2 pieces to fill gaps around the TST pocket, (2) T enters the pocket, (3) 3 now-full rows clear, (4) remaining Bag 2 pieces placed on residual. The TST slot is also at the OVERHANG area (created by Bag 1's T piece), not at the center gap.
+**Correction**: Engine correctly showed 0-2 lines cleared instead of expected 3 — because rows weren't full.
+**Rule**: The TST is a mid-Bag-2 event, not a Bag 1/2 boundary event. The Bag 2 visualization must show: gap-filling pieces → T enters → lines clear → remaining pieces. Never assume board operations happen at bag boundaries — verify the actual game flow from the wiki.
+
 ### 29. "No overlapping" is not "correct" — always check physics AND compare against wiki source
 **Mistake**: Saw Bag 2 screenshot with Z piece at rows 16-17 floating in mid-air (residual at row 19, nothing at rows 17-18). Said "the board looks correct — no overlapping cells." Failed to check gravity AND failed to compare against the Hard Drop wiki board diagram.
 **Correction**: "why cant you see it floating? also what does hard wiki showed?"
