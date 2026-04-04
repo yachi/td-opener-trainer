@@ -32,6 +32,7 @@ import {
   holdCurrentPiece,
   softDropPiece,
   resetDrill,
+  toggleGuided,
 } from './modes/drill.ts';
 import type { DrillState } from './modes/drill.ts';
 import { setupDrillInput } from './input/drill-keyboard.ts';
@@ -465,6 +466,10 @@ function dispatchDrill(action: string): void {
         break;
       case 'hold':
         state.drill = holdCurrentPiece(drill);
+        dirty = true;
+        break;
+      case 'toggle_guided':
+        state.drill = toggleGuided(drill);
         dirty = true;
         break;
     }

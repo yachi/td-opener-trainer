@@ -26,6 +26,12 @@ export interface DrillState {
   queue: PieceType[];
   piecesPlaced: number;
   bagPieces: PieceType[];
+  guided: boolean;
+}
+
+export interface TargetPlacement {
+  cells: { col: number; row: number }[];
+  hint: string;
 }
 
 // ── Constants ──
@@ -77,6 +83,7 @@ export function createDrillState(openerId: OpenerID): DrillState {
     queue: spawn ? spawn.remaining : [],
     piecesPlaced: 0,
     bagPieces: [...bag],
+    guided: true,
   };
 }
 
@@ -95,6 +102,7 @@ export function createDrillStateWithBag(openerId: OpenerID, bag: PieceType[], mi
     queue: spawn ? spawn.remaining : [],
     piecesPlaced: 0,
     bagPieces: [...bag],
+    guided: true,
   };
 }
 
@@ -225,7 +233,30 @@ export function resetDrill(state: DrillState): DrillState {
     queue: spawn ? spawn.remaining : [],
     piecesPlaced: 0,
     bagPieces: [...state.bagPieces],
+    guided: state.guided,
   };
+}
+
+export function toggleGuided(state: DrillState): DrillState {
+  return { ...state, guided: !state.guided };
+}
+
+export function getTargetPlacement(state: DrillState): TargetPlacement | null {
+  if (!state.guided || state.phase !== 'playing' || !state.activePiece) return null;
+  const sequence = getOpenerSequence(state.openerId, state.mirror);
+  if (state.activePiece.type === sequence.holdPiece && state.holdPiece === null) return null;
+  const step = sequence.steps.find((s) => s.piece === state.activePiece!.type);
+  if (!step) return null;
+  return { cells: step.newCells, hint: step.hint };
+}
+
+export function getHoldSuggestion(state: DrillState): PieceType | null {
+  if (!state.guided || state.phase !== 'playing' || !state.activePiece) return null;
+  const sequence = getOpenerSequence(state.openerId, state.mirror);
+  if (state.activePiece.type === sequence.holdPiece && state.holdPiece === null) {
+    return sequence.holdPiece;
+  }
+  return null;
 }
 
 export function getExpectedBoard(openerId: OpenerID, mirror: boolean): Board {

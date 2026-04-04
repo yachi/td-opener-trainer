@@ -12,10 +12,14 @@ import {
   checkOpenerMatch,
   resetDrill,
   getExpectedBoard,
+  toggleGuided,
+  getTargetPlacement,
+  getHoldSuggestion,
 } from '../src/modes/drill.ts';
 import type { DrillState } from '../src/modes/drill.ts';
 import { OPENERS } from '../src/openers/decision.ts';
 import { createBoard } from '../src/core/srs.ts';
+import { getOpenerSequence } from '../src/modes/visualizer.ts';
 
 // ── Helpers ──
 
@@ -513,5 +517,116 @@ describe('D11: Full flow — drop all 6 pieces', () => {
 
     expect(['success', 'failed']).toContain(state.phase);
     expect(state.piecesPlaced).toBe(6);
+  });
+});
+
+// ── D12: Guided mode ──
+
+// MS2 hold piece is L. Bag with L first so we can test hold suggestion.
+const MS2_BAG_L_FIRST: PieceType[] = ['L', 'J', 'T', 'S', 'Z', 'I', 'O'];
+
+describe('D12: guided mode', () => {
+  test('createDrillState sets guided to true by default', () => {
+    const state = createDrillState('ms2');
+    expect(state.guided).toBe(true);
+  });
+
+  test('createDrillStateWithBag sets guided to true by default', () => {
+    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    expect(state.guided).toBe(true);
+  });
+
+  test('toggleGuided flips the guided flag', () => {
+    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    expect(state.guided).toBe(true);
+    const toggled = toggleGuided(state);
+    expect(toggled.guided).toBe(false);
+    const toggledBack = toggleGuided(toggled);
+    expect(toggledBack.guided).toBe(true);
+  });
+
+  test('getTargetPlacement returns null when not guided', () => {
+    let state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    state = toggleGuided(state);
+    expect(getTargetPlacement(state)).toBeNull();
+  });
+
+  test('getTargetPlacement returns cells and hint for active piece', () => {
+    // MS2_BAG starts with J, which is placed (not held — L is held for MS2)
+    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    expect(state.activePiece!.type).toBe('J');
+    const target = getTargetPlacement(state);
+    expect(target).not.toBeNull();
+    // Verify it matches the visualizer data
+    const sequence = getOpenerSequence('ms2', false);
+    const jStep = sequence.steps.find((s) => s.piece === 'J');
+    expect(target!.cells).toEqual(jStep!.newCells);
+    expect(target!.hint).toBe(jStep!.hint);
+  });
+
+  test('getTargetPlacement returns null when active piece should be held', () => {
+    // L is the hold piece for MS2. Start with L first in bag.
+    const state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
+    expect(state.activePiece!.type).toBe('L');
+    expect(state.holdPiece).toBeNull();
+    const target = getTargetPlacement(state);
+    expect(target).toBeNull();
+  });
+
+  test('getTargetPlacement returns null when phase is not playing', () => {
+    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    const nonPlaying = { ...state, phase: 'success' as const };
+    expect(getTargetPlacement(nonPlaying)).toBeNull();
+  });
+
+  test('getHoldSuggestion returns hold piece type when active piece matches', () => {
+    // L is MS2 hold piece; start with L first
+    const state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
+    expect(state.activePiece!.type).toBe('L');
+    expect(state.holdPiece).toBeNull();
+    const suggestion = getHoldSuggestion(state);
+    expect(suggestion).toBe('L');
+  });
+
+  test('getHoldSuggestion returns null when hold already used', () => {
+    // Hold L, then swap back — holdPiece is no longer null
+    let state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
+    state = holdCurrentPiece(state); // hold L, get J
+    state = hardDropPiece(state); // drop J, reset holdUsed
+    // Now swap: hold current (T) to get L back
+    state = holdCurrentPiece(state); // hold T, get L
+    // Now active is L, holdPiece is T (not null)
+    expect(state.activePiece!.type).toBe('L');
+    expect(state.holdPiece).not.toBeNull();
+    const suggestion = getHoldSuggestion(state);
+    expect(suggestion).toBeNull();
+  });
+
+  test('getHoldSuggestion returns null when not guided', () => {
+    let state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
+    state = toggleGuided(state);
+    expect(getHoldSuggestion(state)).toBeNull();
+  });
+
+  test('getHoldSuggestion returns null when active piece is not the hold piece', () => {
+    // MS2_BAG starts with J, which is not the hold piece (L)
+    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    expect(state.activePiece!.type).toBe('J');
+    expect(getHoldSuggestion(state)).toBeNull();
+  });
+
+  test('resetDrill preserves guided state', () => {
+    let state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    state = toggleGuided(state); // guided = false
+    state = hardDropPiece(state); // place a piece
+    const reset = resetDrill(state);
+    expect(reset.guided).toBe(false);
+  });
+
+  test('resetDrill preserves guided=true', () => {
+    let state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    state = hardDropPiece(state);
+    const reset = resetDrill(state);
+    expect(reset.guided).toBe(true);
   });
 });

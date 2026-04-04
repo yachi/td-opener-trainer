@@ -3,7 +3,7 @@ import type { DrillState } from '../modes/drill';
 import type { OpenerID } from '../openers/types';
 import { getPieceCells, getGhostPosition } from '../core/srs';
 import { OPENERS } from '../openers/decision';
-import { getExpectedBoard } from '../modes/drill';
+import { getExpectedBoard, getTargetPlacement, getHoldSuggestion } from '../modes/drill';
 import {
   COLORS,
   CANVAS_W,
@@ -120,6 +120,32 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   drawBoard(ctx);
   drawLockedCells(ctx, state);
 
+  // Target outline (guided mode)
+  const target = getTargetPlacement(state);
+  if (target) {
+    const color = COLORS.pieces[state.activePiece!.type] ?? '#888888';
+    ctx.globalAlpha = 0.2;
+    for (const { col, row } of target.cells) {
+      if (row < 0) continue;
+      const px = BOARD_X + col * CELL_SIZE;
+      const py = BOARD_Y + row * CELL_SIZE;
+      drawCell(ctx, px, py, CELL_SIZE, color);
+    }
+    ctx.globalAlpha = 1.0;
+
+    // Dashed border around target cells
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    for (const { col, row } of target.cells) {
+      if (row < 0) continue;
+      const px = BOARD_X + col * CELL_SIZE;
+      const py = BOARD_Y + row * CELL_SIZE;
+      ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+    }
+    ctx.setLineDash([]);
+  }
+
   // Ghost piece
   if (state.activePiece) {
     const ghost = getGhostPosition(state.board, state.activePiece);
@@ -154,7 +180,8 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   }
 
   // Hold piece
-  drawDrillHold(ctx, state.holdPiece, state.holdUsed);
+  const holdSuggestion = getHoldSuggestion(state);
+  drawDrillHold(ctx, state.holdPiece, state.holdUsed, holdSuggestion);
 
   // Next queue
   drawDrillQueue(ctx, state.queue);
@@ -166,10 +193,20 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   ctx.textBaseline = 'top';
   ctx.fillText(`Pieces: ${state.piecesPlaced}/6`, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 8);
 
+  // Hint text (guided mode)
+  if (target) {
+    ctx.fillStyle = '#9999BB';
+    ctx.font = `13px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(target.hint, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 24);
+  }
+
   // Controls help
   drawControlsHelp(ctx);
 
-  drawStatusBar(ctx, `Drill · ${title} · Pieces ${state.piecesPlaced}/6`);
+  const modeLabel = state.guided ? 'Guided' : 'Free';
+  drawStatusBar(ctx, `Drill · ${title} · ${modeLabel} · Pieces ${state.piecesPlaced}/6`);
 }
 
 // ── Success Phase ──
@@ -337,7 +374,12 @@ function drawMiniBoard(
   }
 }
 
-function drawDrillHold(ctx: CanvasRenderingContext2D, holdPiece: PieceType | null, holdUsed: boolean): void {
+function drawDrillHold(
+  ctx: CanvasRenderingContext2D,
+  holdPiece: PieceType | null,
+  holdUsed: boolean,
+  holdSuggestion?: PieceType | null,
+): void {
   const holdX = 20;
   const holdY = BOARD_Y + 20;
   const boxW = 80;
@@ -363,6 +405,19 @@ function drawDrillHold(ctx: CanvasRenderingContext2D, holdPiece: PieceType | nul
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(holdX, holdY, boxW, boxH);
     ctx.setLineDash([]);
+  }
+
+  // Hold suggestion indicator (guided mode)
+  if (holdSuggestion != null) {
+    ctx.strokeStyle = '#00E676';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(holdX - 1, holdY - 1, boxW + 2, boxH + 2);
+
+    ctx.fillStyle = '#00E676';
+    ctx.font = `bold 12px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('\u2190 Hold', holdX + boxW / 2, holdY + boxH + 4);
   }
 }
 
@@ -413,6 +468,7 @@ function drawControlsHelp(ctx: CanvasRenderingContext2D): void {
     '\u2193: soft drop',
     'Space: hard drop',
     'C: hold',
+    'H: hints',
   ];
 
   ctx.fillStyle = '#555577';

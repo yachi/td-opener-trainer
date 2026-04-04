@@ -23,6 +23,7 @@ const INSTANT_MAP: Record<string, string> = {
   Digit3: 'select_3',
   Digit4: 'select_4',
   KeyR: 'retry',
+  KeyH: 'toggle_guided',
   Enter: 'confirm',
 };
 
