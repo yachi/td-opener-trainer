@@ -15,6 +15,7 @@ import {
   toggleGuided,
   getTargetPlacement,
   getHoldSuggestion,
+  getAllTargets,
 } from '../src/modes/drill.ts';
 import type { DrillState } from '../src/modes/drill.ts';
 import { OPENERS } from '../src/openers/decision.ts';
@@ -839,6 +840,34 @@ describe('D12: guided mode', () => {
     const reset = resetDrill(state);
     expect(reset.guided).toBe(true);
   });
+
+  test('RED TEST: getAllTargets should NOT include 7th piece for Honey Cup', () => {
+    // Honey Cup has 7 vis steps but only 6 can be placed. J is step 7.
+    // getAllTargets should show at most 6 targets, NOT including J.
+    const bag: PieceType[] = ['O', 'I', 'Z', 'T', 'S', 'J', 'L'];
+    const state = createDrillStateWithBag('honey_cup', bag, false);
+    const targets = getAllTargets(state);
+    const pieceTypes = targets.map(t => t.piece);
+    expect(pieceTypes).not.toContain('J'); // J is the 7th step — should be excluded
+    expect(targets.length).toBeLessThanOrEqual(6);
+  });
+
+  test('RED TEST: getTargetPlacement should NOT return target for 7th piece', () => {
+    // If J is active in Honey Cup, it's the 7th piece — no target should show
+    const bag: PieceType[] = ['J', 'O', 'I', 'Z', 'T', 'S', 'L'];
+    const state = createDrillStateWithBag('honey_cup', bag, false);
+    expect(state.activePiece!.type).toBe('J');
+    const target = getTargetPlacement(state);
+    // J is the 7th step — should have no target (can't be placed in 6-piece drill)
+    expect(target).toBeNull();
+  });
+
+  test('RED TEST: getAllTargets for MS2 (6 steps) shows all 6', () => {
+    // MS2 has 6 steps, no issue — all 6 should show
+    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
+    const targets = getAllTargets(state);
+    expect(targets.length).toBe(6);
+  });
 });
 
 // ── D12b: Unsupported targets show hint but supported=false ──
@@ -891,16 +920,14 @@ describe('D12b: pieces arriving out of visualizer order get unsupported hints', 
     expect(target!.supported).toBe(false);
   });
 
-  test('Honey Cup: J arrives first — target at rows 15-17 is unsupported', () => {
-    // J in Honey Cup is the last piece placed, sits on top of T and O
+  test('Honey Cup: J arrives first — no target (7th piece, not placeable)', () => {
+    // J in Honey Cup is the 7th step — can't be placed with 7-bag + hold
     const bag: PieceType[] = ['J', 'T', 'S', 'Z', 'O', 'I', 'L'];
     const state = createDrillStateWithBag('honey_cup', bag, false);
     expect(state.activePiece!.type).toBe('J');
 
     const target = getTargetPlacement(state);
-    expect(target).not.toBeNull();
-    expect(target!.supported).toBe(false);
-    expect(target!.hint).toContain('J');
+    expect(target).toBeNull(); // J is the 7th step — excluded from targets
   });
 
   test('all openers: first piece in visualizer order is always supported', () => {
@@ -934,8 +961,10 @@ describe('D13: target matches visualizer data through full placement sequence', 
       test(`${label}: targets match visualizer at each step`, () => {
         const sequence = getOpenerSequence(id, mirror);
         // Build a bag in the visualizer's placement order, with hold piece at position 0
-        // so it gets held first, then placed pieces follow
-        const placedPieces = sequence.steps.map((s) => s.piece);
+        // so it gets held first, then placed pieces follow.
+        // Cap at 6 placeable steps (max with 7-bag + hold).
+        const maxSteps = Math.min(sequence.steps.length, 6);
+        const placedPieces = sequence.steps.slice(0, maxSteps).map((s) => s.piece);
         const bag: PieceType[] = [sequence.holdPiece, ...placedPieces];
 
         let state = createDrillStateWithBag(id, bag, mirror);
@@ -946,8 +975,8 @@ describe('D13: target matches visualizer data through full placement sequence', 
         expect(getHoldSuggestion(state)).toBe(sequence.holdPiece);
         state = holdCurrentPiece(state);
 
-        // Now walk through each placement step
-        for (let i = 0; i < sequence.steps.length; i++) {
+        // Now walk through each placeable step
+        for (let i = 0; i < maxSteps; i++) {
           if (state.phase !== 'playing' || !state.activePiece) break;
           const step = sequence.steps[i]!;
           expect(state.activePiece.type).toBe(step.piece);

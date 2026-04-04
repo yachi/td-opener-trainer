@@ -330,7 +330,9 @@ export function getTargetPlacement(state: DrillState): TargetPlacement | null {
   if (!state.guided || state.phase !== 'playing' || !state.activePiece) return null;
   const sequence = getOpenerSequence(state.openerId, state.mirror);
   if (state.activePiece.type === sequence.holdPiece && state.holdPiece === null) return null;
-  const step = sequence.steps.find((s) => s.piece === state.activePiece!.type);
+  // Cap at 6 steps — with 7-bag + hold, only 6 can be placed
+  const placeableSteps = sequence.steps.slice(0, 6);
+  const step = placeableSteps.find((s) => s.piece === state.activePiece!.type);
   if (!step) return null;
   const supported = isTargetSupported(state.board, step.newCells);
   return { cells: step.newCells, hint: step.hint, supported };
@@ -339,13 +341,15 @@ export function getTargetPlacement(state: DrillState): TargetPlacement | null {
 /**
  * Get ALL remaining piece targets for the opener (the full shape).
  * Excludes pieces already locked on the board.
+ * Capped at 6 steps (max placeable with 7-bag + hold).
  */
 export function getAllTargets(state: DrillState): TargetPlacement[] {
   if (!state.guided || state.phase !== 'playing') return [];
   const sequence = getOpenerSequence(state.openerId, state.mirror);
+  const placeableSteps = sequence.steps.slice(0, 6);
   const targets: TargetPlacement[] = [];
 
-  for (const step of sequence.steps) {
+  for (const step of placeableSteps) {
     // Skip pieces already placed (check if the target cells are already filled)
     const alreadyPlaced = step.newCells.every(
       ({ col, row }) => state.board[row]?.[col] !== null,
