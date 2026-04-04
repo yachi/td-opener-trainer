@@ -186,32 +186,25 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   // Next queue
   drawDrillQueue(ctx, state.queue);
 
-  // Pieces placed counter
-  ctx.fillStyle = COLORS.panelText;
-  ctx.font = `13px ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText(`Pieces: ${state.piecesPlaced}/6`, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 8);
-
-  // Hint text (guided mode)
+  // Hint text in hold area (below hold box)
   if (target) {
-    ctx.font = `13px ${FONT}`;
-    ctx.textAlign = 'center';
+    const hintX = 20;
+    const hintY = BOARD_Y + 120;
+    ctx.font = `12px ${FONT}`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     if (target.supported) {
       ctx.fillStyle = '#9999BB';
-      ctx.fillText(target.hint, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 24);
+      ctx.fillText(target.hint, hintX, hintY);
     } else {
       ctx.fillStyle = '#AA7744';
-      ctx.fillText(`${target.hint} (place other pieces first)`, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 24);
+      ctx.fillText(target.hint, hintX, hintY);
+      ctx.fillText('(place others first)', hintX, hintY + 16);
     }
   }
 
-  // Controls help
-  drawControlsHelp(ctx);
-
   const modeLabel = state.guided ? 'Guided' : 'Free';
-  drawStatusBar(ctx, `Drill · ${title} · ${modeLabel} · Pieces ${state.piecesPlaced}/6`);
+  drawStatusBar(ctx, `Drill · ${title} · ${modeLabel} · ${state.piecesPlaced}/6`);
 }
 
 // ── Success Phase ──
