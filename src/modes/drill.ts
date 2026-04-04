@@ -47,18 +47,84 @@ function cloneBoard(board: Board): Board {
 }
 
 /**
- * Generate bags until one is buildable for the given opener.
- * Returns { bag, mirror } or throws if no buildable bag found.
+ * Simulate whether a bag can be placed using the opener's placement order
+ * with a single hold. Returns true if every piece can either:
+ * - Be placed at its target (target is supported by current board), or
+ * - Be held (hold is empty), or
+ * - Be swapped with hold (and the swapped piece can be placed)
+ */
+function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): boolean {
+  const sequence = getOpenerSequence(openerId, mirror);
+  const holdPieceType = sequence.holdPiece;
+
+  // Build a map: piece type → target cells
+  const targetMap = new Map<PieceType, { col: number; row: number }[]>();
+  for (const step of sequence.steps) {
+    targetMap.set(step.piece, step.newCells);
+  }
+
+  const board: (PieceType | null)[][] = Array.from({ length: 20 }, () =>
+    Array.from({ length: 10 }, () => null),
+  );
+  let hold: PieceType | null = null;
+  let holdUsed = false;
+
+  for (const pieceType of bag) {
+    const target = targetMap.get(pieceType);
+
+    // Can this piece be placed now?
+    if (target && isTargetSupported(board, target)) {
+      // Place it
+      for (const { col, row } of target) {
+        board[row]![col] = pieceType;
+      }
+      holdUsed = false;
+      continue;
+    }
+
+    // Can't place — try hold
+    if (!holdUsed) {
+      if (hold === null) {
+        // First hold: stash this piece
+        hold = pieceType;
+        holdUsed = true;
+        continue;
+      }
+      // Swap with hold
+      const holdTarget = targetMap.get(hold);
+      if (holdTarget && isTargetSupported(board, holdTarget)) {
+        // Place the held piece, hold the current one
+        for (const { col, row } of holdTarget) {
+          board[row]![col] = hold;
+        }
+        hold = pieceType;
+        holdUsed = true;
+        continue;
+      }
+    }
+
+    // Can't place and can't hold — bag is unplayable
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Generate bags until one is buildable AND playable for the given opener.
+ * Playable = pieces can be placed in bag order using one hold.
  */
 function generateBuildableBag(openerId: OpenerID): { bag: PieceType[]; mirror: boolean } {
   const def = OPENERS[openerId];
   for (let i = 0; i < MAX_BAG_ATTEMPTS; i++) {
     const bag = generateBag();
-    if (def.canBuild(bag)) return { bag, mirror: false };
-    if (def.canBuildMirror(bag)) return { bag, mirror: true };
+    if (def.canBuild(bag) && isBagPlayable(openerId, bag, false)) {
+      return { bag, mirror: false };
+    }
+    if (def.canBuildMirror(bag) && isBagPlayable(openerId, bag, true)) {
+      return { bag, mirror: true };
+    }
   }
-  // Fallback — should be statistically impossible for 100% openers
-  throw new Error(`Could not generate buildable bag for ${openerId} in ${MAX_BAG_ATTEMPTS} attempts`);
+  throw new Error(`Could not generate playable bag for ${openerId} in ${MAX_BAG_ATTEMPTS} attempts`);
 }
 
 function spawnNextFromQueue(queue: PieceType[]): { piece: ActivePiece; remaining: PieceType[] } | null {

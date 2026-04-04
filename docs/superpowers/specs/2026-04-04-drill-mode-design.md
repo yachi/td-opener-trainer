@@ -17,6 +17,7 @@ As a learner who has seen the openers in the visualizer, I want to practice plac
 
 - [x] **AC8**: User selects an opener to practice (MS2 / Honey Cup / Stray Cannon / Gamushiro)
 - [x] **AC9**: Bag is generated; only bags where the selected opener is buildable are given
+- [ ] **AC28**: Generated bags must be PLAYABLE — every piece can be placed at its target or held, given the bag order and single-hold constraint. Bags where a piece arrives before its support AND hold is occupied are rejected
 - [x] **AC10**: Ghost piece shows where current piece will land (standard guideline feature)
 - [x] **AC11**: After Bag 1 (7 pieces placed or held), board is compared against the correct opener shape
 - [x] **AC12**: If correct: show success + which T-spin slots are available
