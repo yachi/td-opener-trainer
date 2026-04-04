@@ -179,6 +179,11 @@ If the user says "check the screen" once, check the screen every time going forw
 **Correction**: User screenshot showing "Shape mismatch" with J missing from their build but present in expected.
 **Rule**: The completion check must account for the hold piece. For openers where the hold piece is also in the placement steps (Honey Cup, Gamushiro), the expected board for comparison should exclude the piece that ends up in hold. Never hardcode piece counts — derive from the opener data.
 
+### 29. "No overlapping" is not "correct" — always check physics AND compare against wiki source
+**Mistake**: Saw Bag 2 screenshot with Z piece at rows 16-17 floating in mid-air (residual at row 19, nothing at rows 17-18). Said "the board looks correct — no overlapping cells." Failed to check gravity AND failed to compare against the Hard Drop wiki board diagram.
+**Correction**: "why cant you see it floating? also what does hard wiki showed?"
+**Rule**: When verifying a board visually: (1) check EVERY highlighted piece has support below it — if there's a gap between the piece and the nearest filled row, it's floating; (2) compare the screenshot character-by-character against the source wiki diagram. "No overlap" is necessary but not sufficient. "Physically valid AND matches source" is the bar.
+
 ### 28. Bag 2 routes depend on the EXACT Bag 1 shape — different sources use different shapes
 **Mistake**: Decoded Bag 2 fumen strings from johnbeak.cz and plugged them into our visualizer. But johnbeak.cz's Bag 1 shape for Honey Cup differs from our Hard Drop wiki-sourced shape. The Bag 2 I piece at col 6 overlapped with our Bag 1 T piece at col 6.
 **Correction**: User reported "first I overlapped, open playwright and check"
