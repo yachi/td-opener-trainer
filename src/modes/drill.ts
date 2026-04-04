@@ -32,7 +32,8 @@ export interface DrillState {
 export interface TargetPlacement {
   cells: { col: number; row: number }[];
   hint: string;
-  supported: boolean; // false = target would float, show hint text only
+  supported: boolean; // false = target would float
+  piece?: PieceType;  // which piece this target is for (used by getAllTargets)
 }
 
 // ── Constants ──
@@ -267,6 +268,28 @@ export function getTargetPlacement(state: DrillState): TargetPlacement | null {
   if (!step) return null;
   const supported = isTargetSupported(state.board, step.newCells);
   return { cells: step.newCells, hint: step.hint, supported };
+}
+
+/**
+ * Get ALL remaining piece targets for the opener (the full shape).
+ * Excludes pieces already locked on the board.
+ */
+export function getAllTargets(state: DrillState): TargetPlacement[] {
+  if (!state.guided || state.phase !== 'playing') return [];
+  const sequence = getOpenerSequence(state.openerId, state.mirror);
+  const targets: TargetPlacement[] = [];
+
+  for (const step of sequence.steps) {
+    // Skip pieces already placed (check if the target cells are already filled)
+    const alreadyPlaced = step.newCells.every(
+      ({ col, row }) => state.board[row]?.[col] !== null,
+    );
+    if (alreadyPlaced) continue;
+
+    const supported = isTargetSupported(state.board, step.newCells);
+    targets.push({ cells: step.newCells, hint: step.hint, supported, piece: step.piece });
+  }
+  return targets;
 }
 
 export function getHoldSuggestion(state: DrillState): PieceType | null {

@@ -3,7 +3,7 @@ import type { DrillState } from '../modes/drill';
 import type { OpenerID } from '../openers/types';
 import { getPieceCells, getGhostPosition } from '../core/srs';
 import { OPENERS } from '../openers/decision';
-import { getExpectedBoard, getTargetPlacement, getHoldSuggestion } from '../modes/drill';
+import { getExpectedBoard, getTargetPlacement, getHoldSuggestion, getAllTargets } from '../modes/drill';
 import {
   COLORS,
   CANVAS_W,
@@ -120,15 +120,17 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   drawBoard(ctx);
   drawLockedCells(ctx, state);
 
-  // Target outline (guided mode) — always show, dimmer when unsupported
-  const target = getTargetPlacement(state);
-  if (target) {
-    const color = COLORS.pieces[state.activePiece!.type] ?? '#888888';
-    const fillAlpha = target.supported ? 0.2 : 0.08;
-    const strokeAlpha = target.supported ? 1.0 : 0.3;
+  // All target outlines (guided mode) — show entire opener shape
+  const allTargets = getAllTargets(state);
+  const target = getTargetPlacement(state); // current piece's target for hint text
+  for (const t of allTargets) {
+    const isActive = state.activePiece && t.piece === state.activePiece.type;
+    const color = COLORS.pieces[t.piece ?? 'T'] ?? '#888888';
+    const fillAlpha = isActive ? 0.2 : 0.07;
+    const strokeAlpha = isActive ? 1.0 : 0.25;
 
     ctx.globalAlpha = fillAlpha;
-    for (const { col, row } of target.cells) {
+    for (const { col, row } of t.cells) {
       if (row < 0) continue;
       const px = BOARD_X + col * CELL_SIZE;
       const py = BOARD_Y + row * CELL_SIZE;
@@ -136,19 +138,18 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
     }
     ctx.globalAlpha = strokeAlpha;
 
-    // Dashed border around target cells
     ctx.strokeStyle = color;
-    ctx.lineWidth = target.supported ? 2 : 1;
+    ctx.lineWidth = isActive ? 2 : 1;
     ctx.setLineDash([4, 4]);
-    for (const { col, row } of target.cells) {
+    for (const { col, row } of t.cells) {
       if (row < 0) continue;
       const px = BOARD_X + col * CELL_SIZE;
       const py = BOARD_Y + row * CELL_SIZE;
       ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
     }
     ctx.setLineDash([]);
-    ctx.globalAlpha = 1.0;
   }
+  ctx.globalAlpha = 1.0;
 
   // Ghost piece
   if (state.activePiece) {
