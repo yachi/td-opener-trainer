@@ -18,6 +18,8 @@ const INSTANT_MAP: Record<string, string> = {
   KeyZ: 'rotate_ccw',
   Space: 'hard_drop',
   KeyC: 'hold',
+  ShiftLeft: 'hold',
+  ShiftRight: 'hold',
   Digit1: 'select_1',
   Digit2: 'select_2',
   Digit3: 'select_3',
