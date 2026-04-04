@@ -471,132 +471,51 @@ function buildSequence(
 }
 
 // ── Bag 2 Route Data ──
-// Real Bag 2 placement data from fumen strings (johnbeak.cz, decoded with tetris-fumen)
+// TODO: replace with real Bag 2 data (placeholder routes below)
 
-const MS2_STRAY_CANNON: Bag2Route = {
-  routeId: 'ms2_stray_cannon',
-  routeLabel: 'Stray Cannon Route',
+const MS2_BAG2_ROUTE_C: Bag2Route = {
+  routeId: 'route_c',
+  routeLabel: 'Route C (Olive)',
   condition: 'S first among {I,O,S}',
   conditionPieces: ['S', 'I', 'O'],
   placements: [
-    { piece: 'L', cells: [{ col: 4, row: 18 }, { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }], hint: 'L piece, cols 4-6, center' },
-    { piece: 'S', cells: [{ col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }, { col: 6, row: 18 }], hint: 'S flat, cols 4-6' },
-    { piece: 'J', cells: [{ col: 9, row: 18 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }], hint: 'J piece, cols 7-9, right' },
-    { piece: 'O', cells: [{ col: 7, row: 17 }, { col: 8, row: 17 }, { col: 7, row: 18 }, { col: 8, row: 18 }], hint: 'O piece, cols 7-8, right' },
-    { piece: 'I', cells: [{ col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }], hint: 'I flat, cols 0-3, bottom' },
-    { piece: 'T', cells: [{ col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'T-Spin Triple into TST slot' },
+    // TODO: replace with real Bag 2 data
+    {
+      piece: 'T',
+      cells: [
+        { col: 4, row: 17 },
+        { col: 3, row: 18 },
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
+      ],
+      hint: 'T-spin Triple into the TST slot (placeholder)',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 15 },
+        { col: 2, row: 15 },
+        { col: 0, row: 16 },
+        { col: 1, row: 16 },
+      ],
+      hint: 'S flat, top-left (placeholder)',
+    },
   ],
-  tstStepIndex: 5,
-};
-
-const MS2_PANCAKE: Bag2Route = {
-  routeId: 'ms2_pancake',
-  routeLabel: 'Pancake Route',
-  condition: 'I first among {I,O,S}',
-  conditionPieces: ['I', 'O', 'S'],
-  placements: [
-    { piece: 'O', cells: [{ col: 0, row: 18 }, { col: 1, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }], hint: 'O piece, cols 0-1, left' },
-    { piece: 'L', cells: [{ col: 7, row: 18 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }], hint: 'L piece, cols 7-9, right' },
-    { piece: 'I', cells: [{ col: 3, row: 19 }, { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }], hint: 'I flat, cols 3-6, bottom' },
-    { piece: 'J', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 2, row: 19 }], hint: 'J piece, cols 2-4, left' },
-    { piece: 'S', cells: [{ col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }, { col: 6, row: 18 }], hint: 'S flat, cols 4-6' },
-    { piece: 'T', cells: [{ col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'T-Spin Triple into TST slot' },
-  ],
-  tstStepIndex: 5,
-};
-
-const HONEY_CUP_MAIN: Bag2Route = {
-  routeId: 'honey_cup_main',
-  routeLabel: 'Main Route',
-  condition: 'J placeable on ILS (default)',
-  conditionPieces: ['J', 'I', 'L', 'S'],
-  placements: [
-    { piece: 'I', cells: [{ col: 6, row: 16 }, { col: 6, row: 17 }, { col: 6, row: 18 }, { col: 6, row: 19 }], hint: 'I vertical, col 6, center' },
-    { piece: 'L', cells: [{ col: 3, row: 18 }, { col: 3, row: 19 }, { col: 4, row: 19 }, { col: 5, row: 19 }], hint: 'L piece, cols 3-5, center' },
-    { piece: 'S', cells: [{ col: 3, row: 17 }, { col: 4, row: 17 }, { col: 4, row: 18 }, { col: 5, row: 18 }], hint: 'S flat, cols 3-5' },
-    { piece: 'J', cells: [{ col: 9, row: 18 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }], hint: 'J piece, cols 7-9, right' },
-    { piece: 'O', cells: [{ col: 7, row: 17 }, { col: 8, row: 17 }, { col: 7, row: 18 }, { col: 8, row: 18 }], hint: 'O piece, cols 7-8, right' },
-    { piece: 'T', cells: [{ col: 3, row: 15 }, { col: 2, row: 16 }, { col: 3, row: 16 }, { col: 4, row: 16 }], hint: 'T-Spin Triple into TST slot' },
-  ],
-  tstStepIndex: 5,
-};
-
-const HONEY_CUP_COMPROMISE: Bag2Route = {
-  routeId: 'honey_cup_compromise',
-  routeLabel: 'Compromise Route',
-  condition: 'J before O, S before L',
-  conditionPieces: ['J', 'O', 'S', 'L'],
-  placements: [
-    { piece: 'I', cells: [{ col: 7, row: 16 }, { col: 7, row: 17 }, { col: 7, row: 18 }, { col: 7, row: 19 }], hint: 'I vertical, col 7, right' },
-    { piece: 'J', cells: [{ col: 4, row: 17 }, { col: 4, row: 18 }, { col: 4, row: 19 }, { col: 5, row: 19 }], hint: 'J piece, cols 4-5, center' },
-    { piece: 'Z', cells: [{ col: 5, row: 17 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 6, row: 19 }], hint: 'Z vertical, cols 5-6' },
-    { piece: 'L', cells: [{ col: 9, row: 17 }, { col: 9, row: 18 }, { col: 8, row: 19 }, { col: 9, row: 19 }], hint: 'L piece, cols 8-9, right' },
-    { piece: 'O', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 2, row: 19 }, { col: 3, row: 19 }], hint: 'O piece, cols 2-3, left' },
-    { piece: 'T', cells: [{ col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'T-Spin Triple into TST slot' },
-  ],
-  tstStepIndex: 5,
-};
-
-const GAMUSHIRO_DEFAULT: Bag2Route = {
-  routeId: 'gamushiro_default',
-  routeLabel: 'Default Route',
-  condition: 'L before O (default)',
-  conditionPieces: ['L', 'O'],
-  placements: [
-    { piece: 'L', cells: [{ col: 7, row: 18 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }], hint: 'L piece, cols 7-9, right' },
-    { piece: 'O', cells: [{ col: 8, row: 17 }, { col: 9, row: 17 }, { col: 8, row: 18 }, { col: 9, row: 18 }], hint: 'O piece, cols 8-9, right' },
-    { piece: 'I', cells: [{ col: 3, row: 19 }, { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }], hint: 'I flat, cols 3-6, bottom' },
-    { piece: 'J', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 2, row: 19 }], hint: 'J piece, cols 2-4, left' },
-    { piece: 'S', cells: [{ col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }, { col: 6, row: 18 }], hint: 'S flat, cols 4-6' },
-    { piece: 'T', cells: [{ col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'T-Spin Triple into TST slot' },
-  ],
-  tstStepIndex: 5,
-};
-
-const STRAY_KUROMITSU: Bag2Route = {
-  routeId: 'stray_kuromitsu',
-  routeLabel: 'Kuromitsu Route',
-  condition: 'Z before L',
-  conditionPieces: ['Z', 'L'],
-  placements: [
-    { piece: 'L', cells: [{ col: 9, row: 17 }, { col: 9, row: 18 }, { col: 8, row: 19 }, { col: 9, row: 19 }], hint: 'L piece, cols 8-9, right' },
-    { piece: 'O', cells: [{ col: 0, row: 18 }, { col: 1, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }], hint: 'O piece, cols 0-1, left' },
-    { piece: 'I', cells: [{ col: 3, row: 19 }, { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }], hint: 'I flat, cols 3-6, bottom' },
-    { piece: 'J', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 2, row: 19 }], hint: 'J piece, cols 2-4, left' },
-    { piece: 'S', cells: [{ col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }, { col: 6, row: 18 }], hint: 'S flat, cols 4-6' },
-    { piece: 'T', cells: [{ col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'T-Spin Triple into TST slot' },
-  ],
-  tstStepIndex: 5,
-};
-
-const STRAY_COMPROMISE: Bag2Route = {
-  routeId: 'stray_compromise',
-  routeLabel: 'Compromise Route',
-  condition: 'I before L, O before Z',
-  conditionPieces: ['I', 'L', 'O', 'Z'],
-  placements: [
-    { piece: 'I', cells: [{ col: 9, row: 16 }, { col: 9, row: 17 }, { col: 9, row: 18 }, { col: 9, row: 19 }], hint: 'I vertical, col 9, right' },
-    { piece: 'J', cells: [{ col: 4, row: 17 }, { col: 4, row: 18 }, { col: 4, row: 19 }, { col: 5, row: 19 }], hint: 'J piece, cols 4-5, center' },
-    { piece: 'Z', cells: [{ col: 5, row: 17 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 6, row: 19 }], hint: 'Z vertical, cols 5-6' },
-    { piece: 'L', cells: [{ col: 8, row: 17 }, { col: 8, row: 18 }, { col: 7, row: 19 }, { col: 8, row: 19 }], hint: 'L piece, cols 7-8, right' },
-    { piece: 'O', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 2, row: 19 }, { col: 3, row: 19 }], hint: 'O piece, cols 2-3, left' },
-    { piece: 'T', cells: [{ col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'T-Spin Triple into TST slot' },
-  ],
-  tstStepIndex: 5,
+  tstStepIndex: 0,
 };
 
 const BAG2_ROUTE_DATA: Record<OpenerID, Bag2Data> = {
   ms2: {
-    routes: [MS2_STRAY_CANNON, MS2_PANCAKE],
-  },
-  honey_cup: {
-    routes: [HONEY_CUP_MAIN, HONEY_CUP_COMPROMISE],
+    routes: [MS2_BAG2_ROUTE_C],
   },
   gamushiro: {
-    routes: [GAMUSHIRO_DEFAULT],
+    routes: [], // TODO: replace with real Bag 2 data
+  },
+  honey_cup: {
+    routes: [], // TODO: replace with real Bag 2 data
   },
   stray_cannon: {
-    routes: [STRAY_KUROMITSU, STRAY_COMPROMISE],
+    routes: [], // TODO: replace with real Bag 2 data
   },
 };
 
