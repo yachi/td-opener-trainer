@@ -32,6 +32,7 @@ export interface DrillState {
 export interface TargetPlacement {
   cells: { col: number; row: number }[];
   hint: string;
+  supported: boolean; // false = target would float, show hint text only
 }
 
 // ── Constants ──
@@ -243,17 +244,19 @@ export function toggleGuided(state: DrillState): DrillState {
 
 /**
  * Check if target cells are physically supported by the current board.
- * Every cell must rest on either the floor (row 19) or an existing piece.
+ * A tetromino is a rigid body — it needs at least ONE cell resting on
+ * the floor (row 19) or an existing piece. Not every cell needs support.
  */
 function isTargetSupported(board: Board, cells: { col: number; row: number }[]): boolean {
   const cellSet = new Set(cells.map((c) => `${c.col},${c.row}`));
   for (const { col, row } of cells) {
     const onFloor = row >= 19;
     const onPiece = row < 19 && board[row + 1]?.[col] !== null;
-    const onSibling = row < 19 && cellSet.has(`${col},${row + 1}`);
-    if (!onFloor && !onPiece && !onSibling) return false;
+    // Cell below is NOT a sibling = this cell rests on floor or existing piece
+    const belowIsSibling = row < 19 && cellSet.has(`${col},${row + 1}`);
+    if (onFloor || (onPiece && !belowIsSibling)) return true;
   }
-  return true;
+  return false;
 }
 
 export function getTargetPlacement(state: DrillState): TargetPlacement | null {
@@ -262,9 +265,8 @@ export function getTargetPlacement(state: DrillState): TargetPlacement | null {
   if (state.activePiece.type === sequence.holdPiece && state.holdPiece === null) return null;
   const step = sequence.steps.find((s) => s.piece === state.activePiece!.type);
   if (!step) return null;
-  // Only show target if the position is physically supported by current board
-  if (!isTargetSupported(state.board, step.newCells)) return null;
-  return { cells: step.newCells, hint: step.hint };
+  const supported = isTargetSupported(state.board, step.newCells);
+  return { cells: step.newCells, hint: step.hint, supported };
 }
 
 export function getHoldSuggestion(state: DrillState): PieceType | null {

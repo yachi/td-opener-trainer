@@ -623,23 +623,26 @@ describe('D12: guided mode', () => {
     expect(reset.guided).toBe(false);
   });
 
-  test('getTargetPlacement returns null when target would float (AC26)', () => {
+  test('getTargetPlacement returns supported=false when target would float (AC26)', () => {
     // S piece in MS2 is at rows 16-18, stacks on I and J.
-    // On an empty board, S target floats — should return null.
+    // On an empty board, S target floats — should have supported=false.
     const bag: PieceType[] = ['S', 'J', 'T', 'I', 'Z', 'O', 'L'];
     const state = createDrillStateWithBag('ms2', bag, false);
     expect(state.activePiece!.type).toBe('S');
     const target = getTargetPlacement(state);
-    expect(target).toBeNull(); // S floats without I and J below it
+    expect(target).not.toBeNull();
+    expect(target!.supported).toBe(false); // S floats without I and J below it
+    expect(target!.hint).toContain('S vertical'); // hint still provided
   });
 
-  test('getTargetPlacement returns target when cells are supported', () => {
+  test('getTargetPlacement returns supported=true when cells are supported', () => {
     // I piece in MS2 at col 0, rows 16-19 — rests on floor
     const bag: PieceType[] = ['I', 'J', 'T', 'S', 'Z', 'O', 'L'];
     const state = createDrillStateWithBag('ms2', bag, false);
     expect(state.activePiece!.type).toBe('I');
     const target = getTargetPlacement(state);
-    expect(target).not.toBeNull(); // I piece touches the floor at row 19
+    expect(target).not.toBeNull();
+    expect(target!.supported).toBe(true); // I piece touches the floor at row 19
   });
 
   test('resetDrill preserves guided=true', () => {
@@ -681,8 +684,9 @@ describe('D13: target matches visualizer data through full placement sequence', 
           expect(state.activePiece.type).toBe(step.piece);
 
           const target = getTargetPlacement(state);
-          // Target should exist (piece is supported because we place in order)
+          // Target should exist and be supported (we place in visualizer order)
           expect(target).not.toBeNull();
+          expect(target!.supported).toBe(true);
           // Target cells must match exactly
           expect(target!.cells).toEqual(step.newCells);
           expect(target!.hint).toBe(step.hint);

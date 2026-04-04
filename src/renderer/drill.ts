@@ -122,7 +122,7 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
 
   // Target outline (guided mode)
   const target = getTargetPlacement(state);
-  if (target) {
+  if (target && target.supported) {
     const color = COLORS.pieces[state.activePiece!.type] ?? '#888888';
     ctx.globalAlpha = 0.2;
     for (const { col, row } of target.cells) {
@@ -195,11 +195,16 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
 
   // Hint text (guided mode)
   if (target) {
-    ctx.fillStyle = '#9999BB';
     ctx.font = `13px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText(target.hint, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 24);
+    if (target.supported) {
+      ctx.fillStyle = '#9999BB';
+      ctx.fillText(target.hint, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 24);
+    } else {
+      ctx.fillStyle = '#AA7744';
+      ctx.fillText(`${target.hint} (place other pieces first)`, CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 24);
+    }
   }
 
   // Controls help
