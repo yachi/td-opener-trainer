@@ -179,6 +179,11 @@ If the user says "check the screen" once, check the screen every time going forw
 **Correction**: User screenshot showing "Shape mismatch" with J missing from their build but present in expected.
 **Rule**: The completion check must account for the hold piece. For openers where the hold piece is also in the placement steps (Honey Cup, Gamushiro), the expected board for comparison should exclude the piece that ends up in hold. Never hardcode piece counts — derive from the opener data.
 
+### 31. Check EVERY step, not just the final state — intermediate steps can float
+**Mistake**: Verified Stray Cannon Bag 2 by screenshotting only the final step (7/7). Said "no floating." But at step 6/7, J piece is clearly floating with a gap below it. The final O piece on top of J made the final state look connected, masking the intermediate float.
+**Correction**: User screenshot of step 6/7 showing J floating.
+**Rule**: When verifying board states, step through EVERY step and check gravity at each one. A final state that looks correct can hide intermediate violations. Automate this: the V1b gravity test checks every step, but only for Bag 1 — extend it to Bag 2.
+
 ### 30. The TST fires DURING Bag 2, not at the Bag 1/2 boundary — Bag 2 pieces fill gaps first
 **Mistake**: Assumed the T-Spin Triple fires immediately after Bag 1 is complete. Wrote `computePostTst` that places T directly on the unfilled Bag 1 board. But Bag 1 rows are only 4-9/10 filled — the TST can't fire yet. The correct flow: (1) place some Bag 2 pieces to fill gaps around the TST pocket, (2) T enters the pocket, (3) 3 now-full rows clear, (4) remaining Bag 2 pieces placed on residual. The TST slot is also at the OVERHANG area (created by Bag 1's T piece), not at the center gap.
 **Correction**: Engine correctly showed 0-2 lines cleared instead of expected 3 — because rows weren't full.
