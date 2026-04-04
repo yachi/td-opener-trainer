@@ -201,10 +201,9 @@ describe('V2: Visualizer state machine', () => {
     expect(state.playing).toBe(false);
   });
 
-  test('stepForward advances from 0 to 6, then stops (opener without Bag 2 routes)', async () => {
+  test('stepForward advances from 0 through all Bag 1 steps', async () => {
     const { createVisualizerState, stepForward, getOpenerSequence } = await import('../src/modes/visualizer.ts');
-    // Use honey_cup which has no Bag 2 routes, so stepForward clamps at the end
-    const seq = getOpenerSequence('honey_cup', false);
+    const seq = getOpenerSequence('ms2', false);
     const state = createVisualizerState(seq);
     const totalSteps = seq.steps.length;
 
@@ -212,10 +211,11 @@ describe('V2: Visualizer state machine', () => {
       stepForward(state);
       expect(state.currentStep).toBe(i);
     }
-    // Cannot go past the last step (no Bag 2 routes)
-    stepForward(state);
-    expect(state.currentStep).toBe(totalSteps);
     expect(state.bag).toBe(1);
+    // One more step transitions to Bag 2 (all openers now have Bag 2 routes)
+    stepForward(state);
+    expect(state.bag).toBe(2);
+    expect(state.currentStep).toBe(0);
   });
 
   test('stepBackward goes from 6 to 0, then stops', async () => {
@@ -409,21 +409,25 @@ describe('V6: Layout constraints', () => {
 // ── V7: Bag 2 Routes ──
 
 describe('V7: Bag 2 routes', () => {
-  test('getBag2Routes returns routes for MS2', async () => {
+  test('getBag2Routes returns routes for all 4 openers', async () => {
     const { getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const routes = getBag2Routes('ms2', false);
-    expect(routes.length).toBeGreaterThanOrEqual(1);
-    expect(routes[0]!.routeId).toBe('route_c');
-    expect(routes[0]!.routeLabel).toBe('Route C (Olive)');
-    expect(routes[0]!.condition.length).toBeGreaterThan(0);
-    expect(routes[0]!.conditionPieces.length).toBeGreaterThan(0);
-    expect(routes[0]!.placements.length).toBeGreaterThan(0);
+    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+    for (const id of OPENER_IDS) {
+      const routes = getBag2Routes(id, false);
+      expect(routes.length).toBeGreaterThanOrEqual(2);
+      expect(routes[0]!.routeId.length).toBeGreaterThan(0);
+      expect(routes[0]!.routeLabel.length).toBeGreaterThan(0);
+      expect(routes[0]!.condition.length).toBeGreaterThan(0);
+      expect(routes[0]!.placements.length).toBe(6); // 6 pieces after T fires TST
+    }
   });
 
-  test('getBag2Routes returns empty array for openers without Bag 2 data', async () => {
+  test('getBag2Routes for MS2 returns setup_a and setup_b', async () => {
     const { getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const routes = getBag2Routes('honey_cup', false);
-    expect(routes.length).toBe(0);
+    const routes = getBag2Routes('ms2', false);
+    expect(routes.length).toBe(2);
+    expect(routes[0]!.routeId).toBe('setup_a');
+    expect(routes[1]!.routeId).toBe('setup_b');
   });
 
   test('getBag2Routes returns mirrored routes when mirror=true', async () => {
@@ -434,7 +438,7 @@ describe('V7: Bag 2 routes', () => {
     expect(mirrored[0]!.routeLabel).toContain('Mirror');
   });
 
-  test('getBag2Sequence starts from Bag 1 final board', async () => {
+  test('getBag2Sequence step 0 shows TST transition (Bag 1 final board)', async () => {
     const { getOpenerSequence, getBag2Sequence } = await import('../src/modes/visualizer.ts');
 
     const bag1 = getOpenerSequence('ms2', false);
@@ -443,22 +447,39 @@ describe('V7: Bag 2 routes', () => {
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    // Step 0 of Bag 2 should show the Bag 1 final board implicitly
-    // Step 1 of Bag 2 should have more filled cells than Bag 1 final
-    const bag2Step1Board = bag2Seq!.steps[0]!.board;
-    const bag2FilledCells = bag2Step1Board.flat().filter((c) => c !== null).length;
-    expect(bag2FilledCells).toBeGreaterThan(bag1FilledCells);
+    // Step 0 is the TST transition — shows the Bag 1 final board
+    expect(bag2Seq!.steps[0]!.piece).toBe('T');
+    expect(bag2Seq!.steps[0]!.hint).toContain('T-Spin Triple');
+    const tstBoard = bag2Seq!.steps[0]!.board;
+    const tstFilledCells = tstBoard.flat().filter((c) => c !== null).length;
+    expect(tstFilledCells).toBe(bag1FilledCells); // Same as Bag 1 board (no new cells)
+  });
+
+  test('getBag2Sequence step 1+ builds on post-TST residual', async () => {
+    const { getBag2Sequence, computePostTstBoard } = await import('../src/modes/visualizer.ts');
+
+    const bag2Seq = getBag2Sequence('ms2', false, 0);
+    expect(bag2Seq).not.toBeNull();
+    // Step 1 is the first Bag 2 piece on the residual
+    const residual = computePostTstBoard('ms2', false);
+    const residualCells = residual.flat().filter((c) => c !== null).length;
+    const step1Cells = bag2Seq!.steps[1]!.board.flat().filter((c) => c !== null).length;
+    expect(step1Cells).toBe(residualCells + 4); // residual + one 4-cell piece
+  });
+
+  test('getBag2Sequence has 7 steps (TST + 6 pieces)', async () => {
+    const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+    for (const id of OPENER_IDS) {
+      const bag2Seq = getBag2Sequence(id, false, 0);
+      expect(bag2Seq).not.toBeNull();
+      expect(bag2Seq!.steps.length).toBe(7); // 1 TST step + 6 piece placements
+    }
   });
 
   test('getBag2Sequence returns null for invalid route index', async () => {
     const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
     const result = getBag2Sequence('ms2', false, 99);
-    expect(result).toBeNull();
-  });
-
-  test('getBag2Sequence returns null for opener without routes', async () => {
-    const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const result = getBag2Sequence('honey_cup', false, 0);
     expect(result).toBeNull();
   });
 
@@ -511,23 +532,31 @@ describe('V7: Bag 2 routes', () => {
     expect(state.bag2Sequence).toBeNull();
   });
 
-  test('navigation: stepForward does NOT enter Bag 2 for openers without routes', async () => {
+  test('navigation: all openers can transition from Bag 1 to Bag 2', async () => {
     const {
       createVisualizerState,
       getOpenerSequence,
       stepForward,
     } = await import('../src/modes/visualizer.ts');
 
-    const seq = getOpenerSequence('honey_cup', false);
-    const state = createVisualizerState(seq);
+    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+    for (const id of OPENER_IDS) {
+      const seq = getOpenerSequence(id, false);
+      const state = createVisualizerState(seq);
 
-    // Advance past end of Bag 1
-    for (let i = 0; i <= seq.steps.length + 1; i++) {
+      // Advance to end of Bag 1
+      for (let i = 0; i < seq.steps.length; i++) {
+        stepForward(state);
+      }
+      expect(state.bag).toBe(1);
+
+      // One more step enters Bag 2
       stepForward(state);
+      expect(state.bag).toBe(2);
+      expect(state.currentStep).toBe(0);
+      expect(state.bag2Sequence).not.toBeNull();
+      expect(state.bag2Sequence!.steps.length).toBe(7);
     }
-    // Should stay at Bag 1 last step
-    expect(state.bag).toBe(1);
-    expect(state.currentStep).toBe(seq.steps.length);
   });
 
   test('switchBag2Route changes the active route', async () => {
@@ -558,6 +587,56 @@ describe('V7: Bag 2 routes', () => {
     switchBag2Route(state, 0);
     expect(state.currentStep).toBe(0);
     expect(state.bag2RouteIndex).toBe(0);
+  });
+
+  test('computePostTstBoard produces correct residual for each opener', async () => {
+    const { computePostTstBoard } = await import('../src/modes/visualizer.ts');
+    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+
+    for (const id of OPENER_IDS) {
+      const residual = computePostTstBoard(id, false);
+      // Residual should be a valid 20x10 board
+      expect(residual.length).toBe(20);
+      for (const row of residual) {
+        expect(row.length).toBe(10);
+      }
+      // Rows 0-16 should be empty (residual pieces only survive in bottom rows)
+      for (let r = 0; r <= 16; r++) {
+        const filled = residual[r]!.filter((c) => c !== null).length;
+        expect(filled).toBe(0);
+      }
+      // Total residual cells should be small (only rows 15-16 of Bag 1 survive)
+      const totalCells = residual.flat().filter((c) => c !== null).length;
+      expect(totalCells).toBeGreaterThanOrEqual(1);
+      expect(totalCells).toBeLessThanOrEqual(10);
+    }
+  });
+
+  test('computePostTstBoard MS2: IS at row 19', async () => {
+    const { computePostTstBoard } = await import('../src/modes/visualizer.ts');
+    const residual = computePostTstBoard('ms2', false);
+    // MS2 row 16 (IS........) drops to row 19
+    expect(residual[19]![0]).toBe('I');
+    expect(residual[19]![1]).toBe('S');
+    expect(residual[19]![2]).toBeNull();
+  });
+
+  test('Bag 2 placements do not overlap with post-TST residual', async () => {
+    const { computePostTstBoard, getBag2Routes } = await import('../src/modes/visualizer.ts');
+    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+
+    for (const id of OPENER_IDS) {
+      const residual = computePostTstBoard(id, false);
+      const routes = getBag2Routes(id, false);
+      for (const route of routes) {
+        for (const placement of route.placements) {
+          for (const cell of placement.cells) {
+            const existing = residual[cell.row]?.[cell.col];
+            expect(existing).toBeNull();
+          }
+        }
+      }
+    }
   });
 
   test('createVisualizerState initializes Bag 2 fields', async () => {
