@@ -18,7 +18,7 @@ import {
 } from '../src/modes/drill.ts';
 import type { DrillState } from '../src/modes/drill.ts';
 import { OPENERS } from '../src/openers/decision.ts';
-import { createBoard } from '../src/core/srs.ts';
+import { createBoard, spawnPiece } from '../src/core/srs.ts';
 import { getOpenerSequence } from '../src/modes/visualizer.ts';
 
 // ── Helpers ──
@@ -648,4 +648,66 @@ describe('D12: guided mode', () => {
     const reset = resetDrill(state);
     expect(reset.guided).toBe(true);
   });
+});
+
+// ── D13: Target correctness across full placement (AC27) ──
+
+describe('D13: target matches visualizer data through full placement sequence', () => {
+  const OPENER_IDS: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+
+      test(`${label}: targets match visualizer at each step`, () => {
+        const sequence = getOpenerSequence(id, mirror);
+        // Build a bag in the visualizer's placement order, with hold piece at position 0
+        // so it gets held first, then placed pieces follow
+        const placedPieces = sequence.steps.map((s) => s.piece);
+        const bag: PieceType[] = [sequence.holdPiece, ...placedPieces];
+
+        let state = createDrillStateWithBag(id, bag, mirror);
+        expect(state.guided).toBe(true);
+
+        // First piece is the hold piece — hold it
+        expect(state.activePiece!.type).toBe(sequence.holdPiece);
+        expect(getHoldSuggestion(state)).toBe(sequence.holdPiece);
+        state = holdCurrentPiece(state);
+
+        // Now walk through each placement step
+        for (let i = 0; i < sequence.steps.length; i++) {
+          if (state.phase !== 'playing' || !state.activePiece) break;
+          const step = sequence.steps[i]!;
+          expect(state.activePiece.type).toBe(step.piece);
+
+          const target = getTargetPlacement(state);
+          // Target should exist (piece is supported because we place in order)
+          expect(target).not.toBeNull();
+          // Target cells must match exactly
+          expect(target!.cells).toEqual(step.newCells);
+          expect(target!.hint).toBe(step.hint);
+
+          // Place the piece at the correct position by setting board directly
+          // (we can't easily move+rotate+drop to exact position in a unit test,
+          //  so we simulate by locking the cells onto the board manually)
+          const newBoard = state.board.map((row) => [...row]);
+          for (const { col, row } of step.newCells) {
+            newBoard[row]![col] = step.piece;
+          }
+
+          // Advance to next piece
+          const nextQueue = state.queue.slice();
+          const nextType = nextQueue.shift();
+          state = {
+            ...state,
+            board: newBoard,
+            piecesPlaced: state.piecesPlaced + 1,
+            activePiece: nextType ? spawnPiece(nextType) : null,
+            queue: nextQueue,
+            holdUsed: false,
+          };
+        }
+      });
+    }
+  }
 });

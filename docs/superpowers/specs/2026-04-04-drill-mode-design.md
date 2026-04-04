@@ -45,6 +45,7 @@ As a learner who hasn't memorized where pieces go, I want the drill to show me w
 - [ ] **AC24**: When guided mode is OFF, no outlines or hints are shown (pure practice)
 - [ ] **AC25**: Status bar shows "Guided" or "Free" indicator, with "[H] toggle hints" text
 - [ ] **AC26**: Target outline must respect physics — every target cell must be supported (resting on the floor or on an existing piece). If the target position would float given the current board, hide the target for that piece
+- [ ] **AC27**: Target outline cells must match the visualizer's placement data exactly — same col/row positions as the corresponding step in getOpenerSequence. Verified across a full placement sequence: for each opener, simulate placing pieces in visualizer order and confirm the target shown at each step matches the expected newCells
 
 ### Design Notes
 - The target placement must account for mirror (use the same mirror logic from visualizer.ts)
