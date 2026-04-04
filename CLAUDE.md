@@ -25,8 +25,8 @@ Answer the user's actual question first. A 3-row table beats 2,000 lines of unsh
 *Lessons: #1, #8, #11, #13, #18*
 
 ### P2. Verify with evidence, not reasoning
-Never say "X should work" — run it, screenshot it, read the output. Test the FULL flow end-to-end, not just one step. Compare outputs character-by-character against authoritative sources. Use exhaustive enumeration (all 5040 permutations) over probabilistic arguments. Use gravity simulation over manual inspection.
-*Lessons: #2, #3, #4, #5, #6, #7, #16, #20*
+Never say "X should work" — run it, screenshot it, read the output. Test the FULL flow end-to-end, not just one step. Compare outputs character-by-character against authoritative sources. Use exhaustive enumeration (all 5040 permutations) over probabilistic arguments. Use gravity simulation over manual inspection. Write the RED test first — a test that passes without seeing it fail proves nothing.
+*Lessons: #2, #3, #4, #5, #6, #7, #16, #20, #21, #22*
 
 ### P3. Don't trust intermediaries
 Agent output can be wrong even when the parsed data was correct. localStorage keys can differ from what you assume. Playwright sessions don't share state with the user's browser. Fumen strings might encode a different variant than expected. Always verify the final output against the original source yourself.
@@ -38,7 +38,7 @@ If something looks interactive, make it interactive. If the user can't figure ou
 
 ### P5. When corrected, internalize immediately
 If the user says "check the screen" once, check the screen every time going forward — don't wait to be told again. If the user says "step back," actually pause and reconsider the whole approach. A correction given twice means it wasn't internalized the first time.
-*Lessons: #3, #16, #18 (all were repeated corrections)*
+*Lessons: #3, #16, #18, #21, #23 (all were repeated corrections)*
 
 ---
 
@@ -143,6 +143,21 @@ If the user says "check the screen" once, check the screen every time going forw
 **Mistake**: The celebration screen showed "[Space] to continue" in faint gray (#666688). User asked "how to go to next after ms2" because they couldn't see the instruction.
 **Correction**: "how to go to next after ms2"
 **Rule**: Any actionable instruction (press Space, press N to skip) must be clearly visible — use a contrasting color, not faint gray. If a user asks "how do I go to the next screen," the UI has failed.
+
+### 21. Write the red test FIRST, then fix — never implementation before failing test
+**Mistake**: User reported unplayable bags (L arrives before I, hold occupied). I wrote the fix (`isBagPlayable`) first, then added tests that passed. The user corrected: "you should add red tests first."
+**Correction**: "industrial standard how to do it, also you should add red tests first"
+**Rule**: TDD — always: (1) write a test with the EXACT failing scenario (e.g., the specific bag from the user's screenshot), (2) run it and confirm it FAILS, (3) implement the fix, (4) run it and confirm it PASSES. Never write tests after the fix — they prove nothing because you never saw them fail.
+
+### 22. Bag "buildable" ≠ bag "playable" — validate placement order against hold constraint
+**Mistake**: `canBuild(bag)` only checks the decision rule (e.g., "L not last of L,O,T"). It doesn't check whether pieces can be placed in the bag's arrival order with one hold. User got stuck: Honey Cup bag had L arriving before I, hold already occupied by S.
+**Correction**: User screenshot showing L active, S in hold, I in queue — unplayable state.
+**Rule**: When generating bags for drill mode, simulate the full placement sequence: for each piece in bag order, check if it can be placed (target supported) or held (hold empty/swappable). Reject bags where a piece arrives before its support AND hold can't save it.
+
+### 23. Rendering bugs can't be caught by unit tests — add layout constraint tests
+**Mistake**: Hint text rendered at y=684, behind the status bar at y=672. All unit tests passed because they test logic (getTargetPlacement returns correct data), not rendering (where text appears on canvas).
+**Correction**: "why you cannot reproduce it in test"
+**Rule**: For canvas rendering, add layout constraint tests that assert Y positions don't overlap reserved regions (status bar, tab bar). Unit tests cover logic; layout tests cover positioning; Playwright covers visual verification. All three layers are needed.
 
 ## Technical Reference
 
