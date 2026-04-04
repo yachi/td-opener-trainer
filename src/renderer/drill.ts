@@ -120,22 +120,25 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   drawBoard(ctx);
   drawLockedCells(ctx, state);
 
-  // Target outline (guided mode)
+  // Target outline (guided mode) — always show, dimmer when unsupported
   const target = getTargetPlacement(state);
-  if (target && target.supported) {
+  if (target) {
     const color = COLORS.pieces[state.activePiece!.type] ?? '#888888';
-    ctx.globalAlpha = 0.2;
+    const fillAlpha = target.supported ? 0.2 : 0.08;
+    const strokeAlpha = target.supported ? 1.0 : 0.3;
+
+    ctx.globalAlpha = fillAlpha;
     for (const { col, row } of target.cells) {
       if (row < 0) continue;
       const px = BOARD_X + col * CELL_SIZE;
       const py = BOARD_Y + row * CELL_SIZE;
       drawCell(ctx, px, py, CELL_SIZE, color);
     }
-    ctx.globalAlpha = 1.0;
+    ctx.globalAlpha = strokeAlpha;
 
     // Dashed border around target cells
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = target.supported ? 2 : 1;
     ctx.setLineDash([4, 4]);
     for (const { col, row } of target.cells) {
       if (row < 0) continue;
@@ -144,6 +147,7 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
       ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
     }
     ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
   }
 
   // Ghost piece
