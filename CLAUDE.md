@@ -174,6 +174,11 @@ If the user says "check the screen" once, check the screen every time going forw
 **Correction**: "industrial standard how to do it, also you should add red tests first"
 **Rule**: When the user reports a bug with a screenshot: (1) extract the exact state (bag order, piece, hold, board), (2) write a test that creates that EXACT state, (3) assert it fails, (4) THEN fix. The user's reproduction case is sacred — it's the acceptance test.
 
+### 27. Completion check must match actual placeable pieces, not hardcoded 6
+**Mistake**: `hardDropPiece` checks `piecesPlaced >= 6` and compares against the full expected board. But Honey Cup and Gamushiro have 7 placement steps in the visualizer (hold piece L is also placed via hold swap). With a 7-bag + 1 hold, only 6 pieces end up on board. The expected board has 28 cells (7 pieces) but the user's board has 24 (6 pieces) — ALWAYS mismatches. The check fires before J is placed.
+**Correction**: User screenshot showing "Shape mismatch" with J missing from their build but present in expected.
+**Rule**: The completion check must account for the hold piece. For openers where the hold piece is also in the placement steps (Honey Cup, Gamushiro), the expected board for comparison should exclude the piece that ends up in hold. Never hardcode piece counts — derive from the opener data.
+
 ## Technical Reference
 
 ### localStorage Keys
