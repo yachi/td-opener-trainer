@@ -140,6 +140,56 @@ describe('V1: Opener placement data exists for all 4 openers', () => {
   });
 });
 
+// ── V1b: Gravity validation — no floating pieces ──
+
+describe('V1b: Placement order respects gravity (no floating pieces)', () => {
+  const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+
+  /**
+   * A piece is supported if at least one of its cells has:
+   * - row 19 (floor), OR
+   * - a non-null cell directly below it that is NOT part of the same piece
+   */
+  function isPieceSupported(
+    board: (PieceType | null)[][],
+    newCells: { col: number; row: number }[],
+  ): boolean {
+    const cellSet = new Set(newCells.map((c) => `${c.col},${c.row}`));
+    for (const { col, row } of newCells) {
+      if (row >= 19) return true; // on floor
+      const below = board[row + 1]?.[col];
+      if (below !== null && !cellSet.has(`${col},${row + 1}`)) return true; // on existing piece
+    }
+    return false;
+  }
+
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+
+      test(`${label}: every piece rests on floor or prior pieces`, async () => {
+        const { getOpenerSequence } = await import('../src/modes/visualizer.ts');
+        const seq = getOpenerSequence(id, mirror);
+
+        // Build the board step by step, checking gravity at each step
+        const board: (PieceType | null)[][] = Array.from({ length: 20 }, () =>
+          Array(10).fill(null),
+        );
+
+        for (let i = 0; i < seq.steps.length; i++) {
+          const step = seq.steps[i]!;
+          const supported = isPieceSupported(board, step.newCells);
+          expect(supported).toBe(true);
+          // "Lock" the piece onto the board
+          for (const { col, row } of step.newCells) {
+            board[row]![col] = step.piece;
+          }
+        }
+      });
+    }
+  }
+});
+
 // ── V2: Visualizer State Machine ──
 
 describe('V2: Visualizer state machine', () => {
