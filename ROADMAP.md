@@ -54,6 +54,13 @@ Must establish canonical mapping before building.
 - tetristemplate.info: best pedagogy (learning order, progressive disclosure)
 - Wicurio wiki: simplest beginner presentation (2 routes only)
 
+### Current Status
+- Framework built (types, navigation, rendering, 11 tests) — committed
+- MS2 Route C has placeholder data — needs real placements
+- Fumen strings found for Honey Cup (main + compromise), Gamushiro (default)
+- Need to decode fumen strings into step-by-step placement order (not just final board)
+- Missing: MS2 Route C/D fumens, Stray Cannon Route A/D fumens
+
 ## Backlog
 - [ ] Adaptive quiz weighting (replay wrong bags more often — data model exists)
 - [ ] Bag 3 PC visualization (after Bag 2 is built)
