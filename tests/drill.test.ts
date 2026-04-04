@@ -653,6 +653,87 @@ describe('D12: guided mode', () => {
   });
 });
 
+// ── D12b: Unsupported targets show hint but supported=false ──
+
+describe('D12b: pieces arriving out of visualizer order get unsupported hints', () => {
+  test('Honey Cup: S arrives before L/I — target shows but unsupported', () => {
+    // Honey Cup normal places in order: O, I, Z, T, L, S, J (hold L)
+    // S target is at rows 16-17, rests on L piece at rows 17-18.
+    // If S arrives before L is placed, target should be unsupported.
+    const bag: PieceType[] = ['S', 'O', 'I', 'Z', 'T', 'J', 'L'];
+    const state = createDrillStateWithBag('honey_cup', bag, false);
+    expect(state.activePiece!.type).toBe('S');
+
+    const target = getTargetPlacement(state);
+    expect(target).not.toBeNull();
+    expect(target!.supported).toBe(false);
+    expect(target!.hint).toContain('S');
+  });
+
+  test('Honey Cup: S becomes supported after L and I are placed', () => {
+    // Place I and L first (they support S)
+    const sequence = getOpenerSequence('honey_cup', false);
+    const iStep = sequence.steps.find((s) => s.piece === 'I')!;
+    const lStep = sequence.steps.find((s) => s.piece === 'L')!;
+
+    // Start with S, but simulate having I and L already on board
+    const bag: PieceType[] = ['S', 'O', 'Z', 'T', 'J', 'I', 'L'];
+    let state = createDrillStateWithBag('honey_cup', bag, false);
+
+    // Manually place I and L on the board
+    const board = state.board.map((row) => [...row]);
+    for (const { col, row } of iStep.newCells) board[row]![col] = 'I';
+    for (const { col, row } of lStep.newCells) board[row]![col] = 'L';
+    state = { ...state, board };
+
+    const target = getTargetPlacement(state);
+    expect(target).not.toBeNull();
+    expect(target!.supported).toBe(true);
+    expect(target!.cells).toEqual(sequence.steps.find((s) => s.piece === 'S')!.newCells);
+  });
+
+  test('MS2: S arrives before I and J — unsupported', () => {
+    // MS2 S is at rows 16-18, stacks on I (col 0) and J (cols 1-3)
+    const bag: PieceType[] = ['S', 'J', 'T', 'I', 'Z', 'O', 'L'];
+    const state = createDrillStateWithBag('ms2', bag, false);
+    expect(state.activePiece!.type).toBe('S');
+
+    const target = getTargetPlacement(state);
+    expect(target).not.toBeNull();
+    expect(target!.supported).toBe(false);
+  });
+
+  test('Honey Cup: J arrives first — target at rows 15-17 is unsupported', () => {
+    // J in Honey Cup is the last piece placed, sits on top of T and O
+    const bag: PieceType[] = ['J', 'T', 'S', 'Z', 'O', 'I', 'L'];
+    const state = createDrillStateWithBag('honey_cup', bag, false);
+    expect(state.activePiece!.type).toBe('J');
+
+    const target = getTargetPlacement(state);
+    expect(target).not.toBeNull();
+    expect(target!.supported).toBe(false);
+    expect(target!.hint).toContain('J');
+  });
+
+  test('all openers: first piece in visualizer order is always supported', () => {
+    const OPENER_IDS: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+    for (const id of OPENER_IDS) {
+      for (const mirror of [false, true]) {
+        const sequence = getOpenerSequence(id, mirror);
+        const firstPiece = sequence.steps[0]!.piece;
+        // Build bag with first visualizer piece at position 0
+        const otherPieces = sequence.steps.slice(1).map((s) => s.piece);
+        const bag: PieceType[] = [firstPiece, ...otherPieces, sequence.holdPiece];
+
+        const state = createDrillStateWithBag(id, bag, mirror);
+        const target = getTargetPlacement(state);
+        expect(target).not.toBeNull();
+        expect(target!.supported).toBe(true);
+      }
+    }
+  });
+});
+
 // ── D13: Target correctness across full placement (AC27) ──
 
 describe('D13: target matches visualizer data through full placement sequence', () => {
