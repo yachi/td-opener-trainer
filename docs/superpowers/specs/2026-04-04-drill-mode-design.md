@@ -44,6 +44,7 @@ As a learner who hasn't memorized where pieces go, I want the drill to show me w
 - [ ] **AC23**: The hold piece suggestion is shown (e.g., "Hold L" highlighted in the hold box) when the current piece is the one that should be held for this opener
 - [ ] **AC24**: When guided mode is OFF, no outlines or hints are shown (pure practice)
 - [ ] **AC25**: Status bar shows "Guided" or "Free" indicator, with "[H] toggle hints" text
+- [ ] **AC26**: Target outline must respect physics — every target cell must be supported (resting on the floor or on an existing piece). If the target position would float given the current board, hide the target for that piece
 
 ### Design Notes
 - The target placement must account for mirror (use the same mirror logic from visualizer.ts)
