@@ -474,10 +474,11 @@ function buildSequence(
 // ── Post-TST residual computation ──
 
 /**
- * Compute the board state after TST fires and lines clear.
- * Delegates to field-engine's computePostTst which uses tetris-fumen's
- * Field.fill() + Field.clearLine() for proper line-clear simulation
- * instead of hardcoding rows 17-19.
+ * @deprecated Use getPostTstResidual() for Bag 2 flow.
+ * computePostTstBoard simulates TST on the Bag 1 board, but the TST actually
+ * fires MID-Bag-2 (after gap-filler pieces complete the rows). The simulation
+ * produces incorrect residuals because the Bag 1 board has unfilled gaps.
+ * Kept for debugging / backward compatibility.
  */
 export function computePostTstBoard(openerId: OpenerID, mirror: boolean): (PieceType | null)[][] {
   const bag1Seq = getOpenerSequence(openerId, mirror);
@@ -497,6 +498,85 @@ export function computePostTstBoard(openerId: OpenerID, mirror: boolean): (Piece
     row: tst.row,
     rotation: tst.rotation as 0 | 1 | 2 | 3,
   });
+}
+
+// ── Hardcoded Post-TST Residuals ──
+// These are the G cells from Hard Drop wiki Bag 2 boards — the Bag 1 cells
+// that survive below the TST clear zone. The TST fires mid-Bag-2, so these
+// residuals are extracted from the wiki rather than computed from Bag 1 alone.
+// Coordinate system: row 19 = bottom, col 0 = left.
+
+export const POST_TST_RESIDUALS: Record<OpenerID, { col: number; row: number }[]> = {
+  // Honey Cup — 28 G cells, hole at col 4 row 19
+  honey_cup: [
+    { col: 9, row: 15 },
+    { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 9, row: 16 },
+    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 },
+    { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 },
+    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
+    { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 },
+    { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
+    { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 },
+    { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
+  ],
+
+  // MS2 — 24 G cells, hole at col 4 row 19
+  ms2: [
+    { col: 0, row: 16 }, { col: 1, row: 16 },
+    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 },
+    { col: 7, row: 17 },
+    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
+    { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 },
+    { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
+    { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 },
+    { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
+  ],
+
+  // Stray Cannon — 24 G cells, hole at col 5 row 19
+  stray_cannon: [
+    { col: 0, row: 16 },
+    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 },
+    { col: 4, row: 17 }, { col: 7, row: 17 },
+    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
+    { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 },
+    { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
+    { col: 3, row: 19 }, { col: 4, row: 19 },
+    { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
+  ],
+
+  // Gamushiro — 28 G cells, hole at col 3 row 19
+  gamushiro: [
+    { col: 8, row: 15 },
+    { col: 0, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 },
+    { col: 0, row: 17 }, { col: 1, row: 17 },
+    { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 },
+    { col: 0, row: 18 }, { col: 1, row: 18 },
+    { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 },
+    { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
+    { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 },
+    { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
+  ],
+};
+
+/**
+ * Get the hardcoded post-TST residual board for an opener.
+ * These are the G cells from Hard Drop wiki — the cells that survive
+ * below the TST clear zone after the TST fires mid-Bag-2.
+ */
+export function getPostTstResidual(openerId: OpenerID, mirror: boolean): (PieceType | null)[][] {
+  const board = emptyBoard();
+  const cells = POST_TST_RESIDUALS[openerId];
+
+  for (const { col, row } of cells) {
+    const c = mirror ? 9 - col : col;
+    board[row]![c] = 'I'; // placeholder piece type for residual
+  }
+
+  return board;
 }
 
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
@@ -746,9 +826,8 @@ export function jumpToStep(state: VisualizerState, step: number): void {
 export function getCurrentBoard(state: VisualizerState): (PieceType | null)[][] {
   if (state.bag === 2 && state.bag2Sequence) {
     if (state.currentStep === 0) {
-      // Show the final Bag 1 board as the base
-      const bag1Steps = state.sequence.steps;
-      return bag1Steps.length > 0 ? bag1Steps[bag1Steps.length - 1]!.board : emptyBoard();
+      // Show the post-TST residual (step 0 of the Bag 2 sequence)
+      return state.bag2Sequence.steps[0]!.board;
     }
     return state.bag2Sequence.steps[state.currentStep - 1]!.board;
   }
@@ -776,25 +855,21 @@ export function getBag2Sequence(
   const route = routes[routeIndex]!;
 
   const bag1Seq = getOpenerSequence(openerId, mirror);
-  const bag1FinalBoard =
-    bag1Seq.steps.length > 0
-      ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
-      : emptyBoard();
 
   const steps: PlacementStep[] = [];
 
-  // Step 0: TST transition — show the Bag 1 final board with a TST hint.
-  // The T piece uses SRS wall kicks to enter the TST cavity, which is complex
-  // to visualize exactly. Instead, we show the pre-clear board and annotate it.
+  // Compute post-TST residual from hardcoded wiki data (not simulation)
+  const residual = getPostTstResidual(openerId, mirror);
+
+  // Step 0: TST transition — show the post-clear residual board.
+  // The TST fires mid-Bag-2 after gap-filler pieces complete the rows.
+  // We show the residual (what remains after the 3-line clear).
   steps.push({
     piece: 'T',
-    board: cloneBoard(bag1FinalBoard),
+    board: cloneBoard(residual),
     newCells: [], // No cells highlighted — just a transition marker
-    hint: 'T-Spin Triple → 3 lines clear',
+    hint: 'T-Spin Triple → 3 lines clear (post-clear residual)',
   });
-
-  // Compute post-TST residual and build remaining steps on it
-  const residual = computePostTstBoard(openerId, mirror);
   let currentBoard = cloneBoard(residual);
 
   for (const placement of route.placements) {

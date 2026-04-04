@@ -275,21 +275,22 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
 
   // Get the current board state
   const board = currentStep === 0
-    ? (inBag2 && sequence.steps.length > 0
-        ? sequence.steps[sequence.steps.length - 1]!.board
+    ? (inBag2 && activeSequence.steps.length > 0
+        ? activeSequence.steps[0]!.board  // Post-TST residual
         : Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null)))
     : activeSequence.steps[currentStep - 1]!.board;
 
   // Get new cells for highlighting (only when step > 0)
   const newCells = currentStep > 0 ? activeSequence.steps[currentStep - 1]!.newCells : [];
 
-  // Build a set of Bag 1 cells for dimming when in Bag 2
+  // Build a set of residual cells for dimming when in Bag 2
+  // These are the post-TST residual cells (from step 0 of bag2Sequence)
   const bag1CellSet = new Set<string>();
-  if (inBag2 && sequence.steps.length > 0) {
-    const bag1Board = sequence.steps[sequence.steps.length - 1]!.board;
+  if (inBag2 && activeSequence.steps.length > 0) {
+    const residualBoard = activeSequence.steps[0]!.board;
     for (let r = 0; r < 20; r++) {
       for (let c = 0; c < 10; c++) {
-        if (bag1Board[r]?.[c] !== null) {
+        if (residualBoard[r]?.[c] !== null) {
           bag1CellSet.add(`${r},${c}`);
         }
       }
@@ -369,7 +370,7 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     if (inBag2) {
-      ctx.fillText('Bag 1 complete — press → to step through Bag 2', CANVAS_W / 2, boardTopY + boardH + 30);
+      ctx.fillText('Post-TST residual — press → to place Bag 2 pieces', CANVAS_W / 2, boardTopY + boardH + 30);
     } else {
       ctx.fillText('Empty board — press → to place first piece', CANVAS_W / 2, boardTopY + boardH + 30);
     }

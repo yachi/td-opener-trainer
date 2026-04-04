@@ -438,30 +438,29 @@ describe('V7: Bag 2 routes', () => {
     expect(mirrored[0]!.routeLabel).toContain('Mirror');
   });
 
-  test('getBag2Sequence step 0 shows TST transition (Bag 1 final board)', async () => {
-    const { getOpenerSequence, getBag2Sequence } = await import('../src/modes/visualizer.ts');
-
-    const bag1 = getOpenerSequence('ms2', false);
-    const bag1FinalBoard = bag1.steps[bag1.steps.length - 1]!.board;
-    const bag1FilledCells = bag1FinalBoard.flat().filter((c) => c !== null).length;
+  test('getBag2Sequence step 0 shows TST transition (post-clear residual)', async () => {
+    const { getBag2Sequence, getPostTstResidual } = await import('../src/modes/visualizer.ts');
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    // Step 0 is the TST transition — shows the Bag 1 final board
+    // Step 0 is the TST transition — shows the post-TST residual board
     expect(bag2Seq!.steps[0]!.piece).toBe('T');
     expect(bag2Seq!.steps[0]!.hint).toContain('T-Spin Triple');
     const tstBoard = bag2Seq!.steps[0]!.board;
     const tstFilledCells = tstBoard.flat().filter((c) => c !== null).length;
-    expect(tstFilledCells).toBe(bag1FilledCells); // Same as Bag 1 board (no new cells)
+    // Should match the hardcoded residual cell count (MS2 = 24)
+    const residual = getPostTstResidual('ms2', false);
+    const residualCells = residual.flat().filter((c) => c !== null).length;
+    expect(tstFilledCells).toBe(residualCells);
   });
 
   test('getBag2Sequence step 1+ builds on post-TST residual', async () => {
-    const { getBag2Sequence, computePostTstBoard } = await import('../src/modes/visualizer.ts');
+    const { getBag2Sequence, getPostTstResidual } = await import('../src/modes/visualizer.ts');
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
     // Step 1 is the first Bag 2 piece on the residual
-    const residual = computePostTstBoard('ms2', false);
+    const residual = getPostTstResidual('ms2', false);
     const residualCells = residual.flat().filter((c) => c !== null).length;
     const step1Cells = bag2Seq!.steps[1]!.board.flat().filter((c) => c !== null).length;
     expect(step1Cells).toBe(residualCells + 4); // residual + one 4-cell piece
@@ -618,17 +617,18 @@ describe('V7: Bag 2 routes', () => {
     expect(residual[19]![2]).toBe('S');
   });
 
-  test('Bag 2 placements do not overlap with post-TST residual (honey_cup, ms2)', async () => {
-    const { computePostTstBoard, getBag2Routes } = await import('../src/modes/visualizer.ts');
-    // Only test openers whose TST actually clears lines correctly.
-    // stray_cannon and gamushiro have incomplete rows — their Bag 2 data
-    // was written for the old hardcoded clearing and needs updating separately.
-    const WORKING_OPENERS: OpenerID[] = ['honey_cup', 'ms2'];
+  test('Bag 2 placements do not overlap with post-TST residual (all openers)', async () => {
+    const { getPostTstResidual, getBag2Routes } = await import('../src/modes/visualizer.ts');
+    const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+    // TODO: gamushiro form_2 route data was authored for the old (incorrect) residual.
+    // It needs to be re-authored from Hard Drop wiki once the correct Bag 2 boards are available.
+    const SKIP_ROUTES = new Set(['gamushiro:form_2']);
 
-    for (const id of WORKING_OPENERS) {
-      const residual = computePostTstBoard(id, false);
+    for (const id of ALL_OPENERS) {
+      const residual = getPostTstResidual(id, false);
       const routes = getBag2Routes(id, false);
       for (const route of routes) {
+        if (SKIP_ROUTES.has(`${id}:${route.routeId}`)) continue;
         for (const placement of route.placements) {
           for (const cell of placement.cells) {
             const existing = residual[cell.row]?.[cell.col];
@@ -647,5 +647,54 @@ describe('V7: Bag 2 routes', () => {
     expect(state.bag).toBe(1);
     expect(state.bag2RouteIndex).toBe(0);
     expect(state.bag2Sequence).toBeNull();
+  });
+
+  test('getPostTstResidual returns correct cell count for each opener', async () => {
+    const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
+    const EXPECTED: Record<OpenerID, number> = {
+      honey_cup: 28,
+      ms2: 24,
+      stray_cannon: 24,
+      gamushiro: 28,
+    };
+    const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+    for (const id of OPENER_IDS) {
+      const board = getPostTstResidual(id, false);
+      const count = board.flat().filter((c) => c !== null).length;
+      expect(count).toBe(EXPECTED[id]);
+    }
+  });
+
+  test('getPostTstResidual mirror has same cell count as normal', async () => {
+    const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
+    const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+    for (const id of OPENER_IDS) {
+      const normal = getPostTstResidual(id, false);
+      const mirrored = getPostTstResidual(id, true);
+      const normalCount = normal.flat().filter((c) => c !== null).length;
+      const mirrorCount = mirrored.flat().filter((c) => c !== null).length;
+      expect(mirrorCount).toBe(normalCount);
+    }
+  });
+
+  test('Bag 2 placements do not overlap with residual (mirror)', async () => {
+    const { getPostTstResidual, getBag2Routes } = await import('../src/modes/visualizer.ts');
+    const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+    // Same skip set as normal side — gamushiro form_2 needs re-authoring
+    const SKIP_ROUTES = new Set(['gamushiro:form_2']);
+
+    for (const id of ALL_OPENERS) {
+      const residual = getPostTstResidual(id, true);
+      const routes = getBag2Routes(id, true);
+      for (const route of routes) {
+        if (SKIP_ROUTES.has(`${id}:${route.routeId}`)) continue;
+        for (const placement of route.placements) {
+          for (const cell of placement.cells) {
+            const existing = residual[cell.row]?.[cell.col];
+            expect(existing).toBeNull();
+          }
+        }
+      }
+    }
   });
 });
