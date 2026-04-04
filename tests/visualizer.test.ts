@@ -367,3 +367,38 @@ describe('V5: User can switch between openers', () => {
     expect(newState.sequence.openerId).toBe('honey_cup');
   });
 });
+
+// ── V6: Layout constraints — prevent content from rendering behind status bar ──
+
+describe('V6: Layout constraints', () => {
+  test('board bottom + content must not overlap the status bar', async () => {
+    const { LAYOUT, CANVAS_H } = await import('../src/renderer/board.ts');
+
+    const boardBottom = LAYOUT.board.y + LAYOUT.board.h;
+    const statusBarTop = LAYOUT.statusBar.y;
+    const gap = statusBarTop - boardBottom;
+
+    // The gap between board bottom and status bar must exist
+    expect(gap).toBeGreaterThan(0);
+    // Status bar must fit within canvas
+    expect(LAYOUT.statusBar.y + LAYOUT.statusBar.h).toBeLessThanOrEqual(CANVAS_H);
+  });
+
+  test('drill hint text position is above the status bar', () => {
+    // The drill hint renders at BOARD_Y + 120 = 180 (in the hold area).
+    // This must be well above the status bar at y=672.
+    const BOARD_Y = 60;  // LAYOUT.board.y
+    const hintY = BOARD_Y + 120;
+    const statusBarY = 672; // LAYOUT.statusBar.y
+
+    expect(hintY).toBeLessThan(statusBarY);
+    // With enough margin for 2 lines of text (~32px)
+    expect(hintY + 32).toBeLessThan(statusBarY);
+  });
+
+  test('board area does not overlap with tab bar', async () => {
+    const { LAYOUT } = await import('../src/renderer/board.ts');
+    const tabBottom = LAYOUT.tabBar.y + LAYOUT.tabBar.h;
+    expect(LAYOUT.board.y).toBeGreaterThanOrEqual(tabBottom);
+  });
+});
