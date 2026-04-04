@@ -3,6 +3,10 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build": "vite build",
+    "preview": "vite preview"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "vite": "^8.0.3"
