@@ -589,6 +589,27 @@ canvas.addEventListener('click', (e) => {
     return;
   }
 
+  // Drill mode: selector buttons + success/failed buttons
+  if (state.appMode === 'drill') {
+    if (state.drill === null) {
+      // Selector screen: 4 buttons centered, btnW=280, btnH=48, gap=12, startY=180
+      const btnW = 280;
+      const btnH = 48;
+      const gap = 12;
+      const startY = 180;
+      const bx = (640 - btnW) / 2;
+
+      for (let i = 0; i < 4; i++) {
+        const by = startY + i * (btnH + gap);
+        if (x >= bx && x <= bx + btnW && y >= by && y <= by + btnH) {
+          dispatchDrill(`select_${i + 1}`);
+          return;
+        }
+      }
+    }
+    return;
+  }
+
   // Visualizer mode: opener selector buttons
   if (state.appMode === 'visualizer') {
     // Buttons at y=454, h=32, 4 buttons each 130px wide, 8px gap, centered
