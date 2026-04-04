@@ -179,6 +179,11 @@ If the user says "check the screen" once, check the screen every time going forw
 **Correction**: User screenshot showing "Shape mismatch" with J missing from their build but present in expected.
 **Rule**: The completion check must account for the hold piece. For openers where the hold piece is also in the placement steps (Honey Cup, Gamushiro), the expected board for comparison should exclude the piece that ends up in hold. Never hardcode piece counts — derive from the opener data.
 
+### 28. Bag 2 routes depend on the EXACT Bag 1 shape — different sources use different shapes
+**Mistake**: Decoded Bag 2 fumen strings from johnbeak.cz and plugged them into our visualizer. But johnbeak.cz's Bag 1 shape for Honey Cup differs from our Hard Drop wiki-sourced shape. The Bag 2 I piece at col 6 overlapped with our Bag 1 T piece at col 6.
+**Correction**: User reported "first I overlapped, open playwright and check"
+**Rule**: Before using Bag 2 route data from ANY source, verify that the source's Bag 1 base shape matches ours. Diff the fumen's gray (X) cells against our Bag 1 board. If they differ, the Bag 2 data is incompatible.
+
 ## Technical Reference
 
 ### localStorage Keys
