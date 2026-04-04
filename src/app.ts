@@ -22,6 +22,8 @@ import {
   createVisualizerState,
   stepForward,
   stepBackward,
+  switchBag2Route,
+  getBag2Routes,
 } from './modes/visualizer.ts';
 import type { VisualizerState } from './modes/visualizer.ts';
 import {
@@ -207,6 +209,22 @@ function dispatchVisualizer(action: string): void {
       const id = openerIds[idx]!;
       state.visualizer = createVisualizerState(getOpenerSequence(id, viz.sequence.mirror));
       dirty = true;
+      break;
+    }
+    case 'option_5':
+    case 'option_6': {
+      // 5/6 = switch Bag 2 routes
+      const routeIdx = action === 'option_5' ? 0 : 1;
+      const routes = getBag2Routes(viz.sequence.openerId, viz.sequence.mirror);
+      if (routeIdx < routes.length) {
+        switchBag2Route(viz, routeIdx);
+        // If not already in Bag 2, enter it
+        if (viz.bag !== 2) {
+          viz.bag = 2;
+          viz.currentStep = 0;
+        }
+        dirty = true;
+      }
       break;
     }
     case 'toggle_mode': { // M = toggle mirror (reuse S key or add M)

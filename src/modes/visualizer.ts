@@ -23,10 +23,29 @@ export interface OpenerSequence {
   };
 }
 
+// ── Bag 2 Route Types ──
+
+export interface Bag2Route {
+  routeId: string;          // 'route_c', 'main', etc.
+  routeLabel: string;       // 'Route C (Olive)'
+  condition: string;        // 'S first among {I,O,S}'
+  conditionPieces: PieceType[];
+  placements: RawPlacement[];
+  tstStepIndex: number;     // which step fires the TST
+}
+
+export interface Bag2Data {
+  routes: Bag2Route[];
+}
+
 export interface VisualizerState {
   sequence: OpenerSequence;
   currentStep: number;
   playing: boolean;
+  // Bag 2 navigation
+  bag: 1 | 2;
+  bag2RouteIndex: number;
+  bag2Sequence: OpenerSequence | null;
 }
 
 // ── Board helpers ──
@@ -42,7 +61,7 @@ function cloneBoard(board: (PieceType | null)[][]): (PieceType | null)[][] {
 // ── Placement data ──
 // Row 19 = bottom, row 0 = top (screen coordinates)
 
-interface RawPlacement {
+export interface RawPlacement {
   piece: PieceType;
   cells: { col: number; row: number }[];
   hint: string;
@@ -451,6 +470,68 @@ function buildSequence(
   };
 }
 
+// ── Bag 2 Route Data ──
+// TODO: replace with real Bag 2 data (placeholder routes below)
+
+const MS2_BAG2_ROUTE_C: Bag2Route = {
+  routeId: 'route_c',
+  routeLabel: 'Route C (Olive)',
+  condition: 'S first among {I,O,S}',
+  conditionPieces: ['S', 'I', 'O'],
+  placements: [
+    // TODO: replace with real Bag 2 data
+    {
+      piece: 'T',
+      cells: [
+        { col: 4, row: 17 },
+        { col: 3, row: 18 },
+        { col: 4, row: 18 },
+        { col: 5, row: 18 },
+      ],
+      hint: 'T-spin Triple into the TST slot (placeholder)',
+    },
+    {
+      piece: 'S',
+      cells: [
+        { col: 1, row: 15 },
+        { col: 2, row: 15 },
+        { col: 0, row: 16 },
+        { col: 1, row: 16 },
+      ],
+      hint: 'S flat, top-left (placeholder)',
+    },
+  ],
+  tstStepIndex: 0,
+};
+
+const BAG2_ROUTE_DATA: Record<OpenerID, Bag2Data> = {
+  ms2: {
+    routes: [MS2_BAG2_ROUTE_C],
+  },
+  gamushiro: {
+    routes: [], // TODO: replace with real Bag 2 data
+  },
+  honey_cup: {
+    routes: [], // TODO: replace with real Bag 2 data
+  },
+  stray_cannon: {
+    routes: [], // TODO: replace with real Bag 2 data
+  },
+};
+
+function mirrorBag2Route(route: Bag2Route): Bag2Route {
+  return {
+    ...route,
+    routeLabel: route.routeLabel + ' (Mirror)',
+    conditionPieces: route.conditionPieces.map(mirrorPiece),
+    placements: route.placements.map((p) => ({
+      piece: mirrorPiece(p.piece),
+      cells: p.cells.map((c) => ({ col: 9 - c.col, row: c.row })),
+      hint: p.hint + ' (mirrored)',
+    })),
+  };
+}
+
 // ── Public API ──
 
 export function getOpenerSequence(openerId: OpenerID, mirror: boolean): OpenerSequence {
@@ -466,19 +547,55 @@ export function createVisualizerState(sequence: OpenerSequence): VisualizerState
     sequence,
     currentStep: 0,
     playing: false,
+    bag: 1,
+    bag2RouteIndex: 0,
+    bag2Sequence: null,
   };
 }
 
 export function stepForward(state: VisualizerState): void {
-  const maxStep = state.sequence.steps.length;
-  if (state.currentStep < maxStep) {
-    state.currentStep++;
+  if (state.bag === 1) {
+    const maxStep = state.sequence.steps.length;
+    if (state.currentStep < maxStep) {
+      state.currentStep++;
+    } else {
+      // At the end of Bag 1 — try to transition to Bag 2
+      const routes = getBag2Routes(state.sequence.openerId, state.sequence.mirror);
+      if (routes.length > 0) {
+        const bag2Seq = getBag2Sequence(
+          state.sequence.openerId,
+          state.sequence.mirror,
+          state.bag2RouteIndex,
+        );
+        if (bag2Seq) {
+          state.bag = 2;
+          state.bag2Sequence = bag2Seq;
+          state.currentStep = 0;
+        }
+      }
+    }
+  } else if (state.bag === 2 && state.bag2Sequence) {
+    const maxStep = state.bag2Sequence.steps.length;
+    if (state.currentStep < maxStep) {
+      state.currentStep++;
+    }
   }
 }
 
 export function stepBackward(state: VisualizerState): void {
-  if (state.currentStep > 0) {
-    state.currentStep--;
+  if (state.bag === 2) {
+    if (state.currentStep > 0) {
+      state.currentStep--;
+    } else {
+      // At step 0 of Bag 2 — go back to last Bag 1 step
+      state.bag = 1;
+      state.bag2Sequence = null;
+      state.currentStep = state.sequence.steps.length;
+    }
+  } else {
+    if (state.currentStep > 0) {
+      state.currentStep--;
+    }
   }
 }
 
@@ -488,10 +605,86 @@ export function jumpToStep(state: VisualizerState, step: number): void {
 }
 
 export function getCurrentBoard(state: VisualizerState): (PieceType | null)[][] {
+  if (state.bag === 2 && state.bag2Sequence) {
+    if (state.currentStep === 0) {
+      // Show the final Bag 1 board as the base
+      const bag1Steps = state.sequence.steps;
+      return bag1Steps.length > 0 ? bag1Steps[bag1Steps.length - 1]!.board : emptyBoard();
+    }
+    return state.bag2Sequence.steps[state.currentStep - 1]!.board;
+  }
   if (state.currentStep === 0) {
     return emptyBoard();
   }
   return state.sequence.steps[state.currentStep - 1]!.board;
+}
+
+// ── Bag 2 Public API ──
+
+export function getBag2Routes(openerId: OpenerID, mirror: boolean): Bag2Route[] {
+  const data = BAG2_ROUTE_DATA[openerId];
+  if (!data || data.routes.length === 0) return [];
+  return mirror ? data.routes.map(mirrorBag2Route) : [...data.routes];
+}
+
+export function getBag2Sequence(
+  openerId: OpenerID,
+  mirror: boolean,
+  routeIndex: number,
+): OpenerSequence | null {
+  const routes = getBag2Routes(openerId, mirror);
+  if (routeIndex < 0 || routeIndex >= routes.length) return null;
+  const route = routes[routeIndex]!;
+
+  // Start from the Bag 1 final board
+  const bag1Seq = getOpenerSequence(openerId, mirror);
+  const bag1FinalBoard =
+    bag1Seq.steps.length > 0
+      ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
+      : emptyBoard();
+
+  // Build Bag 2 steps on top of the Bag 1 board
+  const steps: PlacementStep[] = [];
+  let currentBoard = cloneBoard(bag1FinalBoard);
+
+  for (const placement of route.placements) {
+    currentBoard = cloneBoard(currentBoard);
+    for (const cell of placement.cells) {
+      currentBoard[cell.row]![cell.col] = placement.piece;
+    }
+    steps.push({
+      piece: placement.piece,
+      board: cloneBoard(currentBoard),
+      newCells: [...placement.cells],
+      hint: placement.hint,
+    });
+  }
+
+  const bag = steps.map((s) => s.piece);
+
+  return {
+    openerId,
+    mirror,
+    bag,
+    holdPiece: bag1Seq.holdPiece, // Bag 2 hold TBD — use Bag 1 hold as placeholder
+    steps,
+    tSpinSlots: bag1Seq.tSpinSlots,
+  };
+}
+
+export function switchBag2Route(state: VisualizerState, routeIndex: number): void {
+  const routes = getBag2Routes(state.sequence.openerId, state.sequence.mirror);
+  if (routeIndex < 0 || routeIndex >= routes.length) return;
+  state.bag2RouteIndex = routeIndex;
+  if (state.bag === 2) {
+    const bag2Seq = getBag2Sequence(
+      state.sequence.openerId,
+      state.sequence.mirror,
+      routeIndex,
+    );
+    state.bag2Sequence = bag2Seq;
+    state.currentStep = 0;
+  }
 }
 
 export function getAvailableOpeners(): { id: OpenerID; nameEn: string; nameCn: string }[] {

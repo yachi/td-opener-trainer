@@ -15,6 +15,8 @@ export function setupKeyboard(
     ArrowLeft: 'step_back',
     KeyM: 'toggle_mode',
     Digit4: 'option_4',
+    Digit5: 'option_5',
+    Digit6: 'option_6',
   };
 
   function onKeyDown(e: KeyboardEvent): void {

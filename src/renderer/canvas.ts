@@ -4,7 +4,8 @@ import type { OnboardingProgress } from '../modes/onboarding';
 import type { QuizHUDData } from './hud';
 import type { QuizQueueOptions } from './queue';
 import type { OnboardingRenderState } from './onboarding';
-import type { VisualizerState } from '../modes/visualizer';
+import type { VisualizerState, Bag2Route } from '../modes/visualizer';
+import { getBag2Routes } from '../modes/visualizer';
 import { CANVAS_W, CANVAS_H, COLORS, LAYOUT, CELL_SIZE, drawCell, drawPieceInBox, roundRect } from './board';
 import { drawBoard, drawFilledCells, drawPiecePreview } from './board';
 import { drawHoldPiece, drawQueue, drawQuizQueue } from './queue';
@@ -199,6 +200,8 @@ function buildOnboardingRenderState(state: AppState): OnboardingRenderState {
 
 function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: VisualizerState): void {
   const { sequence, currentStep } = vizState;
+  const inBag2 = vizState.bag === 2;
+  const activeSequence = inBag2 && vizState.bag2Sequence ? vizState.bag2Sequence : sequence;
   const FONT = '-apple-system, sans-serif';
   const boardX = 120;
   const boardY = 60;
@@ -220,10 +223,27 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   ctx.font = `14px ${FONT}`;
   ctx.fillText(`(${openerDef.nameCn})`, CANVAS_W / 2, 75);
 
+  // Bag 2 route label and condition
+  const bag2Routes = getBag2Routes(sequence.openerId, sequence.mirror);
+  if (inBag2 && bag2Routes.length > 0) {
+    const route = bag2Routes[vizState.bag2RouteIndex];
+    if (route) {
+      ctx.fillStyle = '#CCAA44';
+      ctx.font = `bold 13px ${FONT}`;
+      ctx.fillText(`Bag 2 · ${route.routeLabel}`, CANVAS_W / 2, 92);
+      ctx.fillStyle = '#9999BB';
+      ctx.font = `12px ${FONT}`;
+      ctx.fillText(`Condition: ${route.condition}`, CANVAS_W / 2, 108);
+    }
+  }
+
   // Step indicator
+  const stepTotal = activeSequence.steps.length;
+  const bagLabel = inBag2 ? 'Bag 2' : 'Bag 1';
   ctx.fillStyle = '#B0B0D0';
   ctx.font = `14px ${FONT}`;
-  ctx.fillText(`Step ${currentStep} / ${sequence.steps.length}`, CANVAS_W / 2, 95);
+  const stepY = inBag2 ? 122 : 95;
+  ctx.fillText(`${bagLabel} · Step ${currentStep} / ${stepTotal}`, CANVAS_W / 2, stepY);
 
   // Board background
   const boardTopY = 120;
@@ -255,11 +275,26 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
 
   // Get the current board state
   const board = currentStep === 0
-    ? Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null))
-    : sequence.steps[currentStep - 1]!.board;
+    ? (inBag2 && sequence.steps.length > 0
+        ? sequence.steps[sequence.steps.length - 1]!.board
+        : Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null)))
+    : activeSequence.steps[currentStep - 1]!.board;
 
   // Get new cells for highlighting (only when step > 0)
-  const newCells = currentStep > 0 ? sequence.steps[currentStep - 1]!.newCells : [];
+  const newCells = currentStep > 0 ? activeSequence.steps[currentStep - 1]!.newCells : [];
+
+  // Build a set of Bag 1 cells for dimming when in Bag 2
+  const bag1CellSet = new Set<string>();
+  if (inBag2 && sequence.steps.length > 0) {
+    const bag1Board = sequence.steps[sequence.steps.length - 1]!.board;
+    for (let r = 0; r < 20; r++) {
+      for (let c = 0; c < 10; c++) {
+        if (bag1Board[r]?.[c] !== null) {
+          bag1CellSet.add(`${r},${c}`);
+        }
+      }
+    }
+  }
 
   // Draw filled cells (bottom 8 rows = rows 12-19)
   for (let r = 0; r < visibleRows; r++) {
@@ -273,6 +308,8 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
 
         // Check if this is a newly placed cell
         const isNew = newCells.some(nc => nc.row === boardRow && nc.col === c);
+        // Check if this is a Bag 1 cell (dimmed when viewing Bag 2)
+        const isBag1Cell = inBag2 && bag1CellSet.has(`${boardRow},${c}`);
 
         if (isNew) {
           // Bright highlight for new piece
@@ -281,8 +318,13 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
           ctx.strokeStyle = '#FFFFFF';
           ctx.lineWidth = 2;
           ctx.strokeRect(px + 1, py + 1, cellSz - 2, cellSz - 2);
+        } else if (isBag1Cell) {
+          // Bag 1 pieces dimmed when viewing Bag 2
+          ctx.globalAlpha = 0.3;
+          drawCell(ctx, px, py, cellSz, color);
+          ctx.globalAlpha = 1.0;
         } else {
-          // Dimmed for previously placed pieces
+          // Previously placed pieces (same bag)
           ctx.globalAlpha = 0.5;
           drawCell(ctx, px, py, cellSz, color);
           ctx.globalAlpha = 1.0;
@@ -307,7 +349,7 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
 
   // Current step hint
   if (currentStep > 0) {
-    const step = sequence.steps[currentStep - 1]!;
+    const step = activeSequence.steps[currentStep - 1]!;
     const hintY = boardTopY + boardH + 20;
 
     // Piece being placed
@@ -326,7 +368,11 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
     ctx.font = `14px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText('Empty board — press → to place first piece', CANVAS_W / 2, boardTopY + boardH + 30);
+    if (inBag2) {
+      ctx.fillText('Bag 1 complete — press → to step through Bag 2', CANVAS_W / 2, boardTopY + boardH + 30);
+    } else {
+      ctx.fillText('Empty board — press → to place first piece', CANVAS_W / 2, boardTopY + boardH + 30);
+    }
   }
 
   // Navigation controls
@@ -334,7 +380,10 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   ctx.fillStyle = '#555577';
   ctx.font = `13px ${FONT}`;
   ctx.textAlign = 'center';
-  ctx.fillText('← prev · → next · 1-4: switch opener · M: mirror', CANVAS_W / 2, navY);
+  const navHint = bag2Routes.length > 0
+    ? '← prev · → next · 1-4: opener · 5-6: route · M: mirror'
+    : '← prev · → next · 1-4: switch opener · M: mirror';
+  ctx.fillText(navHint, CANVAS_W / 2, navY);
 
   // Opener selector buttons (bottom)
   const btnY = navY + 30;
@@ -363,6 +412,36 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
     btnX += btnW + 8;
   }
 
+  // Bag 2 route selector buttons (below opener buttons, only when routes exist)
+  if (bag2Routes.length > 0) {
+    const routeBtnY = btnY + 42;
+    const routeBtnW = 160;
+    const routeTotalW = bag2Routes.length * routeBtnW + (bag2Routes.length - 1) * 8;
+    let routeBtnX = (CANVAS_W - routeTotalW) / 2;
+
+    for (let i = 0; i < bag2Routes.length; i++) {
+      const route = bag2Routes[i]!;
+      const isActive = inBag2 && vizState.bag2RouteIndex === i;
+      ctx.fillStyle = isActive ? '#3A3A2C' : '#1A1A3A';
+      roundRect(ctx, routeBtnX, routeBtnY, routeBtnW, 28, 6);
+      ctx.fill();
+      ctx.strokeStyle = isActive ? '#AAAA6C' : '#3A3A5C';
+      ctx.lineWidth = 1;
+      roundRect(ctx, routeBtnX, routeBtnY, routeBtnW, 28, 6);
+      ctx.stroke();
+
+      ctx.fillStyle = isActive ? '#FFDD66' : '#9999BB';
+      ctx.font = `bold 11px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${i + 5}: ${route.routeLabel}`, routeBtnX + routeBtnW / 2, routeBtnY + 14);
+
+      routeBtnX += routeBtnW + 8;
+    }
+  }
+
   // Status bar
-  drawStatusBar(ctx, `${title} · Step ${currentStep}/${sequence.steps.length} · ←→: step · M: mirror`);
+  const statusStepTotal = inBag2 ? activeSequence.steps.length : sequence.steps.length;
+  const statusBag = inBag2 ? 'Bag 2' : 'Bag 1';
+  drawStatusBar(ctx, `${title} · ${statusBag} · Step ${currentStep}/${statusStepTotal} · ←→: step · M: mirror`);
 }
