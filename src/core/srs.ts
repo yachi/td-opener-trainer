@@ -165,3 +165,101 @@ export function spawnPiece(type: PieceType): ActivePiece {
 export function getGhostPosition(board: Board, piece: ActivePiece): ActivePiece {
   return hardDrop(board, piece);
 }
+
+// ── Reachability BFS ──
+
+function stateKey(col: number, row: number, rotation: number): string {
+  return `${col},${row},${rotation}`;
+}
+
+/**
+ * Find all positions where a piece can lock, reachable from spawn via SRS moves.
+ * Uses BFS through state space (col, row, rotation).
+ *
+ * Moves explored per state:
+ *   - left, right, soft drop
+ *   - rotate CW, rotate CCW
+ *   - hard drop (optimization: jump to lockable position immediately)
+ *
+ * A position is "lockable" if the piece can't move down further.
+ * Returns deduplicated array of ActivePiece positions (deduplicated by final cell footprint).
+ */
+export function findReachablePositions(board: Board, type: PieceType): ActivePiece[] {
+  const spawn = spawnPiece(type);
+
+  if (!isValidPosition(board, spawn)) {
+    return [];
+  }
+
+  const visited = new Set<string>();
+  const queue: ActivePiece[] = [spawn];
+  visited.add(stateKey(spawn.col, spawn.row, spawn.rotation));
+
+  const lockableMap = new Map<string, ActivePiece>();
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+
+    // Check if this position is lockable (can't move down)
+    const canMoveDown = tryMove(board, current, 0, 1);
+    if (!canMoveDown) {
+      const cells = getPieceCells(current);
+      const cellKey = cells
+        .map((c) => `${c.col},${c.row}`)
+        .sort()
+        .join('|');
+      if (!lockableMap.has(cellKey)) {
+        lockableMap.set(cellKey, current);
+      }
+    }
+
+    // Try all 6 moves: left, right, soft drop, rotate CW, rotate CCW, hard drop
+    const candidates: (ActivePiece | null)[] = [
+      tryMove(board, current, -1, 0),
+      tryMove(board, current, +1, 0),
+      tryMove(board, current, 0, +1),
+      tryRotate(board, current, +1),
+      tryRotate(board, current, -1),
+      hardDrop(board, current) === current ? null : hardDrop(board, current), // skip if already at bottom
+    ];
+
+    for (const next of candidates) {
+      if (next === null) continue;
+      const key = stateKey(next.col, next.row, next.rotation);
+      if (visited.has(key)) continue;
+      visited.add(key);
+      queue.push(next);
+    }
+  }
+
+  return Array.from(lockableMap.values());
+}
+
+/**
+ * Check if a specific piece placement is reachable from spawn via SRS moves.
+ */
+export function isPositionReachable(
+  board: Board,
+  type: PieceType,
+  targetCells: { col: number; row: number }[],
+): boolean {
+  const reachable = findReachablePositions(board, type);
+
+  const targetKey = targetCells
+    .map((c) => `${c.col},${c.row}`)
+    .sort()
+    .join('|');
+
+  for (const pos of reachable) {
+    const cells = getPieceCells(pos);
+    const cellKey = cells
+      .map((c) => `${c.col},${c.row}`)
+      .sort()
+      .join('|');
+    if (cellKey === targetKey) {
+      return true;
+    }
+  }
+
+  return false;
+}
