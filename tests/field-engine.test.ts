@@ -660,13 +660,15 @@ describe('buildBoardFromPlacements', () => {
     expect(result).toEqual(seqFinal);
   });
 
-  test('Bag 2 complete board matches step-by-step overlay', async () => {
+  test('Bag 2 boards grow step-by-step (each step adds 4 cells or overwrites)', async () => {
     const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
     const bag2 = getBag2Sequence('honey_cup', false, 0);
     expect(bag2).not.toBeNull();
-    // All Bag 2 steps (except step 0) should show the same complete board
+    // Each step should have >= the previous step's filled cells
     for (let i = 2; i < bag2!.steps.length; i++) {
-      expect(bag2!.steps[i]!.board).toEqual(bag2!.steps[1]!.board);
+      const prevFilled = bag2!.steps[i - 1]!.board.flat().filter(c => c !== null).length;
+      const currFilled = bag2!.steps[i]!.board.flat().filter(c => c !== null).length;
+      expect(currFilled).toBeGreaterThanOrEqual(prevFilled);
     }
   });
 

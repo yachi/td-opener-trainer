@@ -5,7 +5,6 @@ import {
   boardToField,
   fieldToBoard,
   placePieceFromCells,
-  buildBoardFromPlacements,
 } from '../core/field-engine.ts';
 
 // ── Types ──
@@ -774,17 +773,20 @@ export function getBag2Sequence(
     hint: 'Bag 1 complete — Bag 2 pieces will be placed on top',
   });
 
-  // Build the complete Bag 2 board (all pieces placed) through the physics engine.
-  // Allow overwrite: Bag 2 pieces overlay on Bag 1 (which would be cleared by TST in actual play).
-  const completeBag2Board = buildBoardFromPlacements(bag1Final, route.placements, { allowOverwrite: true });
-
-  // Each step shows the COMPLETE board with one piece highlighted
-  for (let i = 0; i < route.placements.length; i++) {
+  // Build Bag 2 step-by-step: each step adds one piece to the board.
+  // Pieces may "float" visually because they interlock — this is correct
+  // per SRS (pieces reach positions via kicks, not gravity alone).
+  let currentBoard = cloneBoard(bag1Final);
+  for (const placement of route.placements) {
+    currentBoard = cloneBoard(currentBoard);
+    const field = boardToField(currentBoard);
+    placePieceFromCells(field, placement.piece, placement.cells, { allowOverwrite: true });
+    currentBoard = fieldToBoard(field);
     steps.push({
-      piece: route.placements[i]!.piece,
-      board: cloneBoard(completeBag2Board),  // SAME complete board every step
-      newCells: [...route.placements[i]!.cells],    // Different highlight each step
-      hint: route.placements[i]!.hint,
+      piece: placement.piece,
+      board: cloneBoard(currentBoard),
+      newCells: [...placement.cells],
+      hint: placement.hint,
     });
   }
 
