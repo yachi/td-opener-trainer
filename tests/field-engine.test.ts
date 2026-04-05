@@ -405,6 +405,43 @@ describe('Golden fumen strings', () => {
   }
 });
 
+// ── 8b. Golden fumen strings for Bag 2 final boards ──
+
+describe('Bag 2 golden fumen strings', () => {
+  const BAG2_GOLDEN_FUMENS: Record<string, string> = {
+    'honey_cup_0': 'v115@fgzhFeh0R4BeRpBeg0R4CeRpglh0R4AeBtilg0R4gl?BeBtwwh0ilAeBtxwRpzhAeBtwwRpJeAgH',
+    'honey_cup_1': 'v115@fgwhi0FewhRpg0BeglQ4BewhRpCeglR4g0whR4AeBt?hlQ4g0R4glBeBtwwh0ilAeBtxwRpzhAeBtwwRpJeAgH',
+    'ms2_0': 'v115@egwhhlGewhAeglh0EewhAeglg0DeR4xhQ4g0AeBtR4?RpwhR4BeBtwwRpwhg0Q4AeBtxwRpwhi0AeBtwwRpJeAgH',
+    'ms2_1': 'v115@VgzhGeilGeglh0Heg0DeR4AewhQ4g0AeBtR4RpwhR4?BeBtwwRpwhg0Q4AeBtxwRpwhi0AeBtwwRpJeAgH',
+    'stray_cannon_0': 'v115@lgRpg0whCeAtBeRpg0whQ4AeBtCeh0whR4AtilCexh?R4glwwBeg0BewhglR4xwAeg0RpwhhlQ4wwAeh0RpJeAgH',
+    'stray_cannon_1': 'v115@XgAtHeBtHeAtRpBei0whBeRpCeQ4g0xhBeilAeR4xh?glQ4glwwBeg0Q4xhglR4xwAeg0RpwhhlQ4wwAeh0RpJeAgH',
+    'gamushiro_0': 'v115@VgwhGeRpwhGeRpwhh0Eehlwhg0DeR4hlQ4g0AeBtR4?whhlR4BeBtwwwhhlg0Q4AeBtxwwhRpi0AeBtwwwhRpJeAgH',
+    'gamushiro_1': 'v115@VgwhIewhGehlwhh0Feglwhg0DeR4hlQ4g0AeBtR4wh?RpR4BeBtwwwhRpg0Q4AeBtxwwhRpi0AeBtwwwhRpJeAgH',
+  };
+
+  const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+
+  for (const id of OPENER_IDS) {
+    test(`${id} Bag 2 route 0 final board matches golden fumen`, async () => {
+      const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+      const seq = getBag2Sequence(id, false, 0);
+      if (!seq || seq.steps.length < 2) return;
+      const finalBoard = seq.steps[seq.steps.length - 1]!.board;
+      const fumen = boardToFumen(finalBoard);
+      expect(fumen).toBe(BAG2_GOLDEN_FUMENS[`${id}_0`]);
+    });
+
+    test(`${id} Bag 2 route 1 final board matches golden fumen`, async () => {
+      const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+      const seq = getBag2Sequence(id, false, 1);
+      if (!seq || seq.steps.length < 2) return;
+      const finalBoard = seq.steps[seq.steps.length - 1]!.board;
+      const fumen = boardToFumen(finalBoard);
+      expect(fumen).toBe(BAG2_GOLDEN_FUMENS[`${id}_1`]);
+    });
+  }
+});
+
 // ── 9. Final board floating cell check ──
 // TD openers intentionally leave a T-spin gap, so the cell above the gap
 // appears "floating" by the naive gravity check. We only verify that
