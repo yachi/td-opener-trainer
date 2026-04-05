@@ -1,7 +1,7 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { OPENERS } from '../openers/decision.ts';
-import { computePostTst } from '../core/field-engine.ts';
+import { computePostTst, findFloatingCells } from '../core/field-engine.ts';
 
 // ── Types ──
 
@@ -507,47 +507,57 @@ export function computePostTstBoard(openerId: OpenerID, mirror: boolean): (Piece
 // Coordinate system: row 19 = bottom, col 0 = left.
 
 export const POST_TST_RESIDUALS: Record<OpenerID, { col: number; row: number }[]> = {
-  // Honey Cup — 28 G cells, hole at col 4 row 19
+  // Honey Cup — 26 G cells (wiki Board 8)
+  // Row 16: GGGG......
+  // Row 17: GGGG..GG..
+  // Row 18: GGG...GGGG
+  // Row 19: GGGG.GGGGG
   honey_cup: [
-    { col: 9, row: 15 },
-    { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 9, row: 16 },
-    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 },
-    { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 },
+    { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 3, row: 16 },
+    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 3, row: 17 },
+    { col: 6, row: 17 }, { col: 7, row: 17 },
     { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
-    { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 },
-    { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
-    { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 },
-    { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
+    { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 },
+    { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
   ],
 
-  // MS2 — 24 G cells, hole at col 4 row 19
+  // MS2 — 24 G cells (wiki Board 2)
+  // Row 16: GG........
+  // Row 17: GGG....G..
+  // Row 18: GGG.GGGGGG
+  // Row 19: GGGG.GGGGG
   ms2: [
     { col: 0, row: 16 }, { col: 1, row: 16 },
-    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 },
-    { col: 7, row: 17 },
+    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 7, row: 17 },
     { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
     { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 },
     { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
-    { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 },
-    { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 },
+    { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
   ],
 
-  // Stray Cannon — 24 G cells, hole at col 5 row 19
+  // Stray Cannon — 26 G cells (wiki Board 3)
+  // Row 16: ......GGGG
+  // Row 17: G..G..GGGG
+  // Row 18: GGGG...GGG
+  // Row 19: GGGGG.GGGG
   stray_cannon: [
-    { col: 0, row: 16 },
-    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 },
-    { col: 4, row: 17 }, { col: 7, row: 17 },
-    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
-    { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 },
+    { col: 6, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 }, { col: 9, row: 16 },
+    { col: 0, row: 17 }, { col: 3, row: 17 },
+    { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 },
+    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 3, row: 18 },
     { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
-    { col: 3, row: 19 }, { col: 4, row: 19 },
+    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 4, row: 19 },
     { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
   ],
 
-  // Gamushiro — 28 G cells, hole at col 3 row 19
+  // Gamushiro — 28 G cells (wiki Board 1)
+  // Row 15: ........G.
+  // Row 16: G......GG.
+  // Row 17: GG....GGGG
+  // Row 18: GG.GGGGGGG
+  // Row 19: GGG.GGGGGG
   gamushiro: [
     { col: 8, row: 15 },
     { col: 0, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 },
@@ -577,6 +587,51 @@ export function getPostTstResidual(openerId: OpenerID, mirror: boolean): (PieceT
   }
 
   return board;
+}
+
+// ── TSD Pocket Positions ──
+// These cells form the T-Spin Double pocket and may legitimately "float"
+// (overhang) in intermediate Bag 2 steps.
+
+const TSD_POCKET_CELLS: Record<OpenerID, { col: number; row: number }[]> = {
+  honey_cup: [{ col: 3, row: 16 }, { col: 3, row: 17 }, { col: 4, row: 17 }, { col: 3, row: 18 }, { col: 4, row: 19 }],
+  ms2: [{ col: 3, row: 16 }, { col: 3, row: 17 }, { col: 4, row: 17 }, { col: 3, row: 18 }, { col: 4, row: 19 }],
+  stray_cannon: [{ col: 6, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }, { col: 6, row: 18 }, { col: 5, row: 19 }],
+  gamushiro: [{ col: 2, row: 16 }, { col: 2, row: 17 }, { col: 3, row: 17 }, { col: 2, row: 18 }, { col: 3, row: 19 }],
+};
+
+/**
+ * Get the TSD pocket cells for an opener (mirrored if needed).
+ * These are allowed to "float" during Bag 2 placement since they form
+ * an intentional overhang for the T-Spin Double.
+ */
+export function getTsdPocketCells(
+  openerId: OpenerID,
+  mirror: boolean,
+): { col: number; row: number }[] {
+  const cells = TSD_POCKET_CELLS[openerId];
+  if (mirror) {
+    return cells.map((c) => ({ col: 9 - c.col, row: c.row }));
+  }
+  return [...cells];
+}
+
+/**
+ * Filter out floating cells that are in or adjacent to the TSD pocket.
+ * Returns only "real" floating cells that indicate a placement error.
+ */
+export function filterTsdPocketFloating(
+  floating: { col: number; row: number }[],
+  openerId: OpenerID,
+  mirror: boolean,
+): { col: number; row: number }[] {
+  const pocket = getTsdPocketCells(openerId, mirror);
+  return floating.filter(
+    (c) =>
+      !pocket.some((p) => p.col === c.col && p.row === c.row) &&
+      // Also allow cells directly above TSD pocket (overhang walls)
+      !pocket.some((p) => p.col === c.col && p.row === c.row + 1),
+  );
 }
 
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
@@ -883,6 +938,17 @@ export function getBag2Sequence(
       newCells: [...placement.cells],
       hint: placement.hint,
     });
+
+    // Layer 2: Runtime validation — no floating cells (excluding TSD pocket overhangs)
+    if (process.env.NODE_ENV !== 'production') {
+      const floating = findFloatingCells(currentBoard);
+      const realFloating = filterTsdPocketFloating(floating, openerId, mirror);
+      if (realFloating.length > 0) {
+        console.warn(
+          `Bag 2 floating: ${openerId} route ${routeIndex} piece ${placement.piece}: ${realFloating.map((c) => `(${c.col},${c.row})`).join(',')}`,
+        );
+      }
+    }
   }
 
   const bag: PieceType[] = ['T', ...route.placements.map((p) => p.piece)];

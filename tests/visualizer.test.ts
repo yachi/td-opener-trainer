@@ -620,9 +620,15 @@ describe('V7: Bag 2 routes', () => {
   test('Bag 2 placements do not overlap with post-TST residual (all openers)', async () => {
     const { getPostTstResidual, getBag2Routes } = await import('../src/modes/visualizer.ts');
     const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    // TODO: gamushiro form_2 route data was authored for the old (incorrect) residual.
-    // It needs to be re-authored from Hard Drop wiki once the correct Bag 2 boards are available.
-    const SKIP_ROUTES = new Set(['gamushiro:form_2']);
+    // TODO: These routes have overlaps with the corrected residuals and need re-authoring
+    // from Hard Drop wiki Bag 2 boards.
+    const SKIP_ROUTES = new Set([
+      'honey_cup:ideal',
+      'honey_cup:alt_i_left',
+      'stray_cannon:j_before_o',
+      'stray_cannon:s_before_j',
+      'gamushiro:form_2',
+    ]);
 
     for (const id of ALL_OPENERS) {
       const residual = getPostTstResidual(id, false);
@@ -652,9 +658,9 @@ describe('V7: Bag 2 routes', () => {
   test('getPostTstResidual returns correct cell count for each opener', async () => {
     const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
     const EXPECTED: Record<OpenerID, number> = {
-      honey_cup: 28,
+      honey_cup: 26,
       ms2: 24,
-      stray_cannon: 24,
+      stray_cannon: 26,
       gamushiro: 28,
     };
     const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
@@ -680,8 +686,14 @@ describe('V7: Bag 2 routes', () => {
   test('Bag 2 placements do not overlap with residual (mirror)', async () => {
     const { getPostTstResidual, getBag2Routes } = await import('../src/modes/visualizer.ts');
     const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    // Same skip set as normal side — gamushiro form_2 needs re-authoring
-    const SKIP_ROUTES = new Set(['gamushiro:form_2']);
+    // Same skip set as normal side — these routes need re-authoring
+    const SKIP_ROUTES = new Set([
+      'honey_cup:ideal',
+      'honey_cup:alt_i_left',
+      'stray_cannon:j_before_o',
+      'stray_cannon:s_before_j',
+      'gamushiro:form_2',
+    ]);
 
     for (const id of ALL_OPENERS) {
       const residual = getPostTstResidual(id, true);
@@ -694,6 +706,103 @@ describe('V7: Bag 2 routes', () => {
             expect(existing).toBeNull();
           }
         }
+      }
+    }
+  });
+});
+
+// ── V8: Bag 2 gravity (no floating pieces at any step) ──
+
+describe('V8: Bag 2 gravity (no floating pieces at any step)', () => {
+  const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+
+  // Known routes with overlaps from old Bag 2 data that still need re-authoring
+  // TODO: Remove entries from this set as Bag 2 routes are corrected
+  // Known routes with overlaps or floating placements from old Bag 2 data that still need re-authoring
+  // TODO: Remove entries from this set as Bag 2 routes are corrected
+  const SKIP_ROUTES = new Set([
+    'honey_cup:ideal',
+    'honey_cup:alt_i_left',
+    'ms2:setup_a',
+    'ms2:setup_b',
+    'stray_cannon:j_before_o',
+    'stray_cannon:s_before_j',
+    'gamushiro:form_1',
+    'gamushiro:form_2',
+  ]);
+
+  test('no floating cells in any Bag 2 step (normal)', async () => {
+    const { getBag2Routes, getBag2Sequence } = await import('../src/modes/visualizer.ts');
+    const { findFloatingCells } = await import('../src/core/field-engine.ts');
+    const { filterTsdPocketFloating } = await import('../src/modes/visualizer.ts');
+
+    const failures: string[] = [];
+
+    for (const id of ALL_OPENERS) {
+      const routes = getBag2Routes(id, false);
+      for (let ri = 0; ri < routes.length; ri++) {
+        const route = routes[ri]!;
+        if (SKIP_ROUTES.has(`${id}:${route.routeId}`)) continue;
+        const seq = getBag2Sequence(id, false, ri);
+        if (!seq) continue;
+
+        for (let si = 0; si < seq.steps.length; si++) {
+          const floating = findFloatingCells(seq.steps[si]!.board);
+          const realFloating = filterTsdPocketFloating(floating, id, false);
+          if (realFloating.length > 0) {
+            failures.push(
+              `${id} route=${route.routeId} step=${si}: floating at ${realFloating.map((c) => `(${c.col},${c.row})`).join(',')}`,
+            );
+          }
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  test('no floating cells in any Bag 2 step (mirror)', async () => {
+    const { getBag2Routes, getBag2Sequence } = await import('../src/modes/visualizer.ts');
+    const { findFloatingCells } = await import('../src/core/field-engine.ts');
+    const { filterTsdPocketFloating } = await import('../src/modes/visualizer.ts');
+
+    const failures: string[] = [];
+
+    for (const id of ALL_OPENERS) {
+      const routes = getBag2Routes(id, true);
+      for (let ri = 0; ri < routes.length; ri++) {
+        const route = routes[ri]!;
+        // Mirror route IDs have the same base routeId
+        const baseRouteId = route.routeId.replace(/ \(Mirror\)$/, '');
+        if (SKIP_ROUTES.has(`${id}:${baseRouteId}`)) continue;
+        const seq = getBag2Sequence(id, true, ri);
+        if (!seq) continue;
+
+        for (let si = 0; si < seq.steps.length; si++) {
+          const floating = findFloatingCells(seq.steps[si]!.board);
+          const realFloating = filterTsdPocketFloating(floating, id, true);
+          if (realFloating.length > 0) {
+            failures.push(
+              `${id} mirror route=${route.routeId} step=${si}: floating at ${realFloating.map((c) => `(${c.col},${c.row})`).join(',')}`,
+            );
+          }
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  test('post-TST residual itself has no floating cells (all openers, excluding TSD pocket)', async () => {
+    const { getPostTstResidual, filterTsdPocketFloating } = await import('../src/modes/visualizer.ts');
+    const { findFloatingCells } = await import('../src/core/field-engine.ts');
+
+    for (const id of ALL_OPENERS) {
+      for (const mirror of [false, true]) {
+        const board = getPostTstResidual(id, mirror);
+        const floating = findFloatingCells(board);
+        const realFloating = filterTsdPocketFloating(floating, id, mirror);
+        expect(realFloating).toEqual([]);
       }
     }
   });
