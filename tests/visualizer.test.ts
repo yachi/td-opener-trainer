@@ -536,22 +536,14 @@ describe('V7: Bag 2 routes', () => {
     const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
 
     const bag1Seq = getOpenerSequence('ms2', false);
-    const bag1FinalCells = bag1Seq.steps[bag1Seq.steps.length - 1]!.board.flat().filter((c) => c !== null).length;
+    const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
     expect(bag2Seq!.steps[0]!.piece).toBe('T');
     expect(bag2Seq!.steps[0]!.hint).toContain('Bag 1 complete');
-    const step0Board = bag2Seq!.steps[0]!.board;
-    const step0Cells = step0Board.flat().filter((c) => c !== null).length;
-    // Bag 2 base board includes Bag 1 cells + wiki gap-fillers, so >= Bag 1 final
-    expect(step0Cells).toBeGreaterThanOrEqual(bag1FinalCells);
-    // All cells should be normalized to 'I' (base board rendering)
-    for (const row of step0Board) {
-      for (const cell of row) {
-        if (cell !== null) expect(cell).toBe('I');
-      }
-    }
+    // Step 0 = exact copy of Bag 1 final (no visual jump)
+    expect(bag2Seq!.steps[0]!.board).toEqual(bag1Final);
   });
 
   test('getBag2Sequence step 1+ builds on Bag 1 final board', async () => {
@@ -740,11 +732,11 @@ describe('V8: Bag 2 steps have no unsupported piece cells', () => {
 
 // ── V9: Bag 2 step 0 is a superset of Bag 1 final ──
 
-describe('V9: Bag 2 step 0 is superset of Bag 1 final (no missing cells)', () => {
-  test('every Bag 1 cell is present in Bag 2 step 0 for all openers', async () => {
+describe('V9: Bag 2 step 0 equals Bag 1 final (no visual jump)', () => {
+  test('Bag 2 step 0 board is identical to Bag 1 final board for all openers', async () => {
     const { getOpenerSequence, getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
     const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    const missing: string[] = [];
+    const mismatches: string[] = [];
 
     for (const id of OPENER_IDS) {
       for (const mirror of [false, true]) {
@@ -759,8 +751,10 @@ describe('V9: Bag 2 step 0 is superset of Bag 1 final (no missing cells)', () =>
 
           for (let r = 0; r < 20; r++) {
             for (let c = 0; c < 10; c++) {
-              if (bag1Final[r]![c] !== null && bag2Step0[r]![c] === null) {
-                missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${c},${r}) in Bag1 but missing in Bag2 step0`);
+              const b1 = bag1Final[r]![c];
+              const b2 = bag2Step0[r]![c];
+              if ((b1 === null) !== (b2 === null)) {
+                mismatches.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${c},${r}) Bag1=${b1 || '.'} Bag2=${b2 || '.'}`);
               }
             }
           }
@@ -768,8 +762,8 @@ describe('V9: Bag 2 step 0 is superset of Bag 1 final (no missing cells)', () =>
       }
     }
 
-    if (missing.length > 0) {
-      throw new Error(`Bag 2 step 0 missing Bag 1 cells:\n${missing.join('\n')}`);
+    if (mismatches.length > 0) {
+      throw new Error(`Bag 1 final ≠ Bag 2 step 0:\n${mismatches.join('\n')}`);
     }
   });
 });
