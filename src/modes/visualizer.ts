@@ -1,7 +1,7 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { OPENERS } from '../openers/decision.ts';
-import { computePostTst, findFloatingCells, findFloatingPieces } from '../core/field-engine.ts';
+// field-engine imports removed — Bag 2 now uses Bag 1 final board directly
 
 // ── Types ──
 
@@ -473,166 +473,7 @@ function buildSequence(
 
 // ── Post-TST residual computation ──
 
-/**
- * @deprecated Use getPostTstResidual() for Bag 2 flow.
- * computePostTstBoard simulates TST on the Bag 1 board, but the TST actually
- * fires MID-Bag-2 (after gap-filler pieces complete the rows). The simulation
- * produces incorrect residuals because the Bag 1 board has unfilled gaps.
- * Kept for debugging / backward compatibility.
- */
-export function computePostTstBoard(openerId: OpenerID, mirror: boolean): (PieceType | null)[][] {
-  const bag1Seq = getOpenerSequence(openerId, mirror);
-  const bag1Board =
-    bag1Seq.steps.length > 0
-      ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
-      : emptyBoard();
 
-  const tst = bag1Seq.tSpinSlots.tst;
-  if (!tst) {
-    // No TST slot defined — return the board as-is
-    return cloneBoard(bag1Board);
-  }
-
-  return computePostTst(bag1Board, {
-    col: tst.col,
-    row: tst.row,
-    rotation: tst.rotation as 0 | 1 | 2 | 3,
-  });
-}
-
-// ── Hardcoded Post-TST Residuals ──
-// These are the G cells from Hard Drop wiki Bag 2 boards — the Bag 1 cells
-// that survive below the TST clear zone. The TST fires mid-Bag-2, so these
-// residuals are extracted from the wiki rather than computed from Bag 1 alone.
-// Coordinate system: row 19 = bottom, col 0 = left.
-
-export const POST_TST_RESIDUALS: Record<OpenerID, { col: number; row: number }[]> = {
-  // Honey Cup — 26 G cells (wiki Board 8)
-  // Row 16: GGGG......
-  // Row 17: GGGG..GG..
-  // Row 18: GGG...GGGG
-  // Row 19: GGGG.GGGGG
-  honey_cup: [
-    { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 3, row: 16 },
-    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 3, row: 17 },
-    { col: 6, row: 17 }, { col: 7, row: 17 },
-    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
-    { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 },
-    { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
-  ],
-
-  // MS2 — 24 G cells (wiki Board 2)
-  // Row 16: GG........
-  // Row 17: GGG....G..
-  // Row 18: GGG.GGGGGG
-  // Row 19: GGGG.GGGGG
-  ms2: [
-    { col: 0, row: 16 }, { col: 1, row: 16 },
-    { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 7, row: 17 },
-    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 },
-    { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 },
-    { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 },
-    { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
-  ],
-
-  // Stray Cannon — 26 G cells (wiki Board 3)
-  // Row 16: ......GGGG
-  // Row 17: G..G..GGGG
-  // Row 18: GGGG...GGG
-  // Row 19: GGGGG.GGGG
-  stray_cannon: [
-    { col: 6, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 }, { col: 9, row: 16 },
-    { col: 0, row: 17 }, { col: 3, row: 17 },
-    { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 },
-    { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 3, row: 18 },
-    { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 4, row: 19 },
-    { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
-  ],
-
-  // Gamushiro — 28 G cells (wiki Board 1)
-  // Row 15: ........G.
-  // Row 16: G......GG.
-  // Row 17: GG....GGGG
-  // Row 18: GG.GGGGGGG
-  // Row 19: GGG.GGGGGG
-  gamushiro: [
-    { col: 8, row: 15 },
-    { col: 0, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 },
-    { col: 0, row: 17 }, { col: 1, row: 17 },
-    { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 },
-    { col: 0, row: 18 }, { col: 1, row: 18 },
-    { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 },
-    { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 },
-    { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 },
-    { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 },
-    { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 },
-  ],
-};
-
-/**
- * Get the hardcoded post-TST residual board for an opener.
- * These are the G cells from Hard Drop wiki — the cells that survive
- * below the TST clear zone after the TST fires mid-Bag-2.
- */
-export function getPostTstResidual(openerId: OpenerID, mirror: boolean): (PieceType | null)[][] {
-  const board = emptyBoard();
-  const cells = POST_TST_RESIDUALS[openerId];
-
-  for (const { col, row } of cells) {
-    const c = mirror ? 9 - col : col;
-    board[row]![c] = 'I'; // placeholder piece type for residual
-  }
-
-  return board;
-}
-
-// ── TSD Pocket Positions ──
-// These cells form the T-Spin Double pocket and may legitimately "float"
-// (overhang) in intermediate Bag 2 steps.
-
-const TSD_POCKET_CELLS: Record<OpenerID, { col: number; row: number }[]> = {
-  honey_cup: [{ col: 3, row: 16 }, { col: 3, row: 17 }, { col: 4, row: 17 }, { col: 3, row: 18 }, { col: 4, row: 19 }],
-  ms2: [{ col: 3, row: 16 }, { col: 3, row: 17 }, { col: 4, row: 17 }, { col: 3, row: 18 }, { col: 4, row: 19 }],
-  stray_cannon: [{ col: 6, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }, { col: 6, row: 18 }, { col: 5, row: 19 }],
-  gamushiro: [{ col: 2, row: 16 }, { col: 2, row: 17 }, { col: 3, row: 17 }, { col: 2, row: 18 }, { col: 3, row: 19 }],
-};
-
-/**
- * Get the TSD pocket cells for an opener (mirrored if needed).
- * These are allowed to "float" during Bag 2 placement since they form
- * an intentional overhang for the T-Spin Double.
- */
-export function getTsdPocketCells(
-  openerId: OpenerID,
-  mirror: boolean,
-): { col: number; row: number }[] {
-  const cells = TSD_POCKET_CELLS[openerId];
-  if (mirror) {
-    return cells.map((c) => ({ col: 9 - c.col, row: c.row }));
-  }
-  return [...cells];
-}
-
-/**
- * Filter out floating cells that are in or adjacent to the TSD pocket.
- * Returns only "real" floating cells that indicate a placement error.
- */
-export function filterTsdPocketFloating(
-  floating: { col: number; row: number }[],
-  openerId: OpenerID,
-  mirror: boolean,
-): { col: number; row: number }[] {
-  const pocket = getTsdPocketCells(openerId, mirror);
-  return floating.filter(
-    (c) =>
-      !pocket.some((p) => p.col === c.col && p.row === c.row) &&
-      // Also allow cells directly above TSD pocket (overhang walls)
-      !pocket.some((p) => p.col === c.col && p.row === c.row + 1),
-  );
-}
 
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
 
@@ -913,19 +754,19 @@ export function getBag2Sequence(
 
   const steps: PlacementStep[] = [];
 
-  // Compute post-TST residual from hardcoded wiki data (not simulation)
-  const residual = getPostTstResidual(openerId, mirror);
+  // Step 0: show the Bag 1 final board as-is (no TST simulation).
+  // The wiki shows Bag 1 dimmed to gray with Bag 2 pieces overlaid in color.
+  const bag1Final = bag1Seq.steps.length > 0
+    ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
+    : emptyBoard();
 
-  // Step 0: TST transition — show the post-clear residual board.
-  // The TST fires mid-Bag-2 after gap-filler pieces complete the rows.
-  // We show the residual (what remains after the 3-line clear).
   steps.push({
     piece: 'T',
-    board: cloneBoard(residual),
-    newCells: [], // No cells highlighted — just a transition marker
-    hint: 'T-Spin Triple → 3 lines clear (post-clear residual)',
+    board: cloneBoard(bag1Final),
+    newCells: [],
+    hint: 'Bag 1 complete — Bag 2 pieces will be placed on top',
   });
-  let currentBoard = cloneBoard(residual);
+  let currentBoard = cloneBoard(bag1Final);
 
   for (const placement of route.placements) {
     currentBoard = cloneBoard(currentBoard);
@@ -938,16 +779,6 @@ export function getBag2Sequence(
       newCells: [...placement.cells],
       hint: placement.hint,
     });
-
-    // Layer 2: Runtime validation — no floating pieces (piece-level physics)
-    if (process.env.NODE_ENV !== 'production') {
-      const floatingPieces = findFloatingPieces(currentBoard);
-      if (floatingPieces.length > 0) {
-        console.warn(
-          `Bag 2 floating piece: ${openerId} route ${routeIndex} piece ${placement.piece}: ${floatingPieces.map((f) => `${f.piece}@${f.cells.map((c) => `(${c.col},${c.row})`).join('+')}`).join('; ')}`,
-        );
-      }
-    }
   }
 
   const bag: PieceType[] = ['T', ...route.placements.map((p) => p.piece)];

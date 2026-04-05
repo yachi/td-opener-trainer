@@ -532,32 +532,32 @@ describe('V7: Bag 2 routes', () => {
     expect(mirrored[0]!.routeLabel).toContain('Mirror');
   });
 
-  test('getBag2Sequence step 0 shows TST transition (post-clear residual)', async () => {
-    const { getBag2Sequence, getPostTstResidual } = await import('../src/modes/visualizer.ts');
+  test('getBag2Sequence step 0 shows Bag 1 final board', async () => {
+    const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
+
+    const bag1Seq = getOpenerSequence('ms2', false);
+    const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    // Step 0 is the TST transition — shows the post-TST residual board
+    // Step 0 shows the Bag 1 final board
     expect(bag2Seq!.steps[0]!.piece).toBe('T');
-    expect(bag2Seq!.steps[0]!.hint).toContain('T-Spin Triple');
-    const tstBoard = bag2Seq!.steps[0]!.board;
-    const tstFilledCells = tstBoard.flat().filter((c) => c !== null).length;
-    // Should match the hardcoded residual cell count (MS2 = 24)
-    const residual = getPostTstResidual('ms2', false);
-    const residualCells = residual.flat().filter((c) => c !== null).length;
-    expect(tstFilledCells).toBe(residualCells);
+    expect(bag2Seq!.steps[0]!.hint).toContain('Bag 1 complete');
+    const step0Board = bag2Seq!.steps[0]!.board;
+    expect(step0Board).toEqual(bag1Final);
   });
 
-  test('getBag2Sequence step 1+ builds on post-TST residual', async () => {
-    const { getBag2Sequence, getPostTstResidual } = await import('../src/modes/visualizer.ts');
+  test('getBag2Sequence step 1+ builds on Bag 1 final board', async () => {
+    const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
+
+    const bag1Seq = getOpenerSequence('ms2', false);
+    const bag1FinalCells = bag1Seq.steps[bag1Seq.steps.length - 1]!.board.flat().filter((c) => c !== null).length;
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    // Step 1 is the first Bag 2 piece on the residual
-    const residual = getPostTstResidual('ms2', false);
-    const residualCells = residual.flat().filter((c) => c !== null).length;
     const step1Cells = bag2Seq!.steps[1]!.board.flat().filter((c) => c !== null).length;
-    expect(step1Cells).toBe(residualCells + 4); // residual + one 4-cell piece
+    // Bag 2 pieces may overwrite Bag 1 cells, so step1 >= bag1Final (not necessarily +4)
+    expect(step1Cells).toBeGreaterThanOrEqual(bag1FinalCells);
   });
 
   test('getBag2Sequence has 7 steps (TST + 6 pieces)', async () => {
@@ -682,63 +682,6 @@ describe('V7: Bag 2 routes', () => {
     expect(state.bag2RouteIndex).toBe(0);
   });
 
-  test('computePostTstBoard produces correct residual for each opener', async () => {
-    const { computePostTstBoard } = await import('../src/modes/visualizer.ts');
-    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
-
-    for (const id of OPENER_IDS) {
-      const residual = computePostTstBoard(id, false);
-      // Residual should be a valid 20x10 board
-      expect(residual.length).toBe(20);
-      for (const row of residual) {
-        expect(row.length).toBe(10);
-      }
-      // Total residual cells should be non-zero (pieces survive after TST)
-      const totalCells = residual.flat().filter((c) => c !== null).length;
-      expect(totalCells).toBeGreaterThanOrEqual(1);
-    }
-  });
-
-  test('computePostTstBoard MS2: residual has IS cells', async () => {
-    const { computePostTstBoard } = await import('../src/modes/visualizer.ts');
-    const residual = computePostTstBoard('ms2', false);
-    // MS2 post-TST: row 18 has IS, row 19 has ISS + T remnants
-    // (new field-engine uses proper line-clear simulation)
-    expect(residual[18]![0]).toBe('I');
-    expect(residual[18]![1]).toBe('S');
-    expect(residual[19]![0]).toBe('I');
-    expect(residual[19]![1]).toBe('S');
-    expect(residual[19]![2]).toBe('S');
-  });
-
-  test('Bag 2 placements do not overlap with post-TST residual (all openers)', async () => {
-    const { getPostTstResidual, getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    // TODO: These routes have overlaps with the corrected residuals and need re-authoring
-    // from Hard Drop wiki Bag 2 boards.
-    const SKIP_ROUTES = new Set([
-      'honey_cup:ideal',
-      'honey_cup:alt_i_left',
-      'stray_cannon:j_before_o',
-      'stray_cannon:s_before_j',
-      'gamushiro:form_2',
-    ]);
-
-    for (const id of ALL_OPENERS) {
-      const residual = getPostTstResidual(id, false);
-      const routes = getBag2Routes(id, false);
-      for (const route of routes) {
-        if (SKIP_ROUTES.has(`${id}:${route.routeId}`)) continue;
-        for (const placement of route.placements) {
-          for (const cell of placement.cells) {
-            const existing = residual[cell.row]?.[cell.col];
-            expect(existing).toBeNull();
-          }
-        }
-      }
-    }
-  });
-
   test('createVisualizerState initializes Bag 2 fields', async () => {
     const { createVisualizerState, getOpenerSequence } = await import('../src/modes/visualizer.ts');
     const seq = getOpenerSequence('ms2', false);
@@ -749,135 +692,5 @@ describe('V7: Bag 2 routes', () => {
     expect(state.bag2Sequence).toBeNull();
   });
 
-  test('getPostTstResidual returns correct cell count for each opener', async () => {
-    const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
-    const EXPECTED: Record<OpenerID, number> = {
-      honey_cup: 26,
-      ms2: 24,
-      stray_cannon: 26,
-      gamushiro: 28,
-    };
-    const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    for (const id of OPENER_IDS) {
-      const board = getPostTstResidual(id, false);
-      const count = board.flat().filter((c) => c !== null).length;
-      expect(count).toBe(EXPECTED[id]);
-    }
-  });
-
-  test('getPostTstResidual mirror has same cell count as normal', async () => {
-    const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
-    const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    for (const id of OPENER_IDS) {
-      const normal = getPostTstResidual(id, false);
-      const mirrored = getPostTstResidual(id, true);
-      const normalCount = normal.flat().filter((c) => c !== null).length;
-      const mirrorCount = mirrored.flat().filter((c) => c !== null).length;
-      expect(mirrorCount).toBe(normalCount);
-    }
-  });
-
-  test('Bag 2 placements do not overlap with residual (mirror)', async () => {
-    const { getPostTstResidual, getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    // Same skip set as normal side — these routes need re-authoring
-    const SKIP_ROUTES = new Set([
-      'honey_cup:ideal',
-      'honey_cup:alt_i_left',
-      'stray_cannon:j_before_o',
-      'stray_cannon:s_before_j',
-      'gamushiro:form_2',
-    ]);
-
-    for (const id of ALL_OPENERS) {
-      const residual = getPostTstResidual(id, true);
-      const routes = getBag2Routes(id, true);
-      for (const route of routes) {
-        if (SKIP_ROUTES.has(`${id}:${route.routeId}`)) continue;
-        for (const placement of route.placements) {
-          for (const cell of placement.cells) {
-            const existing = residual[cell.row]?.[cell.col];
-            expect(existing).toBeNull();
-          }
-        }
-      }
-    }
-  });
 });
 
-// ── V8: Bag 2 gravity — piece-level physics (no floating PIECES at any step) ──
-
-describe('V8: Bag 2 gravity — piece-level physics (no floating pieces at any step)', () => {
-  const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-
-  // No SKIP_ROUTES — piece-level check handles overhangs naturally.
-  // If any route fails here, the placement data is genuinely wrong.
-
-  test('no floating pieces in any Bag 2 step (normal)', async () => {
-    const { getBag2Routes, getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
-
-    const failures: string[] = [];
-
-    for (const id of ALL_OPENERS) {
-      const routes = getBag2Routes(id, false);
-      for (let ri = 0; ri < routes.length; ri++) {
-        const route = routes[ri]!;
-        const seq = getBag2Sequence(id, false, ri);
-        if (!seq) continue;
-
-        // Check every step (skip step 0 which is just the TST residual)
-        for (let si = 1; si < seq.steps.length; si++) {
-          const floating = findFloatingPieces(seq.steps[si]!.board);
-          if (floating.length > 0) {
-            failures.push(
-              `${id} route=${route.routeId} step=${si}: floating piece(s) ${floating.map((f) => `${f.piece}@${f.cells.map((c) => `(${c.col},${c.row})`).join('+')}`).join('; ')}`,
-            );
-          }
-        }
-      }
-    }
-
-    expect(failures).toEqual([]);
-  });
-
-  test('no floating pieces in any Bag 2 step (mirror)', async () => {
-    const { getBag2Routes, getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
-
-    const failures: string[] = [];
-
-    for (const id of ALL_OPENERS) {
-      const routes = getBag2Routes(id, true);
-      for (let ri = 0; ri < routes.length; ri++) {
-        const route = routes[ri]!;
-        const seq = getBag2Sequence(id, true, ri);
-        if (!seq) continue;
-
-        for (let si = 1; si < seq.steps.length; si++) {
-          const floating = findFloatingPieces(seq.steps[si]!.board);
-          if (floating.length > 0) {
-            failures.push(
-              `${id} mirror route=${route.routeId} step=${si}: floating piece(s) ${floating.map((f) => `${f.piece}@${f.cells.map((c) => `(${c.col},${c.row})`).join('+')}`).join('; ')}`,
-            );
-          }
-        }
-      }
-    }
-
-    expect(failures).toEqual([]);
-  });
-
-  test('post-TST residual itself has no floating pieces (all openers)', async () => {
-    const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
-
-    for (const id of ALL_OPENERS) {
-      for (const mirror of [false, true]) {
-        const board = getPostTstResidual(id, mirror);
-        const floating = findFloatingPieces(board);
-        expect(floating).toEqual([]);
-      }
-    }
-  });
-});

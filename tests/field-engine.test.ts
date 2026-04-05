@@ -8,10 +8,9 @@
  *   4. Line clearing
  *   5. Gravity validation (no floating cells)
  *   6. Fumen encode/decode round-trip
- *   7. computePostTst replaces hardcoded row clearing
+ *   7. computePostTst (line-clear simulation)
  *   8. Golden fumen strings for each opener's final Bag 1 board
  *   9. Property-based: every step of every opener has no floating cells
- *  10. Legacy parity: computePostTst matches computePostTstBoard
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -432,68 +431,3 @@ describe('Final opener boards are structurally valid', () => {
   }
 });
 
-// ── 10. computePostTst produces consistent results ──
-// The new implementation uses proper line-clear simulation instead of
-// hardcoding rows 17-19. We verify basic structural properties.
-
-describe('computePostTst produces consistent results', () => {
-  const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
-
-  for (const id of OPENER_IDS) {
-    for (const mirror of [false, true]) {
-      const label = `${id} ${mirror ? 'mirror' : 'normal'}`;
-
-      test(`${label}: post-TST board round-trips through fumen`, () => {
-        const seq = getOpenerSequence(id, mirror);
-        const tst = seq.tSpinSlots.tst;
-        if (!tst) return;
-
-        const bag1Board =
-          seq.steps.length > 0
-            ? seq.steps[seq.steps.length - 1]!.board
-            : emptyBoard();
-
-        const result = computePostTst(bag1Board, {
-          col: tst.col,
-          row: tst.row,
-          rotation: tst.rotation as 0 | 1 | 2 | 3,
-        });
-
-        // The result should be a valid board that round-trips through fumen
-        const fumen = boardToFumen(result);
-        const decoded = fumenToBoard(fumen);
-        expect(decoded).toEqual(result);
-      });
-
-      test(`${label}: post-TST board has no more cells than pre-TST + 4 (T piece)`, () => {
-        const seq = getOpenerSequence(id, mirror);
-        const tst = seq.tSpinSlots.tst;
-        if (!tst) return;
-
-        const bag1Board =
-          seq.steps.length > 0
-            ? seq.steps[seq.steps.length - 1]!.board
-            : emptyBoard();
-
-        const result = computePostTst(bag1Board, {
-          col: tst.col,
-          row: tst.row,
-          rotation: tst.rotation as 0 | 1 | 2 | 3,
-        });
-
-        const countCells = (b: Board) => {
-          let n = 0;
-          for (const row of b) for (const c of row) if (c !== null) n++;
-          return n;
-        };
-
-        const preCells = countCells(bag1Board);
-        const postCells = countCells(result);
-        // Post-TST adds 4 cells (T piece) then clears some lines.
-        // At worst (0 lines cleared), postCells = preCells + 4.
-        // At best (3 lines cleared), postCells = preCells + 4 - 30.
-        expect(postCells).toBeLessThanOrEqual(preCells + 4);
-      });
-    }
-  }
-});
