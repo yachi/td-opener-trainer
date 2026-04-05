@@ -63,12 +63,12 @@ Must establish canonical mapping before building.
 - Previous attempt with johnbeak.cz fumen data REVERTED — their Bag 1 shapes differ from ours
 - Hard Drop wiki data is compatible — Bag 1 shapes match confirmed
 
-## Planned: Port Cold Clear libtetris to TypeScript
-Cold Clear's `libtetris` (~1000 lines Rust) provides reachability checking (`find_moves()` — BFS from spawn through SRS moves) that tetris-fumen doesn't have. Needed for:
-- **Bag 2 validation**: verify placements are physically reachable, not just gravity-valid
-- **PC solver**: enumerate all possible Bag 3 placements for Perfect Clear
-- **Phase 3 auto-route**: detect optimal route from actual Bag 2 pieces
-Source: https://github.com/MinusKelvin/cold-clear (archived, `libtetris/src/`)
+## Bag 2 architectural decision
+Bag 2 pieces interlock — no valid sequential placement order exists. Show the COMPLETE final board and highlight one piece per step. No floating possible because all pieces are always present. Matches Hard Drop wiki (one board per route).
+
+## Backlog: Port Cold Clear libtetris
+Only needed for Phase 3 auto-route and Bag 3 PC solver (future). NOT needed for Bag 2 visualization.
+Source: https://github.com/MinusKelvin/cold-clear (archived)
 
 ## Backlog
 - [ ] Adaptive quiz weighting (replay wrong bags more often — data model exists)
