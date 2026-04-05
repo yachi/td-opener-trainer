@@ -593,19 +593,6 @@ function getBag2BaseBoard(
     }
   }
 
-  // Normalize all base cells to 'I' so findFloatingPieces treats
-  // adjacent Bag-1-original and wiki-extra cells as one component.
-  // This prevents false "floating" when a wiki residual cell (marked 'I')
-  // is adjacent to a Bag 1 cell (marked 'L', 'S', etc.) — they need to
-  // be the same type for flood-fill to connect them.
-  for (let r = 0; r < 20; r++) {
-    for (let c = 0; c < 10; c++) {
-      if (board[r]![c] !== null) {
-        board[r]![c] = 'I';
-      }
-    }
-  }
-
   return board;
 }
 

@@ -410,17 +410,16 @@ describe('Golden fumen strings', () => {
 // ── 8b. Golden fumen strings for Bag 2 final boards ──
 
 describe('Bag 2 golden fumen strings', () => {
-  // Golden fumens updated after Bag 2 base board fix: base cells are now all 'I'
-  // (merged from Bag 1 final + wiki gap-fillers, normalized for consistent rendering)
+  // Golden fumens with real Bag 1 piece colors (not normalized to 'I')
   const BAG2_GOLDEN_FUMENS: Record<string, string> = {
-    'honey_cup_0': 'v115@fgzhFeh0R4BeRpBeg0R4CeRpglwhg0yhBtil1hBtAi?Ae0hJeAgH',
-    'honey_cup_1': 'v115@fgwhi0FewhRpg0BeglQ4BewhRpCeglR40hBthlQ41h?BtAiAe0hJeAgH',
-    'ms2_0': 'v115@egwhhlGewhAeglh0EewhAeglg0DeR4yhg0whBtR4Rp?0hBtwhRp9hAe0hJeAgH',
-    'ms2_1': 'v115@VgzhGeilGeglh0Heg0DeR4Aexhg0whBtR4Rp0hBtwh?Rp9hAe0hJeAgH',
-    'stray_cannon_0': 'v115@lgRpg0whCeAtBeRpg0whQ4AeBtCeh0whR4Atil0hQ4?whglEiAezhJeAgH',
-    'stray_cannon_1': 'v115@XgAtHeBtHeAtRpBei0yhRpCeQ4g0zhilwhR4zhglzh?Q4/hAezhJeAgH',
-    'gamushiro_0': 'v115@VgwhGeRpwhGeRpwhh0Eehlwhg0DeR4whglwhg0whBt?R4xhglzhBtAiAe1hJeAgH',
-    'gamushiro_1': 'v115@VgwhIewhGehlwhh0Eewhglwhg0DeR4whglwhg0whBt?R4whRpzhBtxhRp8hAe1hJeAgH',
+    'honey_cup_0': 'v115@fgzhFeh0R4BeRpBeg0R4CeRpglh0R4whBtilg0R4gl?xhBtwwh0ilwhBtxwRpzhAeBtwwRpJeAgH',
+    'honey_cup_1': 'v115@fgwhi0FewhRpg0BeglQ4BewhRpCeglR4g0whR4whBt?hlQ4g0R4glxhBtwwh0ilwhBtxwRpzhAeBtwwRpJeAgH',
+    'ms2_0': 'v115@egwhhlGewhAeglh0EewhAeglg0DeR4xhQ4g0whBtR4?RpwhR4xhBtwwRpwhg0Q4whBtxwRpwhi0AeBtwwRpJeAgH',
+    'ms2_1': 'v115@VgzhGeilGeglh0Heg0DeR4AewhQ4g0whBtR4RpwhR4?xhBtwwRpwhg0Q4whBtxwRpwhi0AeBtwwRpJeAgH',
+    'stray_cannon_0': 'v115@lgRpg0whCeAtBeRpg0whQ4AeBtCeh0whR4Atil0hR4?glwwxhg0yhglR4xwwhg0RpwhhlQ4wwAeh0RpJeAgH',
+    'stray_cannon_1': 'v115@XgAtHeBtHeAtRpBei0yhRpCeQ4g0zhilwhR4xhglQ4?glwwxhg0Q4xhglR4xwwhg0RpwhhlQ4wwAeh0RpJeAgH',
+    'gamushiro_0': 'v115@VgwhGeRpwhGeRpwhh0Eehlwhg0DeR4hlQ4g0whBtR4?whhlR4xhBtwwwhhlg0Q4whBtxwwhRpi0AeBtwwwhRpJeAgH',
+    'gamushiro_1': 'v115@VgwhIewhGehlwhh0Eewhglwhg0DeR4hlQ4g0whBtR4?whRpR4xhBtwwwhRpg0Q4whBtxwwhRpi0AeBtwwwhRpJeAgH',
   };
 
   const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];

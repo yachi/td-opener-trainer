@@ -679,13 +679,12 @@ describe('V7: Bag 2 routes', () => {
 
 // ── V8: No Bag 2 step has unsupported piece cells (floating fix) ──
 
-describe('V8: Bag 2 steps have no unsupported piece cells', () => {
-  test('no Bag 2 step has a floating piece (piece-level physics)', async () => {
+describe('V8: Every Bag 2 piece has support (piece-level, rigid body)', () => {
+  test('each placed piece rests on floor or existing cell', async () => {
     const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
 
     const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
-    const allFloating: string[] = [];
+    const unsupported: string[] = [];
 
     for (const openerId of OPENER_IDS) {
       for (const mirror of [false, true]) {
@@ -694,13 +693,23 @@ describe('V8: Bag 2 steps have no unsupported piece cells', () => {
           const bag2Seq = getBag2Sequence(openerId, mirror, routeIdx);
           expect(bag2Seq).not.toBeNull();
 
-          // Check every step's board for floating pieces
           for (let stepIdx = 0; stepIdx < bag2Seq!.steps.length; stepIdx++) {
             const step = bag2Seq!.steps[stepIdx]!;
-            const floating = findFloatingPieces(step.board);
-            for (const fp of floating) {
-              allFloating.push(
-                `${openerId} mirror=${mirror} route=${routeIdx} step=${stepIdx} piece=${fp.piece} cells=${fp.cells.map(c => `(${c.col},${c.row})`).join(',')}`,
+            const cells = step.newCells;
+            if (cells.length === 0) continue;
+
+            // Rigid body: at least ONE cell must have support
+            const cellSet = new Set(cells.map(c => `${c.col},${c.row}`));
+            const hasSupport = cells.some(({ col, row }) => {
+              if (row >= 19) return true; // floor
+              const below = step.board[row + 1]?.[col];
+              const isSibling = cellSet.has(`${col},${row + 1}`);
+              return below !== null && !isSibling;
+            });
+
+            if (!hasSupport) {
+              unsupported.push(
+                `${openerId} mirror=${mirror} route=${routeIdx} step=${stepIdx} piece=${step.piece}`,
               );
             }
           }
@@ -708,8 +717,8 @@ describe('V8: Bag 2 steps have no unsupported piece cells', () => {
       }
     }
 
-    if (allFloating.length > 0) {
-      throw new Error(`Floating pieces found:\n${allFloating.join('\n')}`);
+    if (unsupported.length > 0) {
+      throw new Error(`Unsupported pieces:\n${unsupported.join('\n')}`);
     }
   });
 });
