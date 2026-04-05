@@ -880,10 +880,18 @@ export function getBag2Sequence(
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
 
+  // Step 0: bridge — Bag 1 final board (identical to last Bag 1 step)
+  steps.push({
+    piece: 'I' as PieceType, // placeholder — not displayed as a piece label
+    board: cloneBoard(bag1Final),
+    newCells: [],
+    hint: 'Bag 1 complete — press → to see Bag 2 pieces',
+  });
+
   // Bag 2 base board has extra gap-filler cells from the wiki.
   const bag2Base = getBag2BaseBoard(openerId, mirror, routeIndex);
 
-  // Build Bag 2 step-by-step — no T/TST step, just the route pieces.
+  // Build Bag 2 step-by-step on the base board.
   let currentBoard = cloneBoard(bag2Base);
   for (const placement of route.placements) {
     currentBoard = cloneBoard(currentBoard);

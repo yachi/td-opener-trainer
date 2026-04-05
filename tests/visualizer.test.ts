@@ -532,15 +532,16 @@ describe('V7: Bag 2 routes', () => {
     expect(mirrored[0]!.routeLabel).toContain('Mirror');
   });
 
-  test('getBag2Sequence step 0 is first route piece (no T/TST step)', async () => {
-    const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+  test('getBag2Sequence step 0 = Bag 1 final (bridge, no visual jump)', async () => {
+    const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
 
-    const routes = getBag2Routes('ms2', false);
+    const bag1Seq = getOpenerSequence('ms2', false);
+    const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    // Step 0 = first route piece, not T
-    expect(bag2Seq!.steps[0]!.piece).toBe(routes[0]!.placements[0]!.piece);
-    expect(bag2Seq!.steps[0]!.newCells.length).toBe(4);
+    // Step 0 = bridge (Bag 1 final board, no new cells)
+    expect(bag2Seq!.steps[0]!.board).toEqual(bag1Final);
+    expect(bag2Seq!.steps[0]!.newCells.length).toBe(0);
   });
 
   test('getBag2Sequence has 6 steps (6 route pieces, no TST)', async () => {
@@ -549,7 +550,7 @@ describe('V7: Bag 2 routes', () => {
     for (const id of OPENER_IDS) {
       const bag2Seq = getBag2Sequence(id, false, 0);
       expect(bag2Seq).not.toBeNull();
-      expect(bag2Seq!.steps.length).toBe(6);
+      expect(bag2Seq!.steps.length).toBe(7); // 1 bridge + 6 pieces
     }
   });
 
@@ -631,7 +632,7 @@ describe('V7: Bag 2 routes', () => {
       expect(state.bag).toBe(2);
       expect(state.currentStep).toBe(0);
       expect(state.bag2Sequence).not.toBeNull();
-      expect(state.bag2Sequence!.steps.length).toBe(6);
+      expect(state.bag2Sequence!.steps.length).toBe(7); // 1 bridge + 6 pieces
     }
   });
 
