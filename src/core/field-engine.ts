@@ -24,6 +24,8 @@ import { decode } from 'tetris-fumen/lib/decoder';
 import type { PieceType } from '../core/types';
 import { BOARD_WIDTH, BOARD_VISIBLE_HEIGHT } from '../core/types';
 import { createBoard } from '../core/srs';
+import { getBlockXYs } from 'tetris-fumen/lib/inner_field';
+import { parsePiece, parseRotation } from 'tetris-fumen/lib/defines';
 import type { Board } from '../core/srs';
 
 // ── Constants ──
@@ -335,6 +337,127 @@ export function computePostTst(
 
   // Clear full lines — fumen handles the gravity shift
   field.clearLine();
+
+  return fieldToBoard(field);
+}
+
+// ── Physics engine: piece placement from target cells ──
+
+/**
+ * Given target cells for a piece, find which fumen rotation state + pivot matches.
+ * Returns { rotation, fumenX, fumenY } or throws if no match.
+ *
+ * Uses fumen's own getBlockXYs() to compute block positions, so the pivot
+ * coordinates are compatible with field.fill().
+ *
+ * Fumen coordinate system: x = column, y = 0 at bottom, positive up.
+ * Our target cells use: col = column, row = 0 at top.
+ */
+function matchRotationFumen(
+  piece: PieceType,
+  targetCells: { col: number; row: number }[],
+): { rotation: RotationType; fumenX: number; fumenY: number } {
+  const fumenPieceNum = parsePiece(piece);
+  const rotations: RotationType[] = ['spawn', 'right', 'reverse', 'left'];
+
+  // Convert target cells to fumen coordinate set: { x: col, y: fumenY }
+  const targetFumenCells = targetCells.map(c => ({
+    x: c.col,
+    y: rowToFumenY(c.row),
+  }));
+  const targetSet = new Set(targetFumenCells.map(c => `${c.x},${c.y}`));
+
+  for (const rot of rotations) {
+    const fumenRotNum = parseRotation(rot);
+    // Try each target cell as the potential pivot position
+    for (const pivot of targetFumenCells) {
+      const blocks = getBlockXYs(fumenPieceNum, fumenRotNum, pivot.x, pivot.y);
+      const blockSet = new Set(blocks.map((b: { x: number; y: number }) => `${b.x},${b.y}`));
+
+      if (
+        blockSet.size === targetSet.size &&
+        [...targetSet].every(c => blockSet.has(c))
+      ) {
+        return { rotation: rot, fumenX: pivot.x, fumenY: pivot.y };
+      }
+    }
+  }
+
+  throw new Error(
+    `No SRS rotation matches piece ${piece} at cells ${JSON.stringify(targetCells)}`,
+  );
+}
+
+/**
+ * Place a piece using the physics engine, given target cells.
+ * Uses Field.fill() to place at the exact position (wiki data is authoritative),
+ * then verifies no cell conflicts exist.
+ *
+ * @param field - The Field to place on (mutated in place)
+ * @param piece - Our PieceType ('I', 'T', etc.)
+ * @param targetCells - The 4 cells where this piece should land
+ * @throws If no rotation matches, or cells conflict with existing pieces
+ */
+export function placePieceFromCells(
+  field: Field,
+  piece: PieceType,
+  targetCells: { col: number; row: number }[],
+  options?: { allowOverwrite?: boolean },
+): void {
+  const { rotation, fumenX, fumenY } = matchRotationFumen(piece, targetCells);
+
+  // Check for conflicts before placing (unless overwrite is allowed)
+  if (!options?.allowOverwrite) {
+    for (const cell of targetCells) {
+      const fy = rowToFumenY(cell.row);
+      const existing = field.at(cell.col, fy);
+      if (existing !== '_') {
+        throw new Error(
+          `Cell conflict at (${cell.col},${cell.row}): already occupied by ${existing}, cannot place ${piece}`,
+        );
+      }
+    }
+  }
+
+  const operation: Operation = {
+    type: ourTypeToFumen(piece),
+    rotation,
+    x: fumenX,
+    y: fumenY,
+  };
+
+  field.fill(operation, true);
+
+  // Verify the cells are now set correctly
+  for (const cell of targetCells) {
+    const fy = rowToFumenY(cell.row);
+    const actual = field.at(cell.col, fy);
+    if (actual !== piece) {
+      throw new Error(
+        `Placement verification failed: expected ${piece} at (${cell.col},${cell.row}), got ${actual}`,
+      );
+    }
+  }
+}
+
+/**
+ * Build a board by placing pieces one at a time through the physics engine.
+ * Each placement is verified against target cells for conflicts and correctness.
+ *
+ * @param baseBoard - The starting board state
+ * @param placements - Array of { piece, cells } to place in order
+ * @returns The final board after all placements
+ */
+export function buildBoardFromPlacements(
+  baseBoard: Board,
+  placements: { piece: PieceType; cells: { col: number; row: number }[] }[],
+  options?: { allowOverwrite?: boolean },
+): Board {
+  const field = boardToField(baseBoard);
+
+  for (const placement of placements) {
+    placePieceFromCells(field, placement.piece, placement.cells, options);
+  }
 
   return fieldToBoard(field);
 }

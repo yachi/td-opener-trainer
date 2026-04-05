@@ -31,6 +31,8 @@ import {
   fumenToBoard,
   computePostTst,
   boardToAscii,
+  placePieceFromCells,
+  buildBoardFromPlacements,
 } from '../src/core/field-engine.ts';
 import { getOpenerSequence } from '../src/modes/visualizer.ts';
 import { Field } from 'tetris-fumen/lib/field';
@@ -57,8 +59,8 @@ describe('Coordinate conversion', () => {
   });
 
   test('round-trip: rowToFumenY then fumenYToRow is identity', () => {
-    for (let row = 0; row < 20; row++) {
-      expect(fumenYToRow(rowToFumenY(row))).toBe(row);
+    for (let r = 0; r < 20; r++) {
+      expect(fumenYToRow(rowToFumenY(r))).toBe(r);
     }
   });
 
@@ -463,6 +465,245 @@ describe('Final opener boards are structurally valid', () => {
         // Round-trip: encode then decode should match
         const decoded = fumenToBoard(fumen);
         expect(decoded).toEqual(finalBoard);
+      });
+    }
+  }
+});
+
+// ── 10. Physics engine: placePieceFromCells ──
+
+describe('placePieceFromCells', () => {
+  test('I vertical at col 0 (rows 16-19)', () => {
+    const board = emptyBoard();
+    const field = boardToField(board);
+    placePieceFromCells(field, 'I', [
+      { col: 0, row: 16 },
+      { col: 0, row: 17 },
+      { col: 0, row: 18 },
+      { col: 0, row: 19 },
+    ]);
+    const result = fieldToBoard(field);
+    expect(result[16]![0]).toBe('I');
+    expect(result[17]![0]).toBe('I');
+    expect(result[18]![0]).toBe('I');
+    expect(result[19]![0]).toBe('I');
+    // No other cells should be filled
+    let filled = 0;
+    for (const row of result) for (const c of row) if (c !== null) filled++;
+    expect(filled).toBe(4);
+  });
+
+  test('T CW rotation', () => {
+    const board = emptyBoard();
+    const field = boardToField(board);
+    // T CW: pivot at center, extends up, down, and right
+    // MS2 T placement: col 7 row 17, col 6 row 18, col 7 row 18, col 7 row 19
+    placePieceFromCells(field, 'T', [
+      { col: 7, row: 17 },
+      { col: 6, row: 18 },
+      { col: 7, row: 18 },
+      { col: 7, row: 19 },
+    ]);
+    const result = fieldToBoard(field);
+    expect(result[17]![7]).toBe('T');
+    expect(result[18]![6]).toBe('T');
+    expect(result[18]![7]).toBe('T');
+    expect(result[19]![7]).toBe('T');
+  });
+
+  test('O piece at bottom-right', () => {
+    const board = emptyBoard();
+    const field = boardToField(board);
+    placePieceFromCells(field, 'O', [
+      { col: 8, row: 18 },
+      { col: 9, row: 18 },
+      { col: 8, row: 19 },
+      { col: 9, row: 19 },
+    ]);
+    const result = fieldToBoard(field);
+    expect(result[18]![8]).toBe('O');
+    expect(result[18]![9]).toBe('O');
+    expect(result[19]![8]).toBe('O');
+    expect(result[19]![9]).toBe('O');
+  });
+
+  test('S piece vertical', () => {
+    const board = emptyBoard();
+    const field = boardToField(board);
+    placePieceFromCells(field, 'S', [
+      { col: 1, row: 16 },
+      { col: 1, row: 17 },
+      { col: 2, row: 17 },
+      { col: 2, row: 18 },
+    ]);
+    const result = fieldToBoard(field);
+    expect(result[16]![1]).toBe('S');
+    expect(result[17]![1]).toBe('S');
+    expect(result[17]![2]).toBe('S');
+    expect(result[18]![2]).toBe('S');
+  });
+
+  test('throws on cell conflict', () => {
+    const board = emptyBoard();
+    board[19]![0] = 'T';
+    const field = boardToField(board);
+    expect(() =>
+      placePieceFromCells(field, 'I', [
+        { col: 0, row: 16 },
+        { col: 0, row: 17 },
+        { col: 0, row: 18 },
+        { col: 0, row: 19 },
+      ]),
+    ).toThrow('Cell conflict');
+  });
+
+  test('allowOverwrite bypasses conflict check', () => {
+    const board = emptyBoard();
+    board[19]![0] = 'T';
+    const field = boardToField(board);
+    // Should not throw with allowOverwrite
+    placePieceFromCells(
+      field,
+      'I',
+      [
+        { col: 0, row: 16 },
+        { col: 0, row: 17 },
+        { col: 0, row: 18 },
+        { col: 0, row: 19 },
+      ],
+      { allowOverwrite: true },
+    );
+    const result = fieldToBoard(field);
+    expect(result[19]![0]).toBe('I');
+  });
+
+  test('throws on invalid cell shape (no rotation matches)', () => {
+    const board = emptyBoard();
+    const field = boardToField(board);
+    expect(() =>
+      placePieceFromCells(field, 'T', [
+        { col: 0, row: 19 },
+        { col: 1, row: 19 },
+        { col: 5, row: 19 },
+        { col: 6, row: 19 },
+      ]),
+    ).toThrow('No SRS rotation matches');
+  });
+
+  test('RED TEST: floating piece placement is detected (no cell resting on support)', () => {
+    // This test verifies that placing a piece at a floating position
+    // works through the engine (fill() places at exact coords), but
+    // the resulting board fails the gravity check.
+    const board = emptyBoard();
+    const field = boardToField(board);
+    // Place T piece in mid-air (row 5, nothing below)
+    placePieceFromCells(field, 'T', [
+      { col: 1, row: 4 },
+      { col: 0, row: 5 },
+      { col: 1, row: 5 },
+      { col: 2, row: 5 },
+    ]);
+    const result = fieldToBoard(field);
+    // The physics engine places it, but gravity validation catches it
+    const floating = findFloatingCells(result);
+    expect(floating.length).toBeGreaterThan(0);
+  });
+});
+
+// ── 11. buildBoardFromPlacements ──
+
+describe('buildBoardFromPlacements', () => {
+  test('produces correct board from multiple placements', () => {
+    const base = emptyBoard();
+    const result = buildBoardFromPlacements(base, [
+      {
+        piece: 'I',
+        cells: [
+          { col: 0, row: 16 },
+          { col: 0, row: 17 },
+          { col: 0, row: 18 },
+          { col: 0, row: 19 },
+        ],
+      },
+      {
+        piece: 'O',
+        cells: [
+          { col: 8, row: 18 },
+          { col: 9, row: 18 },
+          { col: 8, row: 19 },
+          { col: 9, row: 19 },
+        ],
+      },
+    ]);
+    expect(result[16]![0]).toBe('I');
+    expect(result[19]![0]).toBe('I');
+    expect(result[18]![8]).toBe('O');
+    expect(result[19]![9]).toBe('O');
+  });
+
+  test('Bag 1 step-by-step matches golden fumen for MS2', () => {
+    const base = emptyBoard();
+    // MS2 full placement data
+    const placements = [
+      { piece: 'I' as PieceType, cells: [{ col: 0, row: 16 }, { col: 0, row: 17 }, { col: 0, row: 18 }, { col: 0, row: 19 }] },
+      { piece: 'T' as PieceType, cells: [{ col: 7, row: 17 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 7, row: 19 }] },
+      { piece: 'J' as PieceType, cells: [{ col: 1, row: 18 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }] },
+      { piece: 'S' as PieceType, cells: [{ col: 1, row: 16 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 2, row: 18 }] },
+      { piece: 'Z' as PieceType, cells: [{ col: 4, row: 18 }, { col: 5, row: 18 }, { col: 5, row: 19 }, { col: 6, row: 19 }] },
+      { piece: 'O' as PieceType, cells: [{ col: 8, row: 18 }, { col: 9, row: 18 }, { col: 8, row: 19 }, { col: 9, row: 19 }] },
+    ];
+    const result = buildBoardFromPlacements(base, placements);
+    const fumen = boardToFumen(result);
+    // This should match the golden fumen from the existing tests
+    const seq = getOpenerSequence('ms2', false);
+    const seqFinal = seq.steps[seq.steps.length - 1]!.board;
+    expect(result).toEqual(seqFinal);
+  });
+
+  test('Bag 2 complete board matches step-by-step overlay', async () => {
+    const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+    const bag2 = getBag2Sequence('honey_cup', false, 0);
+    expect(bag2).not.toBeNull();
+    // All Bag 2 steps (except step 0) should show the same complete board
+    for (let i = 2; i < bag2!.steps.length; i++) {
+      expect(bag2!.steps[i]!.board).toEqual(bag2!.steps[1]!.board);
+    }
+  });
+
+  test('Bag 2 steps have different highlight cells', async () => {
+    const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+    const bag2 = getBag2Sequence('ms2', false, 0);
+    expect(bag2).not.toBeNull();
+    // Each Bag 2 step (1-6) should have different newCells
+    const allCellSets = new Set<string>();
+    for (let i = 1; i < bag2!.steps.length; i++) {
+      const key = bag2!.steps[i]!.newCells.map(c => `${c.col},${c.row}`).sort().join('|');
+      expect(allCellSets.has(key)).toBe(false);
+      allCellSets.add(key);
+    }
+  });
+});
+
+// ── 12. All openers build through physics engine without errors ──
+
+describe('Physics engine: all openers build successfully', () => {
+  const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+
+      test(`${label}: Bag 1 builds through engine without errors`, () => {
+        // This implicitly tests placePieceFromCells for every Bag 1 step
+        expect(() => getOpenerSequence(id, mirror)).not.toThrow();
+      });
+
+      test(`${label}: Bag 2 builds through engine without errors`, async () => {
+        const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+        const routes = getBag2Routes(id, mirror);
+        for (let r = 0; r < routes.length; r++) {
+          expect(() => getBag2Sequence(id, mirror, r)).not.toThrow();
+        }
       });
     }
   }

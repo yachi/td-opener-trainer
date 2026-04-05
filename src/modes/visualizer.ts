@@ -1,7 +1,12 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { OPENERS } from '../openers/decision.ts';
-// field-engine imports removed — Bag 2 now uses Bag 1 final board directly
+import {
+  boardToField,
+  fieldToBoard,
+  placePieceFromCells,
+  buildBoardFromPlacements,
+} from '../core/field-engine.ts';
 
 // ── Types ──
 
@@ -444,11 +449,12 @@ function buildSequence(
   const steps: PlacementStep[] = [];
   let currentBoard = emptyBoard();
 
+  // Bag 1: step-by-step construction through the physics engine
   for (const placement of data.placements) {
     currentBoard = cloneBoard(currentBoard);
-    for (const cell of placement.cells) {
-      currentBoard[cell.row]![cell.col] = placement.piece;
-    }
+    const field = boardToField(currentBoard);
+    placePieceFromCells(field, placement.piece, placement.cells);
+    currentBoard = fieldToBoard(field);
     steps.push({
       piece: placement.piece,
       board: cloneBoard(currentBoard),
@@ -760,24 +766,25 @@ export function getBag2Sequence(
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
 
+  // Step 0: show the Bag 1 final board as-is
   steps.push({
     piece: 'T',
     board: cloneBoard(bag1Final),
     newCells: [],
     hint: 'Bag 1 complete — Bag 2 pieces will be placed on top',
   });
-  let currentBoard = cloneBoard(bag1Final);
 
-  for (const placement of route.placements) {
-    currentBoard = cloneBoard(currentBoard);
-    for (const cell of placement.cells) {
-      currentBoard[cell.row]![cell.col] = placement.piece;
-    }
+  // Build the complete Bag 2 board (all pieces placed) through the physics engine.
+  // Allow overwrite: Bag 2 pieces overlay on Bag 1 (which would be cleared by TST in actual play).
+  const completeBag2Board = buildBoardFromPlacements(bag1Final, route.placements, { allowOverwrite: true });
+
+  // Each step shows the COMPLETE board with one piece highlighted
+  for (let i = 0; i < route.placements.length; i++) {
     steps.push({
-      piece: placement.piece,
-      board: cloneBoard(currentBoard),
-      newCells: [...placement.cells],
-      hint: placement.hint,
+      piece: route.placements[i]!.piece,
+      board: cloneBoard(completeBag2Board),  // SAME complete board every step
+      newCells: [...route.placements[i]!.cells],    // Different highlight each step
+      hint: route.placements[i]!.hint,
     });
   }
 
