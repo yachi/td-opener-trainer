@@ -20,6 +20,13 @@ Priority: seeing the board shapes > memorizing rules > speed drilling
 
 ## 5 Principles (generalized from 20 mistakes)
 
+### P0. Output-first: look at the reference, describe the output, build the minimum
+Before building ANY feature: (1) open the authoritative source (wiki, existing tool, competitor), (2) describe in ONE sentence what the user will see, (3) hardcode that output as a walking skeleton, (4) if the skeleton works, ship it — no engine needed. This is Gate 0.
+**Gate 1 (iteration 3):** Stop. Write "This component needs to exist because ___." If you can't fill the blank with evidence from the source, delete it. Ask "would I start this approach if starting fresh?" If no, abandon regardless of investment.
+**Gate 2 (any time):** If implementation exceeds 3x the test size, something is wrong. If you're patching patches, you're in a degenerating programme — abandon.
+*The most common error is to optimize a thing that should not exist. — Elon Musk*
+*Lessons: #30, #31, #32, #33, and the Bag 2 post-mortem (12 iterations, 1000 lines → 10-line solution)*
+
 ### P1. Deliver value before engineering
 Answer the user's actual question first. A 3-row table beats 2,000 lines of unshipped code. Build tools only after the user has the knowledge they need. Don't research for hours when 5 minutes of teaching would suffice.
 *Lessons: #1, #8, #11, #13, #18*
