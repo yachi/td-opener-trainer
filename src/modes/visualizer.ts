@@ -893,19 +893,10 @@ export function getBag2Sequence(
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
 
-  // Step 0: Bag 1 final board — identical to last Bag 1 step
-  steps.push({
-    piece: 'T',
-    board: cloneBoard(bag1Final),
-    newCells: [],
-    hint: 'Bag 1 complete — press → to place Bag 2 pieces',
-  });
-
   // Bag 2 base board has extra gap-filler cells from the wiki.
-  // These provide support for Bag 2 pieces that would otherwise float.
   const bag2Base = getBag2BaseBoard(openerId, mirror, routeIndex);
 
-  // Build Bag 2 step-by-step on the base board (includes gap-fillers).
+  // Build Bag 2 step-by-step — no T/TST step, just the route pieces.
   let currentBoard = cloneBoard(bag2Base);
   for (const placement of route.placements) {
     currentBoard = cloneBoard(currentBoard);
@@ -920,7 +911,7 @@ export function getBag2Sequence(
     });
   }
 
-  const bag: PieceType[] = ['T', ...route.placements.map((p) => p.piece)];
+  const bag: PieceType[] = route.placements.map((p) => p.piece);
 
   return {
     openerId,

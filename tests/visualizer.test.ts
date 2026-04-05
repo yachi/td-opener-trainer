@@ -532,40 +532,24 @@ describe('V7: Bag 2 routes', () => {
     expect(mirrored[0]!.routeLabel).toContain('Mirror');
   });
 
-  test('getBag2Sequence step 0 shows Bag 2 base board (Bag 1 + gap-fillers)', async () => {
-    const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
+  test('getBag2Sequence step 0 is first route piece (no T/TST step)', async () => {
+    const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
 
-    const bag1Seq = getOpenerSequence('ms2', false);
-    const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
-
+    const routes = getBag2Routes('ms2', false);
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    expect(bag2Seq!.steps[0]!.piece).toBe('T');
-    expect(bag2Seq!.steps[0]!.hint).toContain('Bag 1 complete');
-    // Step 0 = exact copy of Bag 1 final (no visual jump)
-    expect(bag2Seq!.steps[0]!.board).toEqual(bag1Final);
+    // Step 0 = first route piece, not T
+    expect(bag2Seq!.steps[0]!.piece).toBe(routes[0]!.placements[0]!.piece);
+    expect(bag2Seq!.steps[0]!.newCells.length).toBe(4);
   });
 
-  test('getBag2Sequence step 1+ builds on Bag 1 final board', async () => {
-    const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
-
-    const bag1Seq = getOpenerSequence('ms2', false);
-    const bag1FinalCells = bag1Seq.steps[bag1Seq.steps.length - 1]!.board.flat().filter((c) => c !== null).length;
-
-    const bag2Seq = getBag2Sequence('ms2', false, 0);
-    expect(bag2Seq).not.toBeNull();
-    const step1Cells = bag2Seq!.steps[1]!.board.flat().filter((c) => c !== null).length;
-    // Bag 2 pieces may overwrite Bag 1 cells, so step1 >= bag1Final (not necessarily +4)
-    expect(step1Cells).toBeGreaterThanOrEqual(bag1FinalCells);
-  });
-
-  test('getBag2Sequence has 7 steps (TST + 6 pieces)', async () => {
+  test('getBag2Sequence has 6 steps (6 route pieces, no TST)', async () => {
     const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
     const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
     for (const id of OPENER_IDS) {
       const bag2Seq = getBag2Sequence(id, false, 0);
       expect(bag2Seq).not.toBeNull();
-      expect(bag2Seq!.steps.length).toBe(7); // 1 TST step + 6 piece placements
+      expect(bag2Seq!.steps.length).toBe(6);
     }
   });
 
@@ -647,7 +631,7 @@ describe('V7: Bag 2 routes', () => {
       expect(state.bag).toBe(2);
       expect(state.currentStep).toBe(0);
       expect(state.bag2Sequence).not.toBeNull();
-      expect(state.bag2Sequence!.steps.length).toBe(7);
+      expect(state.bag2Sequence!.steps.length).toBe(6);
     }
   });
 
@@ -732,11 +716,11 @@ describe('V8: Bag 2 steps have no unsupported piece cells', () => {
 
 // ── V9: Bag 2 step 0 is a superset of Bag 1 final ──
 
-describe('V9: Bag 2 step 0 equals Bag 1 final (no visual jump)', () => {
-  test('Bag 2 step 0 board is identical to Bag 1 final board for all openers', async () => {
+describe('V9: Bag 2 step 0 contains all Bag 1 cells (no cells lost in transition)', () => {
+  test('every Bag 1 cell is present in Bag 2 step 0 for all openers', async () => {
     const { getOpenerSequence, getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
     const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
-    const mismatches: string[] = [];
+    const missing: string[] = [];
 
     for (const id of OPENER_IDS) {
       for (const mirror of [false, true]) {
@@ -751,10 +735,8 @@ describe('V9: Bag 2 step 0 equals Bag 1 final (no visual jump)', () => {
 
           for (let r = 0; r < 20; r++) {
             for (let c = 0; c < 10; c++) {
-              const b1 = bag1Final[r]![c];
-              const b2 = bag2Step0[r]![c];
-              if ((b1 === null) !== (b2 === null)) {
-                mismatches.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${c},${r}) Bag1=${b1 || '.'} Bag2=${b2 || '.'}`);
+              if (bag1Final[r]![c] !== null && bag2Step0[r]![c] === null) {
+                missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${c},${r}) in Bag1 but missing in Bag2 step0`);
               }
             }
           }
@@ -762,8 +744,8 @@ describe('V9: Bag 2 step 0 equals Bag 1 final (no visual jump)', () => {
       }
     }
 
-    if (mismatches.length > 0) {
-      throw new Error(`Bag 1 final ≠ Bag 2 step 0:\n${mismatches.join('\n')}`);
+    if (missing.length > 0) {
+      throw new Error(`Bag 2 step 0 missing Bag 1 cells:\n${missing.join('\n')}`);
     }
   });
 });
