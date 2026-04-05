@@ -353,17 +353,26 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
     const step = activeSequence.steps[currentStep - 1]!;
     const hintY = boardTopY + boardH + 20;
 
-    // Piece being placed
-    ctx.fillStyle = COLORS.pieces[step.piece] ?? '#FFFFFF';
-    ctx.font = `bold 16px ${FONT}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(`Piece ${currentStep}: ${step.piece}`, CANVAS_W / 2, hintY);
+    if (step.newCells.length > 0) {
+      // Piece being placed — show piece label
+      ctx.fillStyle = COLORS.pieces[step.piece] ?? '#FFFFFF';
+      ctx.font = `bold 16px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`Piece ${currentStep}: ${step.piece}`, CANVAS_W / 2, hintY);
 
-    // Hint text
-    ctx.fillStyle = '#B0B0D0';
-    ctx.font = `14px ${FONT}`;
-    ctx.fillText(step.hint, CANVAS_W / 2, hintY + 24);
+      // Hint text
+      ctx.fillStyle = '#B0B0D0';
+      ctx.font = `14px ${FONT}`;
+      ctx.fillText(step.hint, CANVAS_W / 2, hintY + 24);
+    } else {
+      // Bridge step (no piece) — just show hint
+      ctx.fillStyle = '#B0B0D0';
+      ctx.font = `14px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(step.hint, CANVAS_W / 2, hintY);
+    }
   } else {
     ctx.fillStyle = '#666688';
     ctx.font = `14px ${FONT}`;
