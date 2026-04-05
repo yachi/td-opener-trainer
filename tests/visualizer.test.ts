@@ -738,3 +738,39 @@ describe('V8: Bag 2 steps have no unsupported piece cells', () => {
   });
 });
 
+// ── V9: Bag 2 step 0 is a superset of Bag 1 final ──
+
+describe('V9: Bag 2 step 0 is superset of Bag 1 final (no missing cells)', () => {
+  test('every Bag 1 cell is present in Bag 2 step 0 for all openers', async () => {
+    const { getOpenerSequence, getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+    const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+    const missing: string[] = [];
+
+    for (const id of OPENER_IDS) {
+      for (const mirror of [false, true]) {
+        const bag1 = getOpenerSequence(id, mirror);
+        const bag1Final = bag1.steps[bag1.steps.length - 1]!.board;
+        const routes = getBag2Routes(id, mirror);
+
+        for (let ri = 0; ri < routes.length; ri++) {
+          const bag2 = getBag2Sequence(id, mirror, ri);
+          if (!bag2) continue;
+          const bag2Step0 = bag2.steps[0]!.board;
+
+          for (let r = 0; r < 20; r++) {
+            for (let c = 0; c < 10; c++) {
+              if (bag1Final[r]![c] !== null && bag2Step0[r]![c] === null) {
+                missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${c},${r}) in Bag1 but missing in Bag2 step0`);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new Error(`Bag 2 step 0 missing Bag 1 cells:\n${missing.join('\n')}`);
+    }
+  });
+});
+
