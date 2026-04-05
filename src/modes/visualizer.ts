@@ -478,7 +478,136 @@ function buildSequence(
 
 // ── Post-TST residual computation ──
 
+// ── Bag 2 Base Boards (parsed from Hard Drop wiki pfrow data) ──
+// These include Bag 1 cells + gap-filler cells + P pocket cells.
+// The wiki's Bag 2 boards have extra residual cells that provide support
+// for Bag 2 pieces. Using just the Bag 1 final board causes floating.
+// All cells are marked as 'I' placeholder — the renderer dims them.
 
+type Bag2BaseCells = { row: number; col: number }[];
+
+const BAG2_BASE_BOARDS: Record<OpenerID, Bag2BaseCells[]> = {
+  honey_cup: [
+    // Route 0 (Standard J→S→O) — wiki "Second Bag" Board 1
+    [
+      { row: 15, col: 9 },
+      { row: 16, col: 1 }, { row: 16, col: 2 }, { row: 16, col: 3 }, { row: 16, col: 9 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 3 }, { row: 17, col: 4 }, { row: 17, col: 7 }, { row: 17, col: 8 }, { row: 17, col: 9 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 3 }, { row: 19, col: 5 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+    // Route 1 (I-left variant) — wiki "Second Bag" Board 2
+    [
+      { row: 15, col: 9 },
+      { row: 16, col: 1 }, { row: 16, col: 2 }, { row: 16, col: 3 }, { row: 16, col: 9 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 3 }, { row: 17, col: 4 }, { row: 17, col: 7 }, { row: 17, col: 8 }, { row: 17, col: 9 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 3 }, { row: 19, col: 5 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+  ],
+  stray_cannon: [
+    // Route 0 (J>O, 98% PC) — wiki Board 2 under "J>O" section
+    [
+      { row: 16, col: 0 }, { row: 16, col: 6 }, { row: 16, col: 7 }, { row: 16, col: 8 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 4 }, { row: 17, col: 5 }, { row: 17, col: 6 }, { row: 17, col: 7 }, { row: 17, col: 8 }, { row: 17, col: 9 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 3 }, { row: 19, col: 4 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+    // Route 1 (S>J, 84% PC) — wiki Board 18 under "S>J" section
+    [
+      { row: 15, col: 0 }, { row: 15, col: 1 },
+      { row: 16, col: 0 }, { row: 16, col: 1 }, { row: 16, col: 2 }, { row: 16, col: 6 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 4 }, { row: 17, col: 5 }, { row: 17, col: 6 }, { row: 17, col: 7 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 3 }, { row: 19, col: 4 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+  ],
+  gamushiro: [
+    // Route 0 (Form 1, L→O, 99% PC) — wiki Board 12 under "Second Bag"
+    [
+      { row: 15, col: 8 },
+      { row: 16, col: 0 }, { row: 16, col: 2 }, { row: 16, col: 7 }, { row: 16, col: 8 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 3 }, { row: 17, col: 6 }, { row: 17, col: 7 }, { row: 17, col: 8 }, { row: 17, col: 9 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 4 }, { row: 19, col: 5 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+    // Route 1 (Form 2, OO at bottom) — wiki Board 13 under "Second Bag"
+    [
+      { row: 13, col: 8 },
+      { row: 14, col: 8 },
+      { row: 15, col: 8 }, { row: 15, col: 9 },
+      { row: 16, col: 0 }, { row: 16, col: 2 }, { row: 16, col: 7 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 3 }, { row: 17, col: 6 }, { row: 17, col: 7 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 4 }, { row: 19, col: 5 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+  ],
+  ms2: [
+    // Route 0 (Setup A, O early) — wiki Board 2 under "Triple Double PC"
+    [
+      { row: 16, col: 0 }, { row: 16, col: 1 }, { row: 16, col: 3 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 3 }, { row: 17, col: 4 }, { row: 17, col: 7 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 3 }, { row: 19, col: 5 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+    // Route 1 (Setup B, L before I/J) — wiki Board 11 under "Triple Single PC" (same base)
+    [
+      { row: 16, col: 0 }, { row: 16, col: 1 }, { row: 16, col: 3 },
+      { row: 17, col: 0 }, { row: 17, col: 1 }, { row: 17, col: 2 }, { row: 17, col: 3 }, { row: 17, col: 4 }, { row: 17, col: 7 },
+      { row: 18, col: 0 }, { row: 18, col: 1 }, { row: 18, col: 2 }, { row: 18, col: 3 }, { row: 18, col: 4 }, { row: 18, col: 5 }, { row: 18, col: 6 }, { row: 18, col: 7 }, { row: 18, col: 8 }, { row: 18, col: 9 },
+      { row: 19, col: 0 }, { row: 19, col: 1 }, { row: 19, col: 2 }, { row: 19, col: 3 }, { row: 19, col: 5 }, { row: 19, col: 6 }, { row: 19, col: 7 }, { row: 19, col: 8 }, { row: 19, col: 9 },
+    ],
+  ],
+};
+
+/**
+ * Build a Bag 2 base board by merging:
+ * 1. The Bag 1 final board (all pieces placed during Bag 1)
+ * 2. Extra wiki residual cells (gap-fillers + pocket markers)
+ *
+ * The wiki's Bag 2 boards have additional cells (G/P/multi-char) that
+ * aren't in the raw Bag 1 board. These provide support for Bag 2 pieces.
+ * We merge both sources to get the correct base.
+ *
+ * Mirror support: mirror both Bag 1 board and extra cell positions.
+ */
+function getBag2BaseBoard(
+  openerId: OpenerID,
+  mirror: boolean,
+  routeIndex: number,
+): (PieceType | null)[][] {
+  // Start with Bag 1 final board
+  const bag1Seq = getOpenerSequence(openerId, mirror);
+  const bag1Final = bag1Seq.steps.length > 0
+    ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
+    : emptyBoard();
+  const board = cloneBoard(bag1Final);
+
+  // Overlay wiki extra cells (gap-fillers, pocket markers)
+  const routes = BAG2_BASE_BOARDS[openerId];
+  const extraCells = routes?.[routeIndex] ?? routes?.[0] ?? [];
+  for (const { row, col } of extraCells) {
+    const c = mirror ? 9 - col : col;
+    if (board[row]![c] === null) {
+      board[row]![c] = 'I'; // placeholder — renderer dims these
+    }
+  }
+
+  // Normalize all base cells to 'I' so findFloatingPieces treats
+  // adjacent Bag-1-original and wiki-extra cells as one component.
+  // This prevents false "floating" when a wiki residual cell (marked 'I')
+  // is adjacent to a Bag 1 cell (marked 'L', 'S', etc.) — they need to
+  // be the same type for flood-fill to connect them.
+  for (let r = 0; r < 20; r++) {
+    for (let c = 0; c < 10; c++) {
+      if (board[r]![c] !== null) {
+        board[r]![c] = 'I';
+      }
+    }
+  }
+
+  return board;
+}
 
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
 
@@ -759,24 +888,21 @@ export function getBag2Sequence(
 
   const steps: PlacementStep[] = [];
 
-  // Step 0: show the Bag 1 final board as-is (no TST simulation).
-  // The wiki shows Bag 1 dimmed to gray with Bag 2 pieces overlaid in color.
-  const bag1Final = bag1Seq.steps.length > 0
-    ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
-    : emptyBoard();
+  // Use the wiki-parsed Bag 2 base board (Bag 1 + gap-fillers + pocket cells)
+  // instead of raw Bag 1 final board, because the wiki boards have extra
+  // residual cells that provide support for Bag 2 pieces.
+  const bag2Base = getBag2BaseBoard(openerId, mirror, routeIndex);
 
-  // Step 0: show the Bag 1 final board as-is
+  // Step 0: show the Bag 2 base board
   steps.push({
     piece: 'T',
-    board: cloneBoard(bag1Final),
+    board: cloneBoard(bag2Base),
     newCells: [],
     hint: 'Bag 1 complete — Bag 2 pieces will be placed on top',
   });
 
   // Build Bag 2 step-by-step: each step adds one piece to the board.
-  // Pieces may "float" visually because they interlock — this is correct
-  // per SRS (pieces reach positions via kicks, not gravity alone).
-  let currentBoard = cloneBoard(bag1Final);
+  let currentBoard = cloneBoard(bag2Base);
   for (const placement of route.placements) {
     currentBoard = cloneBoard(currentBoard);
     const field = boardToField(currentBoard);

@@ -532,19 +532,26 @@ describe('V7: Bag 2 routes', () => {
     expect(mirrored[0]!.routeLabel).toContain('Mirror');
   });
 
-  test('getBag2Sequence step 0 shows Bag 1 final board', async () => {
+  test('getBag2Sequence step 0 shows Bag 2 base board (Bag 1 + gap-fillers)', async () => {
     const { getBag2Sequence, getOpenerSequence } = await import('../src/modes/visualizer.ts');
 
     const bag1Seq = getOpenerSequence('ms2', false);
-    const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
+    const bag1FinalCells = bag1Seq.steps[bag1Seq.steps.length - 1]!.board.flat().filter((c) => c !== null).length;
 
     const bag2Seq = getBag2Sequence('ms2', false, 0);
     expect(bag2Seq).not.toBeNull();
-    // Step 0 shows the Bag 1 final board
     expect(bag2Seq!.steps[0]!.piece).toBe('T');
     expect(bag2Seq!.steps[0]!.hint).toContain('Bag 1 complete');
     const step0Board = bag2Seq!.steps[0]!.board;
-    expect(step0Board).toEqual(bag1Final);
+    const step0Cells = step0Board.flat().filter((c) => c !== null).length;
+    // Bag 2 base board includes Bag 1 cells + wiki gap-fillers, so >= Bag 1 final
+    expect(step0Cells).toBeGreaterThanOrEqual(bag1FinalCells);
+    // All cells should be normalized to 'I' (base board rendering)
+    for (const row of step0Board) {
+      for (const cell of row) {
+        if (cell !== null) expect(cell).toBe('I');
+      }
+    }
   });
 
   test('getBag2Sequence step 1+ builds on Bag 1 final board', async () => {
@@ -692,5 +699,42 @@ describe('V7: Bag 2 routes', () => {
     expect(state.bag2Sequence).toBeNull();
   });
 
+});
+
+// ── V8: No Bag 2 step has unsupported piece cells (floating fix) ──
+
+describe('V8: Bag 2 steps have no unsupported piece cells', () => {
+  test('no Bag 2 step has a floating piece (piece-level physics)', async () => {
+    const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+
+    const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
+    const allFloating: string[] = [];
+
+    for (const openerId of OPENER_IDS) {
+      for (const mirror of [false, true]) {
+        const routes = getBag2Routes(openerId, mirror);
+        for (let routeIdx = 0; routeIdx < routes.length; routeIdx++) {
+          const bag2Seq = getBag2Sequence(openerId, mirror, routeIdx);
+          expect(bag2Seq).not.toBeNull();
+
+          // Check every step's board for floating pieces
+          for (let stepIdx = 0; stepIdx < bag2Seq!.steps.length; stepIdx++) {
+            const step = bag2Seq!.steps[stepIdx]!;
+            const floating = findFloatingPieces(step.board);
+            for (const fp of floating) {
+              allFloating.push(
+                `${openerId} mirror=${mirror} route=${routeIdx} step=${stepIdx} piece=${fp.piece} cells=${fp.cells.map(c => `(${c.col},${c.row})`).join(',')}`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    if (allFloating.length > 0) {
+      throw new Error(`Floating pieces found:\n${allFloating.join('\n')}`);
+    }
+  });
 });
 
