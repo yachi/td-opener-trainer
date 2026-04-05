@@ -140,6 +140,100 @@ describe('V1: Opener placement data exists for all 4 openers', () => {
   });
 });
 
+// ── V1a: Piece-level physics (findFloatingPieces) ──
+
+describe('V1a: findFloatingPieces — piece-level physics', () => {
+  test('T-spin overhang is valid piece-level physics', async () => {
+    const { createBoard } = await import('../src/core/srs.ts');
+    const { findFloatingCells, findFloatingPieces } = await import('../src/core/field-engine.ts');
+
+    const board = createBoard();
+    board[19]![4] = 'T'; // one cell on floor
+    board[18]![3] = 'T'; // left
+    board[18]![4] = 'T'; // center
+    board[18]![5] = 'T'; // right — this "floats" (nothing at 19,5)
+
+    // Cell-level check: 2 floating cells at (3,18) and (5,18) — WRONG to flag these
+    const cellFloating = findFloatingCells(board);
+    expect(cellFloating.length).toBe(2); // (3,18) and (5,18) have nothing below
+
+    // Piece-level check: T piece is valid — has cell at floor
+    const pieceFloating = findFloatingPieces(board);
+    expect(pieceFloating.length).toBe(0); // no floating PIECES
+  });
+
+  test('genuinely floating piece is detected', async () => {
+    const { createBoard } = await import('../src/core/srs.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+
+    const board = createBoard();
+    // O piece floating in mid-air (row 10-11, no support below)
+    board[10]![3] = 'O';
+    board[10]![4] = 'O';
+    board[11]![3] = 'O';
+    board[11]![4] = 'O';
+
+    const pieceFloating = findFloatingPieces(board);
+    expect(pieceFloating.length).toBe(1);
+    expect(pieceFloating[0]!.piece).toBe('O');
+  });
+
+  test('piece on floor is not floating', async () => {
+    const { createBoard } = await import('../src/core/srs.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+
+    const board = createBoard();
+    board[19]![0] = 'I';
+    board[19]![1] = 'I';
+    board[19]![2] = 'I';
+    board[19]![3] = 'I';
+
+    const pieceFloating = findFloatingPieces(board);
+    expect(pieceFloating.length).toBe(0);
+  });
+
+  test('piece resting on different piece is not floating', async () => {
+    const { createBoard } = await import('../src/core/srs.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+
+    const board = createBoard();
+    // I piece on floor
+    board[19]![0] = 'I';
+    board[19]![1] = 'I';
+    board[19]![2] = 'I';
+    board[19]![3] = 'I';
+    // T piece on top of I — one cell overhangs
+    board[18]![0] = 'T';
+    board[18]![1] = 'T';
+    board[18]![2] = 'T';
+    board[17]![1] = 'T';
+
+    const pieceFloating = findFloatingPieces(board);
+    expect(pieceFloating.length).toBe(0);
+  });
+
+  test('two pieces of same type are treated as separate components', async () => {
+    const { createBoard } = await import('../src/core/srs.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+
+    const board = createBoard();
+    // First I piece on floor (cols 0-3)
+    board[19]![0] = 'I';
+    board[19]![1] = 'I';
+    board[19]![2] = 'I';
+    board[19]![3] = 'I';
+    // Second I piece floating (cols 6-9, row 10)
+    board[10]![6] = 'I';
+    board[10]![7] = 'I';
+    board[10]![8] = 'I';
+    board[10]![9] = 'I';
+
+    const pieceFloating = findFloatingPieces(board);
+    expect(pieceFloating.length).toBe(1);
+    expect(pieceFloating[0]!.cells.every(c => c.row === 10)).toBe(true);
+  });
+});
+
 // ── V1b: Gravity validation — no floating pieces ──
 
 describe('V1b: Placement order respects gravity (no floating pieces)', () => {
@@ -711,30 +805,17 @@ describe('V7: Bag 2 routes', () => {
   });
 });
 
-// ── V8: Bag 2 gravity (no floating pieces at any step) ──
+// ── V8: Bag 2 gravity — piece-level physics (no floating PIECES at any step) ──
 
-describe('V8: Bag 2 gravity (no floating pieces at any step)', () => {
+describe('V8: Bag 2 gravity — piece-level physics (no floating pieces at any step)', () => {
   const ALL_OPENERS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
 
-  // Known routes with overlaps from old Bag 2 data that still need re-authoring
-  // TODO: Remove entries from this set as Bag 2 routes are corrected
-  // Known routes with overlaps or floating placements from old Bag 2 data that still need re-authoring
-  // TODO: Remove entries from this set as Bag 2 routes are corrected
-  const SKIP_ROUTES = new Set([
-    'honey_cup:ideal',
-    'honey_cup:alt_i_left',
-    'ms2:setup_a',
-    'ms2:setup_b',
-    'stray_cannon:j_before_o',
-    'stray_cannon:s_before_j',
-    'gamushiro:form_1',
-    'gamushiro:form_2',
-  ]);
+  // No SKIP_ROUTES — piece-level check handles overhangs naturally.
+  // If any route fails here, the placement data is genuinely wrong.
 
-  test('no floating cells in any Bag 2 step (normal)', async () => {
+  test('no floating pieces in any Bag 2 step (normal)', async () => {
     const { getBag2Routes, getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const { findFloatingCells } = await import('../src/core/field-engine.ts');
-    const { filterTsdPocketFloating } = await import('../src/modes/visualizer.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
 
     const failures: string[] = [];
 
@@ -742,16 +823,15 @@ describe('V8: Bag 2 gravity (no floating pieces at any step)', () => {
       const routes = getBag2Routes(id, false);
       for (let ri = 0; ri < routes.length; ri++) {
         const route = routes[ri]!;
-        if (SKIP_ROUTES.has(`${id}:${route.routeId}`)) continue;
         const seq = getBag2Sequence(id, false, ri);
         if (!seq) continue;
 
-        for (let si = 0; si < seq.steps.length; si++) {
-          const floating = findFloatingCells(seq.steps[si]!.board);
-          const realFloating = filterTsdPocketFloating(floating, id, false);
-          if (realFloating.length > 0) {
+        // Check every step (skip step 0 which is just the TST residual)
+        for (let si = 1; si < seq.steps.length; si++) {
+          const floating = findFloatingPieces(seq.steps[si]!.board);
+          if (floating.length > 0) {
             failures.push(
-              `${id} route=${route.routeId} step=${si}: floating at ${realFloating.map((c) => `(${c.col},${c.row})`).join(',')}`,
+              `${id} route=${route.routeId} step=${si}: floating piece(s) ${floating.map((f) => `${f.piece}@${f.cells.map((c) => `(${c.col},${c.row})`).join('+')}`).join('; ')}`,
             );
           }
         }
@@ -761,10 +841,9 @@ describe('V8: Bag 2 gravity (no floating pieces at any step)', () => {
     expect(failures).toEqual([]);
   });
 
-  test('no floating cells in any Bag 2 step (mirror)', async () => {
+  test('no floating pieces in any Bag 2 step (mirror)', async () => {
     const { getBag2Routes, getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const { findFloatingCells } = await import('../src/core/field-engine.ts');
-    const { filterTsdPocketFloating } = await import('../src/modes/visualizer.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
 
     const failures: string[] = [];
 
@@ -772,18 +851,14 @@ describe('V8: Bag 2 gravity (no floating pieces at any step)', () => {
       const routes = getBag2Routes(id, true);
       for (let ri = 0; ri < routes.length; ri++) {
         const route = routes[ri]!;
-        // Mirror route IDs have the same base routeId
-        const baseRouteId = route.routeId.replace(/ \(Mirror\)$/, '');
-        if (SKIP_ROUTES.has(`${id}:${baseRouteId}`)) continue;
         const seq = getBag2Sequence(id, true, ri);
         if (!seq) continue;
 
-        for (let si = 0; si < seq.steps.length; si++) {
-          const floating = findFloatingCells(seq.steps[si]!.board);
-          const realFloating = filterTsdPocketFloating(floating, id, true);
-          if (realFloating.length > 0) {
+        for (let si = 1; si < seq.steps.length; si++) {
+          const floating = findFloatingPieces(seq.steps[si]!.board);
+          if (floating.length > 0) {
             failures.push(
-              `${id} mirror route=${route.routeId} step=${si}: floating at ${realFloating.map((c) => `(${c.col},${c.row})`).join(',')}`,
+              `${id} mirror route=${route.routeId} step=${si}: floating piece(s) ${floating.map((f) => `${f.piece}@${f.cells.map((c) => `(${c.col},${c.row})`).join('+')}`).join('; ')}`,
             );
           }
         }
@@ -793,16 +868,15 @@ describe('V8: Bag 2 gravity (no floating pieces at any step)', () => {
     expect(failures).toEqual([]);
   });
 
-  test('post-TST residual itself has no floating cells (all openers, excluding TSD pocket)', async () => {
-    const { getPostTstResidual, filterTsdPocketFloating } = await import('../src/modes/visualizer.ts');
-    const { findFloatingCells } = await import('../src/core/field-engine.ts');
+  test('post-TST residual itself has no floating pieces (all openers)', async () => {
+    const { getPostTstResidual } = await import('../src/modes/visualizer.ts');
+    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
 
     for (const id of ALL_OPENERS) {
       for (const mirror of [false, true]) {
         const board = getPostTstResidual(id, mirror);
-        const floating = findFloatingCells(board);
-        const realFloating = filterTsdPocketFloating(floating, id, mirror);
-        expect(realFloating).toEqual([]);
+        const floating = findFloatingPieces(board);
+        expect(floating).toEqual([]);
       }
     }
   });

@@ -193,6 +193,65 @@ export function findFloatingCells(board: Board): { col: number; row: number }[] 
 }
 
 /**
+ * Find pieces (rigid bodies) that are floating — no cell of the piece rests
+ * on the floor or on a cell belonging to a different piece.
+ *
+ * Unlike findFloatingCells which checks individual cells, this uses flood-fill
+ * to identify connected components (same-type adjacent cells), then checks
+ * each component for support. A piece is valid if ANY one of its cells has:
+ * - row 19 (floor), OR
+ * - a filled cell directly below that belongs to a different piece type
+ *
+ * @returns Array of floating pieces with their type and cell positions.
+ */
+export function findFloatingPieces(
+  board: Board,
+): { piece: PieceType; cells: { col: number; row: number }[] }[] {
+  const visited: boolean[][] = Array.from({ length: BOARD_ROWS }, () =>
+    Array(BOARD_COLS).fill(false),
+  );
+
+  const floatingPieces: { piece: PieceType; cells: { col: number; row: number }[] }[] = [];
+
+  for (let row = 0; row < BOARD_ROWS; row++) {
+    for (let col = 0; col < BOARD_COLS; col++) {
+      if (visited[row]![col]) continue;
+      const cellType = board[row]![col];
+      if (cellType === null) continue;
+
+      // Flood-fill to find all connected cells of the same type
+      const component: { col: number; row: number }[] = [];
+      const stack: { col: number; row: number }[] = [{ col, row }];
+      while (stack.length > 0) {
+        const { col: c, row: r } = stack.pop()!;
+        if (r < 0 || r >= BOARD_ROWS || c < 0 || c >= BOARD_COLS) continue;
+        if (visited[r]![c]) continue;
+        if (board[r]![c] !== cellType) continue;
+        visited[r]![c] = true;
+        component.push({ col: c, row: r });
+        stack.push({ col: c - 1, row: r });
+        stack.push({ col: c + 1, row: r });
+        stack.push({ col: c, row: r - 1 });
+        stack.push({ col: c, row: r + 1 });
+      }
+
+      // Check if ANY cell in this component has support
+      const supported = component.some(({ col: c, row: r }) => {
+        if (r >= BOARD_ROWS - 1) return true; // on floor
+        const below = board[r + 1]![c];
+        return below !== null && below !== cellType; // supported by different piece
+      });
+
+      if (!supported) {
+        floatingPieces.push({ piece: cellType, cells: component });
+      }
+    }
+  }
+
+  return floatingPieces;
+}
+
+/**
  * Assert that no cells are floating. Throws with details if any are found.
  */
 export function assertNoFloatingCells(board: Board): void {
