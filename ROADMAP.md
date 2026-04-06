@@ -6,11 +6,14 @@
 - [x] Visualizer: step-by-step board shapes for all 4 openers (normal + mirror)
 - [x] Drill mode: SRS engine + DAS/ARR input + guided mode + playable bag validation
 - [x] Navigation: clickable tabs, keyboard shortcuts
-- [x] Drill mode visual verification (Playwright)
+- [x] Drill mode golden data verification (bun test against fixtures)
+- [x] Cold Clear libtetris port (`src/core/cold-clear.ts` — BFS move finder, reachability, lock+clear, 26 tests)
+- [x] Bag 2 Phase 1: 2 routes per opener, residual data, wiki golden fixture (420 tests total)
+- [x] Bag 2 Acceptance Test Overhaul: oracle test (V10), bridge step fix (baseBoard), continuity test (V11)
 
 ## Next
 - [ ] Gamushiro in onboarding (currently skipped — data + logic exists, just needs stage flow)
-- [ ] Deploy to GitHub Pages (`td-opener-trainer`)
+- [ ] Deploy to GitHub Pages (`td-opener-trainer`) — workflow exists at `.github/workflows/deploy.yml`, needs push/enable
 
 ## Bag 2 Visualization (researched, not yet scoped)
 
@@ -54,39 +57,16 @@ Must establish canonical mapping before building.
 - tetristemplate.info: best pedagogy (learning order, progressive disclosure)
 - Wicurio wiki: simplest beginner presentation (2 routes only)
 
-### Current Status
-- Framework built (types, navigation, rendering, 8 routes × 2 = 16 with mirror) — committed
-- Wiki source parser built — extracts boards from Hard Drop {{pfrow}} markup via Playwright
-- Placement data + post-TST residual extracted for 8 routes (2 per opener) from wiki
-- Golden fixture (`tests/fixtures/bag2-golden.json`) stores wiki-extracted coordinates + residual
-- Each `Bag2Route` has a `residual` field (post-TST cells from wiki), used as Bag 2 base board
-- **BLOCKER**: Bridge step rendering bug (canvas.ts:277) — Bag 2 step 0 shows wrong board. See "Acceptance Test Overhaul" section below.
+### Current Status (Phase 1 complete)
+- 8 routes (2 per opener) with residual data, wiki golden fixture, 420 tests
+- Bridge step fixed (baseBoard exposed to renderer)
+- Oracle test (V10) + continuity test (V11) prevent regression
 
 ## Bag 2 architectural decision
 Bag 2 pieces interlock — no valid sequential placement order exists. Show the COMPLETE final board and highlight one piece per step. No floating possible because all pieces are always present. Matches Hard Drop wiki (one board per route).
 
-## Done: Cold Clear libtetris ported (2026-04-06)
-`src/core/cold-clear.ts` — BFS move finder, reachability check, lock+clear. 26 tests.
-- `findAllPlacements(board, piece)` — all SRS-reachable lock positions
-- `isPlacementReachable(board, type, col, row, rot)` — target reachability
-- `lockAndClear(board, piece)` — immutable place + line clear
-Ready for: Bag 2 placement validation, Phase 3 auto-route, Bag 3 PC solver.
-
-## Bag 2 Acceptance Test Overhaul (from root cause analysis 2026-04-06)
-
-### Problem
-3 visual bugs in one session, all passing 378 tests. Root cause: tests verify intermediate data (piece coords, fumen strings) but never compare complete rendered output against the wiki source. This is the Test Oracle Problem — tests answer "does the data match itself?" instead of "does the output match the wiki?"
-
-### Fix: 3 items
-
-- [ ] **Complete Board Oracle Test** — compare the 20×10 board cell-by-cell at Bag 2 final step against wiki-extracted golden data (52 cells: 24 pieces + 28 residual). External oracle from Hard Drop wiki, not self-generated. Data already extracted in `tests/fixtures/bag2-golden.json`. One test that would have caught all 3 data bugs.
-
-- [ ] **Bridge Step Fix (canvas.ts:277)** — Bag 2 Step 0/N shows `steps[0].board` which already has the first piece placed. The base board (Bag 1 + residual, no Bag 2 pieces) is not exposed to the renderer. Fix: either add a `baseBoard` field on the sequence, or prepend a step 0 with just the base board. This is the bug the user reported as "4→6 board jumps."
-
-- [ ] **Transition Continuity Test** — assert every Bag 1 cell visible at step 6/6 is also visible (non-null) at Bag 2 step 0. Catches rendering-level bugs where data is correct but display is wrong.
-
-### Why this keeps happening (meta)
-Pattern: fix symptom → add narrow test for that symptom → next symptom passes the narrow test. The oracle test breaks this cycle because it tests the COMPLETE output against the EXTERNAL source, not a property of the intermediate data.
+## Lessons: Bag 2 Acceptance Test Overhaul (2026-04-06)
+3 visual bugs in one session, all passing 378 tests. Root cause: Test Oracle Problem — tests verified intermediate data, not complete output against wiki. Fixed by: V10 oracle test (cell-by-cell vs wiki), bridge step baseBoard, V11 continuity test. All 3 now done and passing (420 tests).
 
 ## Backlog
 - [ ] Adaptive quiz weighting (replay wrong bags more often — data model exists)
