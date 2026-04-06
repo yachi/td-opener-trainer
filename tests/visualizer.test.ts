@@ -755,7 +755,7 @@ describe('V11: Bag 1→2 transition preserves Bag 1 cells in baseBoard', () => {
         const missing: string[] = [];
         for (let r = 0; r < 20; r++) {
           for (let c = 0; c < 10; c++) {
-            if (bag1Final[r]![c] !== null && bag2Seq.baseBoard[r]![c] !== bag1Final[r]![c]) {
+            if (bag1Final[r]![c] !== null && bag2Seq.baseBoard[r]![c] === null) {
               missing.push(`(${c},${r})=${bag1Final[r]![c]}`);
             }
           }
@@ -813,40 +813,43 @@ describe('V9: Bag 2 base board matches route residual', () => {
   });
 });
 
-// ── V10b: Bag 2 base board has no phantom cells ──
+// ── V12: Residual arrays match wiki fixture (external oracle) ──
 
-describe('V10b: Bag 2 residual coords all exist in Bag 1 final', () => {
+describe('V12: Residual arrays match wiki fixture', () => {
   const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
 
-  for (const id of OPENER_IDS) {
-    for (const mirror of [false, true]) {
-      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+  test('every route residual matches bag2-golden.json', async () => {
+    const { getBag2Routes } = await import('../src/modes/visualizer.ts');
+    const bag2Golden = (await import('../tests/fixtures/bag2-golden.json')).default;
 
-      test(`${label}: no phantom residual cells`, async () => {
-        const { getOpenerSequence, getBag2Routes } =
-          await import('../src/modes/visualizer.ts');
+    const mismatches: string[] = [];
 
-        const bag1Seq = getOpenerSequence(id, mirror);
-        const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
+    for (const id of OPENER_IDS) {
+      const routes = getBag2Routes(id, false);
+      const wikiRoutes = bag2Golden[id] as Record<string, { residual?: { col: number; row: number }[] }>;
 
-        const routes = getBag2Routes(id, mirror);
-        const phantoms: string[] = [];
+      for (const route of routes) {
+        const wikiRoute = wikiRoutes[route.routeId];
+        if (!wikiRoute?.residual) continue;
 
-        for (let ri = 0; ri < routes.length; ri++) {
-          for (const cell of routes[ri]!.residual) {
-            if (bag1Final[cell.row]?.[cell.col] === null) {
-              phantoms.push(`${id} r${ri}: (${cell.col},${cell.row}) not in Bag 1`);
-            }
+        const wikiSet = new Set(wikiRoute.residual.map((c: { col: number; row: number }) => `${c.col},${c.row}`));
+        const codeSet = new Set(route.residual.map(c => `${c.col},${c.row}`));
+
+        for (const coord of wikiSet) {
+          if (!codeSet.has(coord)) {
+            mismatches.push(`${id}/${route.routeId}: wiki has (${coord}) but code doesn't`);
           }
         }
-
-        if (phantoms.length > 0) {
-          throw new Error(
-            `${label}: ${phantoms.length} phantom residual cells:\n` +
-            phantoms.join('\n')
-          );
+        for (const coord of codeSet) {
+          if (!wikiSet.has(coord)) {
+            mismatches.push(`${id}/${route.routeId}: code has (${coord}) but wiki doesn't`);
+          }
         }
-      });
+      }
     }
-  }
+
+    if (mismatches.length > 0) {
+      throw new Error(`Residual/wiki mismatches:\n${mismatches.join('\n')}`);
+    }
+  });
 });

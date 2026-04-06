@@ -414,12 +414,12 @@ describe('Bag 2 golden fumen strings', () => {
   const BAG2_GOLDEN_FUMENS: Record<string, string> = {
     'honey_cup_0': 'v115@fgzhFeh0R4BeRpBeg0R4CeRpglh0R4AeBtilg0R4gl?BeBtwwh0ilAeBtxwRpzhAeBtwwRpJeAgH',
     'honey_cup_1': 'v115@fgwhi0FewhRpg0BeglQ4BewhRpCeglR4g0whR4AeBt?hlQ4g0R4glBeBtwwh0ilAeBtxwRpzhAeBtwwRpJeAgH',
-    'ms2_0': 'v115@VghlGewhAeglGewhAeglh0EewhBeg0DeR4xhQ4g0Ae?BtR4RpwhR4BeBtwwRpwhg0Q4AeBtxwRpwhi0AeBtwwRpJeA?gH',
-    'ms2_1': 'v115@VgzhGeilGeglh0Heg0DeR4AewhQ4g0AeBtR4RpwhR4?BeBtwwRpwhg0Q4AeBtxwRpwhi0AeBtwwRpJeAgH',
-    'stray_cannon_0': 'v115@lgRpg0whQ4BeAtBeRpg0whR4BtCeh0xhQ4AtilCexh?glQ4glwwBeg0BewhglR4xwAeg0RpwhhlQ4wwAeh0RpJeAgH',
-    'stray_cannon_1': 'v115@XgAtHeBtHeAtRpBei0whBeRpCeQ4g0xhBeilAeR4xh?glQ4glwwBeg0Q4xhglR4xwAeg0RpwhhlQ4wwAeh0RpJeAgH',
+    'ms2_0': 'v115@VghlGewhA8glGewhA8glh0EewhB8g0DeR4xhQ4g0Ae?BtR4RpwhR4BeBtwwRpwhg0Q4AeBtxwRpwhi0AeBtwwRpJeA?gH',
+    'ms2_1': 'v115@VgzhFeA8ilFeA8glh0FeB8g0DeR4AewhQ4g0AeBtR4?RpwhR4BeBtwwRpwhg0Q4AeBtxwRpwhi0AeBtwwRpJeAgH',
+    'stray_cannon_0': 'v115@lgRpg0whQ4BeAtBeRpg0whR4BtCeh0xhQ4AtilAeB8?xhglQ4glwwBeg0B8whglR4xwAeg0RpwhhlQ4wwAeh0RpJeA?gH',
+    'stray_cannon_1': 'v115@XgAtHeBtHeAtRpBei0whB8RpCeQ4g0xhB8ilAeR4xh?glQ4glwwBeg0Q4xhglR4xwAeg0RpwhhlQ4wwAeh0RpJeAgH',
     'gamushiro_0': 'v115@VgwhGeRpwhGeRpwhh0Eehlwhg0DeR4hlQ4g0AeBtR4?whhlR4BeBtwwwhhlg0Q4AeBtxwwhRpi0AeBtwwwhRpJeAgH',
-    'gamushiro_1': 'v115@VgwhGehlwhHeglwhh0Feglwhg0DeR4glAeQ4g0AeBt?R4whRpR4BeBtwwwhRpg0Q4AeBtxwwhRpi0AeBtwwwhRpJeA?gH',
+    'gamushiro_1': 'v115@VgwhGehlwhGeA8glwhh0EeA8glwhg0DeR4glA8Q4g0?AeBtR4whRpR4BeBtwwwhRpg0Q4AeBtxwwhRpi0AeBtwwwhR?pJeAgH',
   };
 
   const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];

@@ -21,7 +21,7 @@ import type { Operation } from 'tetris-fumen/lib/field';
 import type { PieceType as FumenPieceType, RotationType } from 'tetris-fumen/lib/defines';
 import { encode } from 'tetris-fumen/lib/encoder';
 import { decode } from 'tetris-fumen/lib/decoder';
-import type { PieceType } from '../core/types';
+import type { PieceType, CellType } from '../core/types';
 import { BOARD_WIDTH, BOARD_VISIBLE_HEIGHT } from '../core/types';
 import { createBoard } from '../core/srs';
 import { getBlockXYs } from 'tetris-fumen/lib/inner_field';
@@ -54,14 +54,14 @@ export function fumenYToRow(y: number): number {
  * For piece types they're the same strings. The difference is fumen has 'X' (gray) and '_' (empty).
  */
 
-function ourTypeToFumen(type: PieceType): FumenPieceType {
-  // Our PieceType is a subset of FumenPieceType — direct cast is safe
+function ourTypeToFumen(type: CellType): FumenPieceType {
+  if (type === 'G') return 'X' as FumenPieceType; // gray residual → fumen gray
   return type as FumenPieceType;
 }
 
-function fumenTypeToOurs(type: FumenPieceType): PieceType | null {
+function fumenTypeToOurs(type: FumenPieceType): CellType | null {
   if (type === '_') return null;
-  if (type === 'X') return null; // gray cells → treat as null (or could map to a sentinel)
+  if (type === 'X') return 'G'; // fumen gray → our gray residual
   return type as PieceType;
 }
 
