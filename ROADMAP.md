@@ -65,9 +65,12 @@ Must establish canonical mapping before building.
 ## Bag 2 architectural decision
 Bag 2 pieces interlock — no valid sequential placement order exists. Show the COMPLETE final board and highlight one piece per step. No floating possible because all pieces are always present. Matches Hard Drop wiki (one board per route).
 
-## Backlog: Port Cold Clear libtetris
-Only needed for Phase 3 auto-route and Bag 3 PC solver (future). NOT needed for Bag 2 visualization.
-Source: https://github.com/MinusKelvin/cold-clear (archived)
+## Done: Cold Clear libtetris ported (2026-04-06)
+`src/core/cold-clear.ts` — BFS move finder, reachability check, lock+clear. 26 tests.
+- `findAllPlacements(board, piece)` — all SRS-reachable lock positions
+- `isPlacementReachable(board, type, col, row, rot)` — target reachability
+- `lockAndClear(board, piece)` — immutable place + line clear
+Ready for: Bag 2 placement validation, Phase 3 auto-route, Bag 3 PC solver.
 
 ## Bag 2 Acceptance Test Overhaul (from root cause analysis 2026-04-06)
 
