@@ -25,7 +25,7 @@ Before building ANY feature: (1) open the authoritative source (wiki, existing t
 **Gate 1 (iteration 3):** Stop. Write "This component needs to exist because ___." If you can't fill the blank with evidence from the source, delete it. Ask "would I start this approach if starting fresh?" If no, abandon regardless of investment.
 **Gate 2 (any time):** If implementation exceeds 3x the test size, something is wrong. If you're patching patches, you're in a degenerating programme — abandon.
 *The most common error is to optimize a thing that should not exist. — Elon Musk*
-*Lessons: #30, #31, #32, #33, and the Bag 2 post-mortem (12 iterations, 1000 lines → 10-line solution)*
+*Lessons: #30, #31, #32, #33, #34, #35, #36, and the Bag 2 post-mortem (12 iterations, 1000 lines deleted)*
 
 ### P1. Deliver value before engineering
 Answer the user's actual question first. A 3-row table beats 2,000 lines of unshipped code. Build tools only after the user has the knowledge they need. Don't research for hours when 5 minutes of teaching would suffice.
@@ -45,7 +45,11 @@ If something looks interactive, make it interactive. If the user can't figure ou
 
 ### P5. When corrected, internalize immediately
 If the user says "check the screen" once, check the screen every time going forward — don't wait to be told again. If the user says "step back," actually pause and reconsider the whole approach. A correction given twice means it wasn't internalized the first time.
-*Lessons: #3, #16, #18, #21, #23, #24, #25 (all were repeated corrections)*
+*Lessons: #3, #16, #18, #21, #23, #24, #25, #37 (all were repeated corrections)*
+
+### P6. Help, don't order — use tools proactively
+When verifying, navigate to the exact screen. When checking, run the exact command. When the user needs to see something, show them. Don't say "go ahead and check" — do it.
+*Lessons: #37*
 
 ---
 
@@ -211,6 +215,26 @@ If the user says "check the screen" once, check the screen every time going forw
 **Mistake**: Saw Bag 2 screenshot with Z piece at rows 16-17 floating in mid-air (residual at row 19, nothing at rows 17-18). Said "the board looks correct — no overlapping cells." Failed to check gravity AND failed to compare against the Hard Drop wiki board diagram.
 **Correction**: "why cant you see it floating? also what does hard wiki showed?"
 **Rule**: When verifying a board visually: (1) check EVERY highlighted piece has support below it — if there's a gap between the piece and the nearest filled row, it's floating; (2) compare the screenshot character-by-character against the source wiki diagram. "No overlap" is necessary but not sufficient. "Physically valid AND matches source" is the bar.
+
+### 34. Don't build engines — copy the reference output
+**Mistake**: Built a 1000-line TST simulation engine (line clears, gravity, residuals, pocket filtering) when the wiki just shows Bag 2 pieces on top of Bag 1. 12 iterations, all wrong. The final solution: place Bag 2 pieces directly on Bag 1 board. ~5 lines.
+**Correction**: "please follow hardwiki how they present" / "step back and think why this happened"
+**Rule**: Before building ANY system, open the reference source and describe what it shows in ONE sentence. If that sentence doesn't require an engine, don't build one. The wiki shows "colored pieces on gray background" — no TST, no line clears, no residuals needed.
+
+### 35. Don't claim properties without running the check
+**Mistake**: Said "Floating is structurally impossible" without running `findFloatingPieces()`. When I finally ran it: 12/96 steps still had floating. I violated lesson 33 within minutes of writing it.
+**Correction**: "i dont trust you, deep research internally to prove"
+**Rule**: Never claim a property ("impossible", "zero", "all pass") without running the exact check in the same message and showing the output. "Structurally impossible" requires `expect(findFloatingPieces(board)).toEqual([])` to pass. If the test doesn't exist, the claim is unverified.
+
+### 36. Bag 2 pieces go directly on Bag 1 — no dummies, no gap-fillers, no normalization
+**Mistake**: Built gap-filler systems, base board merging, 'I' normalization — all to provide "support" for Bag 2 pieces. But the user wanted Bag 2 placed directly on Bag 1. Visual floating is acceptable because pieces are SRS-reachable.
+**Correction**: "i said not use the dummy? just use bag1? for bag2?"
+**Rule**: When the user says "just use X", use X. Don't add layers. The SRS reachability engine validates positions are physically achievable. The golden fumen tests verify the final board matches the wiki. No intermediate validation layer needed.
+
+### 37. Don't order the user — help them
+**Mistake**: After opening the browser, told the user "Go ahead and check" instead of navigating to the relevant screen myself.
+**Correction**: "dont order me, help me"
+**Rule**: When verifying with Playwright, navigate to the exact screen the user needs to see. Don't tell them to do it themselves. I have the tools — use them.
 
 ### 28. Bag 2 routes depend on the EXACT Bag 1 shape — different sources use different shapes
 **Mistake**: Decoded Bag 2 fumen strings from johnbeak.cz and plugged them into our visualizer. But johnbeak.cz's Bag 1 shape for Honey Cup differs from our Hard Drop wiki-sourced shape. The Bag 2 I piece at col 6 overlapped with our Bag 1 T piece at col 6.
