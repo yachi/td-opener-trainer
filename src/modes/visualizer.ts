@@ -37,6 +37,8 @@ export interface Bag2Route {
   conditionPieces: PieceType[];
   placements: RawPlacement[];
   tstStepIndex: number;     // which step fires the TST
+  /** Post-TST residual cells from wiki (G/LL/LZ cells). Used as Bag 2 base board. */
+  residual: { col: number; row: number }[];
 }
 
 export interface Bag2Data {
@@ -513,6 +515,8 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 0, row: 13 }, { col: 1, row: 13 }, { col: 2, row: 13 }, { col: 3, row: 13 }], hint: 'I horizontal, cols 0-3' },
     ],
     tstStepIndex: -1, // TST already fired before these placements
+    // Post-TST residual from Hard Drop wiki (Honey Cup §Second Bag, board 0)
+    residual: [{ col: 9, row: 15 }, { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 9, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
   {
     routeId: 'alt_i_left',
@@ -528,6 +532,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'J', cells: [{ col: 1, row: 13 }, { col: 2, row: 13 }, { col: 3, row: 13 }, { col: 3, row: 14 }], hint: 'J horizontal, cols 1-3' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 9, row: 15 }, { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 9, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
 ];
 
@@ -547,6 +552,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'L', cells: [{ col: 0, row: 12 }, { col: 1, row: 12 }, { col: 1, row: 13 }, { col: 1, row: 14 }], hint: 'L vertical, cols 0-1' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }, { col: 1, row: 15 }, { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 7, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
   {
     routeId: 'setup_b',
@@ -562,6 +568,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 0, row: 12 }, { col: 1, row: 12 }, { col: 2, row: 12 }, { col: 3, row: 12 }], hint: 'I horizontal, cols 0-3' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }, { col: 1, row: 15 }, { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 7, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
 ];
 
@@ -581,6 +588,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'O', cells: [{ col: 6, row: 13 }, { col: 7, row: 13 }, { col: 6, row: 14 }, { col: 7, row: 14 }], hint: 'O flat, cols 6-7' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 0, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 4, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 4, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
   {
     routeId: 's_before_j',
@@ -596,6 +604,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'Z', cells: [{ col: 2, row: 12 }, { col: 1, row: 13 }, { col: 2, row: 13 }, { col: 1, row: 14 }], hint: 'Z vertical, cols 1-2' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 2, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 4, row: 17 }, { col: 7, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }, { col: 4, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
 ];
 
@@ -615,6 +624,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'O', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 8, row: 13 }, { col: 9, row: 13 }], hint: 'O flat, cols 8-9' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 8, row: 15 }, { col: 0, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 9, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
   {
     routeId: 'form_2',
@@ -630,6 +640,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'L', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }], hint: 'L vertical, cols 8-9' },
     ],
     tstStepIndex: -1,
+    residual: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 8, row: 15 }, { col: 9, row: 15 }, { col: 0, row: 16 }, { col: 7, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 0, row: 18 }, { col: 1, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 8, row: 18 }, { col: 9, row: 18 }, { col: 0, row: 19 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 4, row: 19 }, { col: 5, row: 19 }, { col: 6, row: 19 }, { col: 7, row: 19 }, { col: 8, row: 19 }, { col: 9, row: 19 }],
   },
 ];
 
@@ -650,6 +661,7 @@ function mirrorBag2Route(route: Bag2Route): Bag2Route {
       cells: p.cells.map((c) => ({ col: 9 - c.col, row: c.row })),
       hint: p.hint + ' (mirrored)',
     })),
+    residual: route.residual.map((c) => ({ col: 9 - c.col, row: c.row })),
   };
 }
 
@@ -760,15 +772,19 @@ export function getBag2Sequence(
 
   const steps: PlacementStep[] = [];
 
-  // Bag 1 final board — step 0 shows this EXACTLY (no visual jump)
+  // Build base board from post-TST residual (wiki data).
+  // The TST fires during Bag 2, clearing 3 rows. The residual shape
+  // is different from the pre-TST Bag 1 board — it extends higher
+  // where Bag 1 pieces survived above the cleared zone.
   const bag1Final = bag1Seq.steps.length > 0
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
-
-  // Build Bag 2 step-by-step directly on Bag 1 final board.
-  // No gap-fillers, no dummies — just Bag 1 + Bag 2 pieces.
-  // Some pieces may appear "floating" but they're SRS-reachable.
-  let currentBoard = cloneBoard(bag1Final);
+  const baseBoard = emptyBoard();
+  for (const cell of route.residual) {
+    // Use Bag 1 piece color if available at this position, else generic 'T'
+    baseBoard[cell.row]![cell.col] = bag1Final[cell.row]?.[cell.col] ?? 'T';
+  }
+  let currentBoard = baseBoard;
   for (const placement of route.placements) {
     currentBoard = cloneBoard(currentBoard);
     const field = boardToField(currentBoard);

@@ -687,31 +687,26 @@ describe('V7: Bag 2 routes', () => {
 
 // ── V9: Bag 2 step 0 is a superset of Bag 1 final ──
 
-describe('V9: Bag 2 builds on Bag 1 (all Bag 1 cells preserved)', () => {
-  test('every Bag 1 cell is present in Bag 2 step 0 for all openers', async () => {
-    const { getOpenerSequence, getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+describe('V9: Bag 2 base board matches route residual', () => {
+  test('every residual cell is present in Bag 2 step 0 for all openers', async () => {
+    const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
     const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
     const missing: string[] = [];
 
     for (const id of OPENER_IDS) {
       for (const mirror of [false, true]) {
-        const bag1 = getOpenerSequence(id, mirror);
-        const bag1Final = bag1.steps[bag1.steps.length - 1]!.board;
         const routes = getBag2Routes(id, mirror);
 
         for (let ri = 0; ri < routes.length; ri++) {
           const bag2 = getBag2Sequence(id, mirror, ri);
           if (!bag2) continue;
-          // Step 0 = first piece on Bag 1 board. Bag 2 piece may overwrite Bag 1 cells.
-          // Check that Bag 1 cells NOT overwritten by Bag 2 piece are still present.
           const bag2Step0 = bag2.steps[0]!.board;
           const newCellSet = new Set(bag2.steps[0]!.newCells.map(c => `${c.col},${c.row}`));
 
-          for (let r = 0; r < 20; r++) {
-            for (let c = 0; c < 10; c++) {
-              if (bag1Final[r]![c] !== null && bag2Step0[r]![c] === null && !newCellSet.has(`${c},${r}`)) {
-                missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${c},${r}) in Bag1 but missing in Bag2 step0`);
-              }
+          // Check every residual cell is filled in step 0 (unless overwritten by Bag 2 piece)
+          for (const cell of routes[ri]!.residual) {
+            if (bag2Step0[cell.row]![cell.col] === null && !newCellSet.has(`${cell.col},${cell.row}`)) {
+              missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${cell.col},${cell.row}) residual missing in Bag2 step0`);
             }
           }
         }
@@ -719,7 +714,7 @@ describe('V9: Bag 2 builds on Bag 1 (all Bag 1 cells preserved)', () => {
     }
 
     if (missing.length > 0) {
-      throw new Error(`Bag 2 step 0 missing Bag 1 cells:\n${missing.join('\n')}`);
+      throw new Error(`Bag 2 step 0 missing residual cells:\n${missing.join('\n')}`);
     }
   });
 });
