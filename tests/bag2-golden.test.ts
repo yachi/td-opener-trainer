@@ -14,7 +14,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 import type { OpenerID } from '../src/openers/types.ts';
-import goldenData from './fixtures/bag2-golden.json';
+import goldenData from '../src/data/bag2-golden.json';
 
 // Type for the golden data structure
 type CellCoord = { col: number; row: number };
