@@ -678,6 +678,99 @@ describe('V7: Bag 2 routes', () => {
 
 // ── V8: No Bag 2 step has unsupported piece cells (floating fix) ──
 
+// ── V10: Complete Board Oracle Test ──
+
+describe('V10: Bag 2 final board matches Hard Drop wiki golden data', () => {
+  const golden = require('./fixtures/bag2-golden.json');
+  const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+
+  for (const id of OPENER_IDS) {
+    const openerGolden = golden[id];
+    if (!openerGolden) continue;
+
+    for (const [routeKey, pieceData] of Object.entries(openerGolden)) {
+      test(`${id} ${routeKey}: final board matches wiki`, async () => {
+        const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+        const routes = getBag2Routes(id, false);
+        const routeIndex = routes.findIndex(r => r.routeId === routeKey);
+
+        if (routeIndex < 0) {
+          throw new Error(`Route ${routeKey} not found in ${id} routes`);
+        }
+
+        const seq = getBag2Sequence(id, false, routeIndex)!;
+        const finalBoard = seq.steps[seq.steps.length - 1]!.board;
+        const goldenPieces = pieceData as Record<string, unknown>;
+        const PIECE_KEYS = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+
+        let totalGoldenCells = 0;
+        const mismatches: string[] = [];
+
+        for (const [piece, cells] of Object.entries(goldenPieces)) {
+          if (!PIECE_KEYS.includes(piece)) continue;
+          for (const { col, row } of cells as { col: number; row: number }[]) {
+            totalGoldenCells++;
+            if (finalBoard[row]?.[col] === null) {
+              mismatches.push(`${piece}(${col},${row}) expected filled`);
+            }
+          }
+        }
+
+        if (mismatches.length > 0) {
+          throw new Error(
+            `${id} ${routeKey}: ${mismatches.length}/${totalGoldenCells} cells missing:\n` +
+            mismatches.join('\n')
+          );
+        }
+      });
+    }
+  }
+});
+
+// ── V11: Transition Continuity Test ──
+
+describe('V11: Bag 1→2 transition preserves Bag 1 cells in baseBoard', () => {
+  const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+
+      test(`${label}: every Bag 1 cell present in Bag 2 baseBoard`, async () => {
+        const { getOpenerSequence, getBag2Sequence, getBag2Routes } =
+          await import('../src/modes/visualizer.ts');
+
+        const bag1Seq = getOpenerSequence(id, mirror);
+        const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
+
+        const routes = getBag2Routes(id, mirror);
+        if (routes.length === 0) return;
+
+        const bag2Seq = getBag2Sequence(id, mirror, 0);
+        if (!bag2Seq || !bag2Seq.baseBoard) {
+          throw new Error(`${label}: baseBoard not set on Bag 2 sequence`);
+        }
+
+        const missing: string[] = [];
+        for (let r = 0; r < 20; r++) {
+          for (let c = 0; c < 10; c++) {
+            if (bag1Final[r]![c] !== null && bag2Seq.baseBoard[r]![c] === null) {
+              missing.push(`(${c},${r})=${bag1Final[r]![c]}`);
+            }
+          }
+        }
+
+        if (missing.length > 0) {
+          throw new Error(
+            `${label}: ${missing.length} Bag 1 cells missing from baseBoard:\n` +
+            missing.join(', ')
+          );
+        }
+      });
+    }
+  }
+});
+
 // V8: Bag 2 pieces may visually "float" because they're placed on Bag 1
 // (without gap-fillers). This is correct — pieces are SRS-reachable.
 // The real guardrails are:

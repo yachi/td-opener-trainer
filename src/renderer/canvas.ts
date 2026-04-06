@@ -275,23 +275,28 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
 
   // Get the current board state
   const board = currentStep === 0
-    ? (inBag2 && activeSequence.steps.length > 0
-        ? activeSequence.steps[0]!.board  // Bag 1 final board
-        : Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null)))
+    ? (inBag2 && activeSequence.baseBoard
+        ? activeSequence.baseBoard
+        : (inBag2 && activeSequence.steps.length > 0
+            ? activeSequence.steps[0]!.board
+            : Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null))))
     : activeSequence.steps[currentStep - 1]!.board;
 
   // Get new cells for highlighting (only when step > 0)
   const newCells = currentStep > 0 ? activeSequence.steps[currentStep - 1]!.newCells : [];
 
   // Build a set of Bag 1 cells for dimming when in Bag 2
-  // These are the Bag 1 final cells (from step 0 of bag2Sequence)
+  // These are the base board cells (Bag 1 final + residual)
   const bag1CellSet = new Set<string>();
-  if (inBag2 && activeSequence.steps.length > 0) {
-    const bag1Board = activeSequence.steps[0]!.board;
-    for (let r = 0; r < 20; r++) {
-      for (let c = 0; c < 10; c++) {
-        if (bag1Board[r]?.[c] !== null) {
-          bag1CellSet.add(`${r},${c}`);
+  if (inBag2) {
+    const bag1Board = activeSequence.baseBoard
+      ?? (activeSequence.steps.length > 0 ? activeSequence.steps[0]!.board : null);
+    if (bag1Board) {
+      for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 10; c++) {
+          if (bag1Board[r]?.[c] !== null) {
+            bag1CellSet.add(`${r},${c}`);
+          }
         }
       }
     }

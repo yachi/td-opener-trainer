@@ -26,6 +26,8 @@ export interface OpenerSequence {
     tst: { col: number; row: number; rotation: number } | null;
     tsd: { col: number; row: number; rotation: number } | null;
   };
+  /** Base board for Bag 2: Bag 1 final + residual cells merged. Used as step 0 display. */
+  baseBoard?: (PieceType | null)[][];
 }
 
 // ── Bag 2 Route Types ──
@@ -740,8 +742,7 @@ export function jumpToStep(state: VisualizerState, step: number): void {
 export function getCurrentBoard(state: VisualizerState): (PieceType | null)[][] {
   if (state.bag === 2 && state.bag2Sequence) {
     if (state.currentStep === 0) {
-      // Show the post-TST residual (step 0 of the Bag 2 sequence)
-      return state.bag2Sequence.steps[0]!.board;
+      return state.bag2Sequence.baseBoard ?? state.bag2Sequence.steps[0]!.board;
     }
     return state.bag2Sequence.steps[state.currentStep - 1]!.board;
   }
@@ -779,10 +780,13 @@ export function getBag2Sequence(
   const bag1Final = bag1Seq.steps.length > 0
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
-  const baseBoard = emptyBoard();
+  // Start with Bag 1 final (preserves piece colors), then add extra
+  // residual cells above row 16 that survive the TST clear.
+  const baseBoard = cloneBoard(bag1Final);
   for (const cell of route.residual) {
-    // Use Bag 1 piece color if available at this position, else generic 'T'
-    baseBoard[cell.row]![cell.col] = bag1Final[cell.row]?.[cell.col] ?? 'T';
+    if (baseBoard[cell.row]![cell.col] === null) {
+      baseBoard[cell.row]![cell.col] = bag1Final[cell.row]?.[cell.col] ?? 'T';
+    }
   }
   let currentBoard = baseBoard;
   for (const placement of route.placements) {
@@ -807,6 +811,7 @@ export function getBag2Sequence(
     holdPiece: bag1Seq.holdPiece,
     steps,
     tSpinSlots: bag1Seq.tSpinSlots,
+    baseBoard: cloneBoard(baseBoard),
   };
 }
 
