@@ -710,8 +710,9 @@ describe('V10: Bag 2 final board matches Hard Drop wiki golden data', () => {
           if (!PIECE_KEYS.includes(piece)) continue;
           for (const { col, row } of cells as { col: number; row: number }[]) {
             totalGoldenCells++;
-            if (finalBoard[row]?.[col] === null) {
-              mismatches.push(`${piece}(${col},${row}) expected filled`);
+            const actual = finalBoard[row]?.[col];
+            if (actual !== piece) {
+              mismatches.push(`${piece}(${col},${row}) expected ${piece} got ${actual}`);
             }
           }
         }
@@ -754,7 +755,7 @@ describe('V11: Bag 1→2 transition preserves Bag 1 cells in baseBoard', () => {
         const missing: string[] = [];
         for (let r = 0; r < 20; r++) {
           for (let c = 0; c < 10; c++) {
-            if (bag1Final[r]![c] !== null && bag2Seq.baseBoard[r]![c] === null) {
+            if (bag1Final[r]![c] !== null && bag2Seq.baseBoard[r]![c] !== bag1Final[r]![c]) {
               missing.push(`(${c},${r})=${bag1Final[r]![c]}`);
             }
           }
@@ -812,3 +813,40 @@ describe('V9: Bag 2 base board matches route residual', () => {
   });
 });
 
+// ── V10b: Bag 2 base board has no phantom cells ──
+
+describe('V10b: Bag 2 residual coords all exist in Bag 1 final', () => {
+  const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+
+      test(`${label}: no phantom residual cells`, async () => {
+        const { getOpenerSequence, getBag2Routes } =
+          await import('../src/modes/visualizer.ts');
+
+        const bag1Seq = getOpenerSequence(id, mirror);
+        const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
+
+        const routes = getBag2Routes(id, mirror);
+        const phantoms: string[] = [];
+
+        for (let ri = 0; ri < routes.length; ri++) {
+          for (const cell of routes[ri]!.residual) {
+            if (bag1Final[cell.row]?.[cell.col] === null) {
+              phantoms.push(`${id} r${ri}: (${cell.col},${cell.row}) not in Bag 1`);
+            }
+          }
+        }
+
+        if (phantoms.length > 0) {
+          throw new Error(
+            `${label}: ${phantoms.length} phantom residual cells:\n` +
+            phantoms.join('\n')
+          );
+        }
+      });
+    }
+  }
+});
