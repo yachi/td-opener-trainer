@@ -236,6 +236,11 @@ When verifying, navigate to the exact screen. When checking, run the exact comma
 **Correction**: "dont order me, help me"
 **Rule**: When verifying with Playwright, navigate to the exact screen the user needs to see. Don't tell them to do it themselves. I have the tools — use them.
 
+### 38. Never regenerate golden data from code — golden data is wiki-sourced
+**Mistake**: When the phantom T cell fix changed board output, 5 golden fumen tests failed. Instead of investigating WHY the output changed, I regenerated golden fumens from the code's output. This converted an external oracle (wiki-sourced data) into a tautology (code validates itself). The same commit also removed 19 valid wiki-sourced residual coords based on a wrong assumption (V10b: "residual ⊆ Bag 1"). The wiki fixture `bag2-golden.json` had the correct data the whole time.
+**Correction**: User spotted floating L piece at final step. Root cause: removed coords were post-TST game state deliberately extracted from wiki.
+**Rule**: Golden test data must come from an external source (wiki, spec, user). If code output diverges from golden data, that's a RED flag to investigate — not a TODO to update the golden data. Regenerating golden data from code destroys the external oracle. When a golden test fails: (1) check the external source, (2) if the source says the old golden is correct, the code is wrong, (3) only update golden data when the EXTERNAL SOURCE changes.
+
 ### 28. Bag 2 routes depend on the EXACT Bag 1 shape — different sources use different shapes
 **Mistake**: Decoded Bag 2 fumen strings from johnbeak.cz and plugged them into our visualizer. But johnbeak.cz's Bag 1 shape for Honey Cup differs from our Hard Drop wiki-sourced shape. The Bag 2 I piece at col 6 overlapped with our Bag 1 T piece at col 6.
 **Correction**: User reported "first I overlapped, open playwright and check"
