@@ -20,12 +20,10 @@ import { OPENERS } from './openers/decision.ts';
 import {
   getOpenerSequence,
   createVisualizerState,
-  stepForward,
-  stepBackward,
-  switchBag2Route,
   getBag2Routes,
 } from './modes/visualizer.ts';
 import type { VisualizerState } from './modes/visualizer.ts';
+import { dispatchVisualizerAction } from './dispatcher/visualizer.ts';
 import {
   createDrillState,
   movePiece,
@@ -189,56 +187,8 @@ function dispatch(action: string): void {
 }
 
 function dispatchVisualizer(action: string): void {
-  const viz = state.visualizer!;
-  const openerIds: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
-
-  switch (action) {
-    case 'advance': // → next step
-      stepForward(viz);
-      dirty = true;
-      break;
-    case 'step_back': // ← prev step
-      stepBackward(viz);
-      dirty = true;
-      break;
-    case 'option_1': // 1 = MS2
-    case 'option_2': // 2 = Honey Cup
-    case 'option_3': // 3 = Stray
-    case 'option_4': { // 4 = Gamushiro
-      const idx = action === 'option_1' ? 0 : action === 'option_2' ? 1 : action === 'option_3' ? 2 : 3;
-      const id = openerIds[idx]!;
-      state.visualizer = createVisualizerState(getOpenerSequence(id, viz.sequence.mirror));
-      dirty = true;
-      break;
-    }
-    case 'option_5':
-    case 'option_6': {
-      // 5/6 = switch Bag 2 routes
-      const routeIdx = action === 'option_5' ? 0 : 1;
-      const routes = getBag2Routes(viz.sequence.openerId, viz.sequence.mirror);
-      if (routeIdx < routes.length) {
-        switchBag2Route(viz, routeIdx);
-        // If not already in Bag 2, enter it
-        if (viz.bag !== 2) {
-          viz.bag = 2;
-          viz.currentStep = 0;
-        }
-        dirty = true;
-      }
-      break;
-    }
-    case 'toggle_mode': { // M = toggle mirror (reuse S key or add M)
-      const seq = getOpenerSequence(viz.sequence.openerId, !viz.sequence.mirror);
-      state.visualizer = createVisualizerState(seq);
-      dirty = true;
-      break;
-    }
-    case 'reset_stats': // R = reset to step 0
-      state.visualizer = createVisualizerState(
-        getOpenerSequence(viz.sequence.openerId, viz.sequence.mirror)
-      );
-      dirty = true;
-      break;
+  if (dispatchVisualizerAction(state as any, action)) {
+    dirty = true;
   }
 }
 

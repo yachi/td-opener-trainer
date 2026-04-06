@@ -819,13 +819,13 @@ export function switchBag2Route(state: VisualizerState, routeIndex: number): voi
   const routes = getBag2Routes(state.sequence.openerId, state.sequence.mirror);
   if (routeIndex < 0 || routeIndex >= routes.length) return;
   state.bag2RouteIndex = routeIndex;
+  const bag2Seq = getBag2Sequence(
+    state.sequence.openerId,
+    state.sequence.mirror,
+    routeIndex,
+  );
+  state.bag2Sequence = bag2Seq;
   if (state.bag === 2) {
-    const bag2Seq = getBag2Sequence(
-      state.sequence.openerId,
-      state.sequence.mirror,
-      routeIndex,
-    );
-    state.bag2Sequence = bag2Seq;
     state.currentStep = 0;
   }
 }
