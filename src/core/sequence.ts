@@ -62,31 +62,38 @@ export function buildSteps(placements: Placement[]): Step[] {
   const steps: Step[] = [];
   let board = emptyBoard();
 
-  for (const p of placements) {
-    board = cloneBoard(board);
+  // Support-ordered placement: pieces that need support from other pieces
+  // are deferred until their support exists. The engine decides the order.
+  let remaining = [...placements];
+  while (remaining.length > 0) {
+    let progress = false;
+    const deferred: Placement[] = [];
 
-    // Place through engine — strict, no allowOverwrite, no implicit clears.
-    // If a placement conflicts (e.g. Gamushiro Form 2 O vs Bag 1 L),
-    // skip it — the route needs TST simulation we don't have yet.
-    const field = boardToField(board);
-    try {
-      placePieceFromCells(field, p.piece, p.cells);
-      board = fieldToBoard(field);
-      steps.push({
-        piece: p.piece,
-        board: cloneBoard(board),
-        newCells: [...p.cells],
-        hint: p.hint,
-      });
-    } catch {
-      // Conflict — skip this placement (logged for investigation)
-      steps.push({
-        piece: p.piece,
-        board: cloneBoard(board),
-        newCells: [],
-        hint: `${p.hint} [skipped: conflicts with existing cells]`,
-      });
+    for (const p of remaining) {
+      const allEmpty = p.cells.every(c => board[c.row]?.[c.col] === null);
+      const hasSupport = p.cells.some(c =>
+        c.row >= BOARD_VISIBLE_HEIGHT - 1 || board[c.row + 1]?.[c.col] !== null,
+      );
+
+      if (allEmpty && hasSupport) {
+        board = cloneBoard(board);
+        const field = boardToField(board);
+        placePieceFromCells(field, p.piece, p.cells);
+        board = fieldToBoard(field);
+        steps.push({
+          piece: p.piece,
+          board: cloneBoard(board),
+          newCells: [...p.cells],
+          hint: p.hint,
+        });
+        progress = true;
+      } else {
+        deferred.push(p);
+      }
     }
+
+    remaining = deferred;
+    if (!progress) break; // stuck — remaining pieces can't be placed
   }
 
   return steps;

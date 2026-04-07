@@ -36,8 +36,6 @@ export interface Bag2Route {
   conditionPieces: PieceType[];
   placements: RawPlacement[];
   holdPlacement: RawPlacement | null; // Held piece gap-filler
-  holdInsertIndex?: number; // Where in Bag 2 to insert hold (default: 0 = before all)
-  bag1PieceCount?: number;  // Override: how many Bag 1 pieces to use (default: all)
   tstStepIndex: number;
 }
 
@@ -636,8 +634,6 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'L', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }], hint: 'L vertical, cols 8-9' },
     ],
     holdPlacement: { piece: 'L', cells: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'Hold L, right side gap-filler' },
-    holdInsertIndex: 2, // After Z and O — O at (8,16) provides support for hold L at (8,15)
-    bag1PieceCount: 6, // Form 2: L stays held (not placed in Bag 1)
     tstStepIndex: -1,
   },
 ];
@@ -689,24 +685,29 @@ export function createVisualizerState(
   const routes = getBag2Routes(openerId, mirror);
   const route = routes[routeIndex] ?? null;
 
-  // Routes can override how many Bag 1 pieces to use
-  // (e.g., Gamushiro Form 2: L stays held → only 6 Bag 1 pieces)
-  const bag1Count = route?.bag1PieceCount ?? bag1Placements.length;
-  const bag1Used = bag1Placements.slice(0, bag1Count);
+  // Engine-driven: try full Bag 1 first. If any Bag 2 piece gets stuck
+  // (conflict), reduce Bag 1 by 1 piece (the held piece stays out).
+  // The engine's support-ordered placement handles the rest.
+  const bag2All: RawPlacement[] = route
+    ? [...(route.holdPlacement ? [route.holdPlacement] : []), ...route.placements]
+    : [];
 
-  // Build Bag 2 sequence: hold piece inserted at holdInsertIndex
-  // (default: before all Bag 2 pieces; routes can override for support ordering)
-  let bag2WithHold: RawPlacement[] = [];
-  if (route) {
-    const insertIdx = route.holdInsertIndex ?? 0;
-    bag2WithHold = [...route.placements];
-    if (route.holdPlacement) {
-      bag2WithHold.splice(insertIdx, 0, route.holdPlacement);
+  let bag1Used = bag1Placements;
+  if (route && bag2All.length > 0) {
+    // Try full Bag 1
+    const fullSteps = buildSteps([...bag1Placements, ...bag2All]);
+    if (fullSteps.length < bag1Placements.length + bag2All.length) {
+      // Some pieces stuck — try with one fewer Bag 1 piece
+      const reducedBag1 = bag1Placements.slice(0, bag1Placements.length - 1);
+      const reducedSteps = buildSteps([...reducedBag1, ...bag2All]);
+      if (reducedSteps.length >= reducedBag1.length + bag2All.length) {
+        bag1Used = reducedBag1;
+      }
     }
   }
 
   const allPlacements: RawPlacement[] = route
-    ? [...bag1Used, ...bag2WithHold]
+    ? [...bag1Used, ...bag2All]
     : [...bag1Placements];
 
   return {
