@@ -36,6 +36,7 @@ export interface Bag2Route {
   conditionPieces: PieceType[];
   placements: RawPlacement[];
   holdPlacement: RawPlacement | null; // Held piece gap-filler
+  holdInsertIndex?: number; // Where in Bag 2 to insert hold (default: 0 = before all)
   bag1PieceCount?: number;  // Override: how many Bag 1 pieces to use (default: all)
   tstStepIndex: number;
 }
@@ -635,6 +636,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'L', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }], hint: 'L vertical, cols 8-9' },
     ],
     holdPlacement: { piece: 'L', cells: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'Hold L, right side gap-filler' },
+    holdInsertIndex: 2, // After Z and O — O at (8,16) provides support for hold L at (8,15)
     bag1PieceCount: 6, // Form 2: L stays held (not placed in Bag 1)
     tstStepIndex: -1,
   },
@@ -692,8 +694,19 @@ export function createVisualizerState(
   const bag1Count = route?.bag1PieceCount ?? bag1Placements.length;
   const bag1Used = bag1Placements.slice(0, bag1Count);
 
+  // Build Bag 2 sequence: hold piece inserted at holdInsertIndex
+  // (default: before all Bag 2 pieces; routes can override for support ordering)
+  let bag2WithHold: RawPlacement[] = [];
+  if (route) {
+    const insertIdx = route.holdInsertIndex ?? 0;
+    bag2WithHold = [...route.placements];
+    if (route.holdPlacement) {
+      bag2WithHold.splice(insertIdx, 0, route.holdPlacement);
+    }
+  }
+
   const allPlacements: RawPlacement[] = route
-    ? [...bag1Used, ...(route.holdPlacement ? [route.holdPlacement] : []), ...route.placements]
+    ? [...bag1Used, ...bag2WithHold]
     : [...bag1Placements];
 
   return {
@@ -753,11 +766,19 @@ export function getBag2Sequence(openerId: OpenerID, mirror: boolean, routeIndex:
   if (routeIndex < 0 || routeIndex >= routes.length) return null;
   const route = routes[routeIndex]!;
   const state = createVisualizerState(openerId, mirror, routeIndex);
-  // Skip hold step — only return route placement steps
-  const holdOffset = route.holdPlacement ? 1 : 0;
-  const bag2Steps = state.steps.slice(state.bag1End + holdOffset);
-  const baseBoardIdx = state.bag1End + holdOffset - 1;
-  const baseBoard = baseBoardIdx >= 0 ? state.steps[baseBoardIdx]!.board : emptyBoard();
+  // Bag 2 steps = everything after bag1End, excluding hold piece
+  // The hold is inserted into bag2 at holdInsertIndex, find and skip it
+  const allBag2 = state.steps.slice(state.bag1End);
+  const holdHint = route.holdPlacement?.hint;
+  const bag2Steps = holdHint ? allBag2.filter(s => s.hint !== holdHint) : allBag2;
+  // Base board = Bag 1 final + hold piece (computed directly)
+  const bag1FinalBoard = state.bag1End > 0 ? state.steps[state.bag1End - 1]!.board : emptyBoard();
+  const baseBoard = bag1FinalBoard.map((r: (PieceType | null)[]) => [...r]);
+  if (route.holdPlacement) {
+    for (const c of route.holdPlacement.cells) {
+      if (baseBoard[c.row]![c.col] === null) baseBoard[c.row]![c.col] = route.holdPlacement.piece;
+    }
+  }
   const bag1Seq = getOpenerSequence(openerId, mirror);
   return {
     openerId, mirror,

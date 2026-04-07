@@ -108,9 +108,14 @@ describe('Acceptance: base board matches wiki residual', () => {
 
       test(`${id}/${route.routeId}: engine base board = wiki residual (${wikiResidual.length} cells)`, () => {
         const state = createVisualizerState(id, false, ri);
-        const holdOffset = route.holdPlacement ? 1 : 0;
-        const baseIdx = state.bag1End + holdOffset - 1;
-        const base = baseIdx >= 0 ? state.steps[baseIdx]!.board : null;
+        // Base board = Bag 1 final + hold piece (computed directly, not from step sequence)
+        const bag1Final = state.bag1End > 0 ? state.steps[state.bag1End - 1]!.board : Array.from({length:20}, () => Array(10).fill(null));
+        const base = bag1Final.map((r: any) => [...r]);
+        if (route.holdPlacement) {
+          for (const c of route.holdPlacement.cells) {
+            if (base[c.row][c.col] === null) base[c.row][c.col] = route.holdPlacement.piece;
+          }
+        }
         expect(base).not.toBeNull();
 
         const wikiSet = new Set(wikiResidual.map(c => `${c.col},${c.row}`));

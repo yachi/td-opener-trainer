@@ -746,8 +746,7 @@ describe('V9: Bag 2 base board matches route residual', () => {
         for (let ri = 0; ri < routes.length; ri++) {
           const bag2 = getBag2Sequence(id, mirror, ri);
           if (!bag2) continue;
-          const bag2Step0 = bag2.steps[0]!.board;
-          const newCellSet = new Set(bag2.steps[0]!.newCells.map(c => `${c.col},${c.row}`));
+          const checkBoard = bag2.baseBoard;
 
           // Get residual from wiki fixture, mirror if needed
           const rawResidual = wikiRoutes[routes[ri]!.routeId]?.residual;
@@ -757,8 +756,8 @@ describe('V9: Bag 2 base board matches route residual', () => {
             : rawResidual;
 
           for (const cell of residual) {
-            if (bag2Step0[cell.row]![cell.col] === null && !newCellSet.has(`${cell.col},${cell.row}`)) {
-              missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${cell.col},${cell.row}) residual missing in Bag2 step0`);
+            if (checkBoard[cell.row]![cell.col] === null) {
+              missing.push(`${id}${mirror ? ' mirror' : ''} r${ri}: (${cell.col},${cell.row}) residual missing in baseBoard`);
             }
           }
         }
