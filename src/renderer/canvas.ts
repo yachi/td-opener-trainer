@@ -143,6 +143,10 @@ function buildOnboardingRenderState(state: AppState): OnboardingRenderState {
   const progress = state.onboarding!;
   const result: OnboardingRenderState = { progress };
 
+  if (progress.stagePhase === 'shape_preview') {
+    result.shapeStep = (state as any).onboardingShapeStep ?? 0;
+  }
+
   if (progress.stagePhase === 'drill' && state.onboardingDrill) {
     const drill = state.onboardingDrill;
     const stage = progress.currentStage as OpenerID;

@@ -20,6 +20,7 @@ import { OPENERS } from './openers/decision.ts';
 import {
   createVisualizerState,
   getBag2Routes,
+  getOpenerSequence,
 } from './modes/visualizer.ts';
 import type { VisualizerState } from './modes/visualizer.ts';
 import { dispatchVisualizerAction } from './dispatcher/visualizer.ts';
@@ -50,6 +51,7 @@ interface FullAppState extends AppState {
   appMode: 'onboarding' | 'quiz' | 'visualizer' | 'drill';
   onboarding: OnboardingProgress;
   onboardingDrill: OnboardingDrill;
+  onboardingShapeStep: number;
   drill: DrillState | null;
   drillSelector: { selectedIndex: number };
 }
@@ -75,6 +77,7 @@ const state: FullAppState = {
   stats: getDisplayStats(loadQuizStats()),
   onboarding: onboardingProgress,
   onboardingDrill: createOnboardingDrill(),
+  onboardingShapeStep: 0,
   visualizer: createVisualizerState('ms2', false),
   drill: null,
   drillSelector: { selectedIndex: 0 },
@@ -218,6 +221,28 @@ function dispatchOnboarding(action: string): void {
   const phase = onboarding.stagePhase;
 
   switch (phase) {
+    case 'shape_preview': {
+      const stage = onboarding.currentStage;
+      if (stage === 'full_quiz' || stage === 'complete') break;
+      if (action === 'advance') {
+        const seq = getOpenerSequence(stage as OpenerID, false);
+        if (state.onboardingShapeStep < seq.steps.length) {
+          state.onboardingShapeStep++;
+        } else {
+          advancePhase(onboarding);
+          state.onboardingShapeStep = 0;
+          saveOnboardingProgress(onboarding);
+        }
+        dirty = true;
+      } else if (action === 'step_back') {
+        if (state.onboardingShapeStep > 0) {
+          state.onboardingShapeStep--;
+          dirty = true;
+        }
+      }
+      break;
+    }
+
     case 'rule_card': {
       if (action === 'advance') {
         advancePhase(onboarding);
@@ -298,6 +323,7 @@ function dispatchOnboarding(action: string): void {
     case 'celebration': {
       if (action === 'advance') {
         advancePhase(onboarding);
+        state.onboardingShapeStep = 0;
 
         // Check if we've moved to full_quiz or complete
         if (

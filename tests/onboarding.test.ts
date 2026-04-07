@@ -23,7 +23,7 @@ describe('O1: Onboarding State Management', () => {
     const progress = createOnboardingProgress();
     expect(progress.version).toBe(2);
     expect(progress.currentStage).toBe('ms2');
-    expect(progress.stagePhase).toBe('rule_card');
+    expect(progress.stagePhase).toBe('shape_preview');
     expect(progress.exampleIndex).toBe(0);
     expect(progress.exampleStep).toBe(0);
     expect(progress.placementTestTaken).toBe(false);
@@ -37,8 +37,11 @@ describe('O1: Onboarding State Management', () => {
     }
   });
 
-  test('state advances from rule_card → examples → drill → celebration', () => {
+  test('state advances from shape_preview → rule_card → examples → drill → celebration', () => {
     const progress = createOnboardingProgress();
+    expect(progress.stagePhase).toBe('shape_preview');
+
+    advancePhase(progress);
     expect(progress.stagePhase).toBe('rule_card');
 
     advancePhase(progress);
@@ -53,6 +56,13 @@ describe('O1: Onboarding State Management', () => {
     expect(progress.stagePhase).toBe('celebration');
   });
 
+  test('shape_preview advances to rule_card', () => {
+    const progress = createOnboardingProgress();
+    expect(progress.stagePhase).toBe('shape_preview');
+    advancePhase(progress);
+    expect(progress.stagePhase).toBe('rule_card');
+  });
+
   test('stage advances from ms2 → honey_cup → stray_cannon → full_quiz → complete', () => {
     const progress = createOnboardingProgress();
     expect(progress.currentStage).toBe('ms2');
@@ -62,14 +72,14 @@ describe('O1: Onboarding State Management', () => {
     progress.mastery.ms2.completed = true;
     advancePhase(progress);
     expect(progress.currentStage).toBe('honey_cup');
-    expect(progress.stagePhase).toBe('rule_card');
+    expect(progress.stagePhase).toBe('shape_preview');
 
     // Complete Honey Cup
     progress.stagePhase = 'celebration';
     progress.mastery.honey_cup.completed = true;
     advancePhase(progress);
     expect(progress.currentStage).toBe('stray_cannon');
-    expect(progress.stagePhase).toBe('rule_card');
+    expect(progress.stagePhase).toBe('shape_preview');
 
     // Complete Stray Cannon
     progress.stagePhase = 'celebration';
@@ -571,7 +581,7 @@ describe('O7: State Persistence', () => {
   test('missing localStorage key → returns fresh initial state', () => {
     const loaded = loadOnboardingProgress();
     expect(loaded.currentStage).toBe('ms2');
-    expect(loaded.stagePhase).toBe('rule_card');
+    expect(loaded.stagePhase).toBe('shape_preview');
     expect(loaded.version).toBe(2);
   });
 
@@ -579,7 +589,7 @@ describe('O7: State Persistence', () => {
     store['onboarding_progress'] = '{this is not valid json!!!}';
     const loaded = loadOnboardingProgress();
     expect(loaded.currentStage).toBe('ms2');
-    expect(loaded.stagePhase).toBe('rule_card');
+    expect(loaded.stagePhase).toBe('shape_preview');
     expect(loaded.version).toBe(2);
   });
 
@@ -588,7 +598,7 @@ describe('O7: State Persistence', () => {
     const loaded = loadOnboardingProgress();
     // Should reset since version doesn't match
     expect(loaded.version).toBe(2);
-    expect(loaded.stagePhase).toBe('rule_card');
+    expect(loaded.stagePhase).toBe('shape_preview');
   });
 
   test('stage and phase persist across simulated page reloads', () => {
@@ -752,6 +762,10 @@ describe('O10: Full Flow Integration', () => {
 
     // === Stage 1: MS2 ===
     expect(progress.currentStage).toBe('ms2');
+    expect(progress.stagePhase).toBe('shape_preview');
+
+    // Shape preview → rule card
+    advancePhase(progress);
     expect(progress.stagePhase).toBe('rule_card');
 
     // Rule card → examples
@@ -780,9 +794,10 @@ describe('O10: Full Flow Integration', () => {
     // Celebration → next stage (honey_cup)
     advancePhase(progress);
     expect(progress.currentStage).toBe('honey_cup');
-    expect(progress.stagePhase).toBe('rule_card');
+    expect(progress.stagePhase).toBe('shape_preview');
 
     // === Stage 2: Honey Cup ===
+    advancePhase(progress); // → rule_card
     advancePhase(progress); // → examples
     expect(progress.stagePhase).toBe('examples');
     advancePhase(progress); // → drill
@@ -800,6 +815,7 @@ describe('O10: Full Flow Integration', () => {
     expect(progress.currentStage).toBe('stray_cannon');
 
     // === Stage 3: Stray Cannon ===
+    advancePhase(progress); // → rule_card
     advancePhase(progress); // → examples
     advancePhase(progress); // → drill
 

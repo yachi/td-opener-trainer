@@ -8,7 +8,7 @@ import { OPENERS, DECISION_PIECES } from '../openers/decision';
 export interface OnboardingProgress {
   version: 2;
   currentStage: 'ms2' | 'honey_cup' | 'stray_cannon' | 'full_quiz' | 'complete';
-  stagePhase: 'rule_card' | 'examples' | 'drill' | 'celebration';
+  stagePhase: 'shape_preview' | 'rule_card' | 'examples' | 'drill' | 'celebration';
   exampleIndex: number;
   exampleStep: number;
   mastery: Record<OpenerID, MasteryRecord>;
@@ -69,7 +69,7 @@ export function createOnboardingProgress(): OnboardingProgress {
   return {
     version: 2,
     currentStage: 'ms2',
-    stagePhase: 'rule_card',
+    stagePhase: 'shape_preview',
     exampleIndex: 0,
     exampleStep: 0,
     mastery: {
@@ -96,6 +96,9 @@ export function advancePhase(progress: OnboardingProgress): void {
   }
 
   switch (progress.stagePhase) {
+    case 'shape_preview':
+      progress.stagePhase = 'rule_card';
+      break;
     case 'rule_card':
       progress.stagePhase = 'examples';
       break;
@@ -116,7 +119,7 @@ export function advancePhase(progress: OnboardingProgress): void {
       const idx = STAGE_ORDER.indexOf(progress.currentStage);
       if (idx >= 0 && idx < STAGE_ORDER.length - 1) {
         progress.currentStage = STAGE_ORDER[idx + 1]!;
-        progress.stagePhase = 'rule_card';
+        progress.stagePhase = 'shape_preview';
         progress.exampleIndex = 0;
         progress.exampleStep = 0;
       }

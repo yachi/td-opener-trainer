@@ -4,9 +4,10 @@ import type { OnboardingProgress, WorkedExample } from '../modes/onboarding';
 import type { QuizQueueOptions } from './queue';
 import { getWorkedExamples } from '../modes/onboarding';
 import { OPENERS, DECISION_PIECES } from '../openers/decision';
-import { CANVAS_W, CANVAS_H, COLORS, drawPieceInBox, roundRect } from './board';
+import { CANVAS_W, CANVAS_H, COLORS, drawPieceInBox, roundRect, drawCell } from './board';
 import { drawQuizQueue } from './queue';
 import { drawTabs, drawStatusBar } from './hud';
+import { getOpenerSequence } from '../modes/visualizer';
 
 // ── Shared constants ──
 
@@ -72,6 +73,141 @@ function drawSeparator(ctx: CanvasRenderingContext2D, y: number, margin = 80): v
   ctx.moveTo(margin, y + 0.5);
   ctx.lineTo(CANVAS_W - margin, y + 0.5);
   ctx.stroke();
+}
+
+// ── 0. Shape Preview ──
+
+export function drawShapePreview(
+  ctx: CanvasRenderingContext2D,
+  openerId: OpenerID,
+  stepIndex: number,
+  totalSteps: number,
+): void {
+  const display = OPENER_DISPLAY[openerId];
+  const def = OPENERS[openerId];
+  const cx = centerX();
+
+  // Title
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 24px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`LEARN: ${display.en}`, cx, 80);
+
+  // Subtitle
+  ctx.fillStyle = MUTED;
+  ctx.font = `16px ${FONT}`;
+  ctx.fillText(`(${display.cn})`, cx, 110);
+
+  // Mini board — 7 visible rows (rows 13-19), cellSize 24
+  const cellSz = 24;
+  const visibleRows = 7;
+  const boardW = 10 * cellSz;
+  const boardH = visibleRows * cellSz;
+  const boardX = (CANVAS_W - boardW) / 2;
+  const boardTopY = 145;
+
+  // Board background
+  ctx.fillStyle = COLORS.boardBg;
+  ctx.fillRect(boardX, boardTopY, boardW, boardH);
+
+  // Grid lines
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= visibleRows; r++) {
+    const y = boardTopY + r * cellSz;
+    ctx.beginPath();
+    ctx.moveTo(boardX, y);
+    ctx.lineTo(boardX + boardW, y);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= 10; c++) {
+    const x = boardX + c * cellSz;
+    ctx.beginPath();
+    ctx.moveTo(x, boardTopY);
+    ctx.lineTo(x, boardTopY + boardH);
+    ctx.stroke();
+  }
+
+  // Board border
+  ctx.strokeStyle = COLORS.boardBorder;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boardX, boardTopY, boardW, boardH);
+
+  // Get board state from opener sequence
+  const seq = getOpenerSequence(openerId, false);
+  const board = stepIndex > 0 ? seq.steps[stepIndex - 1]!.board : null;
+  const newCells = stepIndex > 0 ? seq.steps[stepIndex - 1]!.newCells : [];
+
+  // Draw cells (bottom visibleRows rows)
+  if (board) {
+    for (let r = 0; r < visibleRows; r++) {
+      const boardRow = 20 - visibleRows + r;
+      for (let c = 0; c < 10; c++) {
+        const cell = board[boardRow]?.[c];
+        if (cell) {
+          const px = boardX + c * cellSz;
+          const py = boardTopY + r * cellSz;
+          const color = COLORS.pieces[cell] ?? '#888888';
+          const isNew = newCells.some(nc => nc.row === boardRow && nc.col === c);
+
+          if (isNew) {
+            drawCell(ctx, px, py, cellSz, color);
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 1, py + 1, cellSz - 2, cellSz - 2);
+          } else {
+            ctx.globalAlpha = 0.6;
+            drawCell(ctx, px, py, cellSz, color);
+            ctx.globalAlpha = 1.0;
+          }
+        }
+      }
+    }
+  }
+
+  // Hold piece (left of board)
+  const holdX = boardX - 80;
+  const holdY = boardTopY + 30;
+  ctx.fillStyle = COLORS.panelText;
+  ctx.font = `bold 11px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('HOLD', holdX + 30, holdY - 4);
+  drawPieceInBox(ctx, def.holdPiece, holdX, holdY, 60, 44, 12);
+
+  // Piece label + hint
+  const labelY = boardTopY + boardH + 25;
+  if (stepIndex > 0 && stepIndex <= seq.steps.length) {
+    const step = seq.steps[stepIndex - 1]!;
+    ctx.fillStyle = '#FFD600';
+    ctx.font = `bold 18px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`Piece ${stepIndex}: ${step.piece}`, cx, labelY);
+
+    ctx.fillStyle = MUTED;
+    ctx.font = `14px ${FONT}`;
+    ctx.fillText(step.hint, cx, labelY + 28);
+  } else {
+    ctx.fillStyle = MUTED;
+    ctx.font = `16px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Empty board \u2014 press \u2192 to place first piece', cx, labelY + 10);
+  }
+
+  // Navigation hint
+  ctx.fillStyle = HINT_COLOR;
+  ctx.font = `14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const hintY = labelY + 70;
+  if (stepIndex < totalSteps) {
+    ctx.fillText(`Step ${stepIndex} / ${totalSteps} \u00b7 \u2190\u2192 to step \u00b7 [Space] when done`, cx, hintY);
+  } else {
+    ctx.fillText(`All ${totalSteps} pieces placed \u00b7 [Space] to continue`, cx, hintY);
+  }
 }
 
 // ── 1. Rule Card ──
@@ -426,6 +562,7 @@ export interface OnboardingRenderState {
   progress: OnboardingProgress;
   drill?: DrillRenderData;
   celebration?: CelebrationData;
+  shapeStep?: number;
 }
 
 export function renderOnboardingMode(
@@ -441,6 +578,12 @@ export function renderOnboardingMode(
   const openerId = stage as OpenerID;
 
   switch (progress.stagePhase) {
+    case 'shape_preview': {
+      const seq = getOpenerSequence(openerId, false);
+      drawShapePreview(ctx, openerId, state.shapeStep ?? 0, seq.steps.length);
+      break;
+    }
+
     case 'rule_card':
       drawRuleCard(ctx, openerId);
       break;
@@ -465,6 +608,7 @@ export function renderOnboardingMode(
   // Status bar text
   const display = OPENER_DISPLAY[openerId];
   const phaseLabels: Record<string, string> = {
+    shape_preview: `Learning ${display.en} · Shape Preview`,
     rule_card: `Learning ${display.en} · ${stageLabel(openerId)}`,
     examples: `Learning ${display.en} · Examples`,
     drill: state.drill
