@@ -236,9 +236,13 @@ When verifying, navigate to the exact screen. When checking, run the exact comma
 **Correction**: "dont order me, help me"
 **Rule**: When verifying with Playwright, navigate to the exact screen the user needs to see. Don't tell them to do it themselves. I have the tools — use them.
 
-### 41. Use the engine you already have — stop encoding game knowledge as manual data
-**Mistake**: Spent 10 hours adding manual fields (holdInsertIndex, bag1PieceCount, holdPlacement, TST-derived clears) to work around placement conflicts. Each field fixed one bug and created another. The Cold Clear SRS engine (isPlacementReachable, findAllPlacements, lockAndClear) was ported on day 1 and can compute ALL of this automatically: which pieces go first (support ordering), which Bag 1 pieces to include (reachability determines this), where the hold piece fits (BFS finds valid positions).
-**Rule**: Before adding a manual data field to work around a game physics issue, ask: "can the engine compute this?" If the engine has BFS reachability, gravity simulation, and line clears, it can compute placement order, support dependencies, and conflict resolution. Manual data fields are game knowledge that rots — the engine is always correct.
+### 41. When the user says "use X tool" — USE IT. Don't invent workarounds.
+**Mistake**: User said "use the SRS engine" 10+ times over 10 hours. Each time, I invented a workaround instead: `?? 'T'`, `?? 'G'`, `?? holdPiece`, TST-derived clears, support-ordering heuristic, `holdInsertIndex`, `bag1PieceCount`. Each workaround created new bugs. When I finally used `findAllPlacements` from Cold Clear, it worked on the first try.
+**Rule**: If the user names a specific tool/function/library, use it in the NEXT code change. Not after research. Not after a spec. Not after consensus review. Use it. If it doesn't work, THEN discuss alternatives. The user has already evaluated the options — they're giving you the answer, not asking a question.
+
+### 42. Cell-level floating ≠ piece-level floating — Tetris pieces lock as rigid bodies
+**Mistake**: Acceptance test used `findFloatingCells` which flagged 3 cells per route as "floating." Spent hours trying to eliminate cell-level floating. But `findFloatingPieces` returns 0 — every piece is locked because at least one cell in each piece has support. This is correct Tetris physics: pieces lock as rigid bodies.
+**Rule**: Use `findFloatingPieces` (piece-level) not `findFloatingCells` (cell-level) for physics validation. A cell with nothing below it is fine if it's part of a locked piece. J/L/T/S/Z pieces routinely have overhanging cells — that's how they create the T-spin pocket.
 
 ### 40. Board state is a fold — one engine, zero hacks
 **Mistake**: Maintained separate `getOpenerSequence` (Bag 1) and `getBag2Sequence` (Bag 2) with a manufactured "base board" between them. Every bug (17 fix commits) was in that gap: residual hacks, TST-clear derivation, allowOverwrite bypasses, fixture lookups, 'G' type hack.
@@ -286,8 +290,12 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - Use `tetris-fumen` npm package to decode: `decoder.decode('v115@...')`
 
 ### Key Files
-- `src/openers/decision.ts` — canBuild conditions, DECISION_PIECES, bestOpener()
-- `src/modes/visualizer.ts` — piece placement data for all 4 openers
+- `src/core/sequence.ts` — `buildSteps()` fold using Cold Clear BFS (`findAllPlacements`) for SRS-verified placement
+- `src/core/cold-clear.ts` — BFS move finder, `findAllPlacements`, `lockAndClear`, `isPlacementReachable`
+- `src/core/srs.ts` — SRS rotation, kick tables, `hardDrop`, `spawnPiece`, `findReachablePositions`
+- `src/core/field-engine.ts` — fumen bridge, `clearLines`, `findFloatingCells/Pieces`, `placePieceFromCells`
+- `src/modes/visualizer.ts` — unified `VisualizerState` (6 flat fields), placement data for all 4 openers × 8 routes
 - `src/modes/onboarding.ts` — teach→try→test learning flow
 - `src/modes/quiz.ts` — speed quiz (only useful after learning)
-- `tests/` — 103 tests covering quiz, onboarding, visualizer
+- `tests/acceptance.test.ts` — 28 acceptance tests: gravity, no disappearing, cell count, wiki oracle
+- `tests/` — 480 tests across 11 files
