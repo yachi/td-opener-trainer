@@ -236,6 +236,11 @@ When verifying, navigate to the exact screen. When checking, run the exact comma
 **Correction**: "dont order me, help me"
 **Rule**: When verifying with Playwright, navigate to the exact screen the user needs to see. Don't tell them to do it themselves. I have the tools — use them.
 
+### 39. The wiki visualization is pre-clear, not post-clear — residual = Bag 1 + hold piece
+**Mistake**: Assumed the wiki's Bag 2 base board was a "post-TST residual" that required simulating line clears and gravity. Built engine computation, tried multiple clear patterns, none matched. The 4-19 "unknown" cells were labeled 'G' (gray) because we couldn't determine their piece type.
+**Discovery**: All 24 Bag 1 cells in the residual are at their ORIGINAL positions (no gravity shift). The extra cells per route form the exact shape of the opener's hold piece (L for MS2/Gamushiro, Z for Stray Cannon). The base board is simply `Bag 1 + hold piece` — no TST simulation needed.
+**Rule**: Before building an engine to compute something, check whether the data is simpler than you think. 28 residual cells = 24 Bag 1 (unchanged) + 4 hold piece. The fix was `?? bag1Seq.holdPiece` — one token, not an engine.
+
 ### 38. Never regenerate golden data from code — golden data is wiki-sourced
 **Mistake**: When the phantom T cell fix changed board output, 5 golden fumen tests failed. Instead of investigating WHY the output changed, I regenerated golden fumens from the code's output. This converted an external oracle (wiki-sourced data) into a tautology (code validates itself). The same commit also removed 19 valid wiki-sourced residual coords based on a wrong assumption (V10b: "residual ⊆ Bag 1"). The wiki fixture `bag2-golden.json` had the correct data the whole time.
 **Correction**: User spotted floating L piece at final step. Root cause: removed coords were post-TST game state deliberately extracted from wiki.
