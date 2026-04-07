@@ -35,8 +35,9 @@ export interface Bag2Route {
   condition: string;        // 'S first among {I,O,S}'
   conditionPieces: PieceType[];
   placements: RawPlacement[];
-  holdPlacement: RawPlacement | null; // Held piece gap-filler (placed on Bag 1 to form base board)
-  tstStepIndex: number;     // which step fires the TST
+  holdPlacement: RawPlacement | null; // Held piece gap-filler
+  bag1PieceCount?: number;  // Override: how many Bag 1 pieces to use (default: all)
+  tstStepIndex: number;
 }
 
 export interface Bag2Data {
@@ -633,7 +634,8 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 0, row: 12 }, { col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }], hint: 'I vertical, col 0, left wall' },
       { piece: 'L', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }], hint: 'L vertical, cols 8-9' },
     ],
-    holdPlacement: null, // Hold L overlaps Bag 1 L — needs TST simulation to model correctly
+    holdPlacement: { piece: 'L', cells: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'Hold L, right side gap-filler' },
+    bag1PieceCount: 6, // Form 2: L stays held (not placed in Bag 1)
     tstStepIndex: -1,
   },
 ];
@@ -685,15 +687,20 @@ export function createVisualizerState(
   const routes = getBag2Routes(openerId, mirror);
   const route = routes[routeIndex] ?? null;
 
+  // Routes can override how many Bag 1 pieces to use
+  // (e.g., Gamushiro Form 2: L stays held → only 6 Bag 1 pieces)
+  const bag1Count = route?.bag1PieceCount ?? bag1Placements.length;
+  const bag1Used = bag1Placements.slice(0, bag1Count);
+
   const allPlacements: RawPlacement[] = route
-    ? [...bag1Placements, ...(route.holdPlacement ? [route.holdPlacement] : []), ...route.placements]
+    ? [...bag1Used, ...(route.holdPlacement ? [route.holdPlacement] : []), ...route.placements]
     : [...bag1Placements];
 
   return {
     openerId,
     mirror,
     steps: buildSteps(allPlacements),
-    bag1End: bag1Placements.length,
+    bag1End: bag1Used.length,
     currentStep: 0,
     routeIndex: route ? routeIndex : -1,
   };
