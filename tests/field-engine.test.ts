@@ -23,17 +23,12 @@ import {
   fumenYToRow,
   boardToField,
   fieldToBoard,
-  placePieceWithGravity,
-  clearLines,
   findFloatingCells,
-  assertNoFloatingCells,
   boardToFumen,
   fumenToBoard,
-  computePostTst,
   boardToAscii,
   placePieceFromCells,
-  buildBoardFromPlacements,
-} from '../src/core/field-engine.ts';
+} from '../src/core/engine.ts';
 import { getOpenerSequence } from '../src/modes/visualizer.ts';
 import { Field } from 'tetris-fumen/lib/field';
 
@@ -128,120 +123,6 @@ describe('Board ↔ Field conversion', () => {
   });
 });
 
-// ── 3. Piece placement with gravity ──
-
-describe('placePieceWithGravity', () => {
-  test('I piece horizontal drops to bottom row', () => {
-    const field = Field.create();
-    const mino = placePieceWithGravity(field, 'I', 0, 4);
-    const board = fieldToBoard(field);
-    expect(board[19]![3]).toBe('I');
-    expect(board[19]![4]).toBe('I');
-    expect(board[19]![5]).toBe('I');
-    expect(board[19]![6]).toBe('I');
-  });
-
-  test('T piece drops on top of existing piece', () => {
-    const field = Field.create();
-    placePieceWithGravity(field, 'I', 0, 4);
-    placePieceWithGravity(field, 'T', 0, 4);
-
-    const board = fieldToBoard(field);
-    expect(board[18]![3]).toBe('T');
-    expect(board[18]![4]).toBe('T');
-    expect(board[18]![5]).toBe('T');
-    expect(board[17]![4]).toBe('T');
-  });
-
-  test('I piece vertical drops correctly — occupies rows 16-19 at col 0', () => {
-    const field = Field.create();
-    placePieceWithGravity(field, 'I', 1, 0); // right rotation, col 0
-
-    const board = fieldToBoard(field);
-    // I vertical (right rotation) at col 0 should occupy rows 16-19, col 0
-    expect(board[16]![0]).toBe('I');
-    expect(board[17]![0]).toBe('I');
-    expect(board[18]![0]).toBe('I');
-    expect(board[19]![0]).toBe('I');
-
-    // Verify exactly 4 cells filled
-    let count = 0;
-    for (let r = 0; r < 20; r++) {
-      for (let c = 0; c < 10; c++) {
-        if (board[r]![c] !== null) count++;
-      }
-    }
-    expect(count).toBe(4);
-
-    // Verify all other columns are empty
-    for (let r = 0; r < 20; r++) {
-      for (let c = 1; c < 10; c++) {
-        expect(board[r]![c]).toBeNull();
-      }
-    }
-  });
-});
-
-// ── 4. Line clearing ──
-
-describe('Line clearing', () => {
-  test('clearing a full row removes it and drops rows above', () => {
-    const board = emptyBoard();
-    for (let c = 0; c < 10; c++) {
-      board[19]![c] = 'I';
-    }
-    board[18]![0] = 'T';
-
-    const field = boardToField(board);
-    clearLines(field);
-    const result = fieldToBoard(field);
-
-    expect(result[19]![0]).toBe('T');
-    for (let c = 1; c < 10; c++) {
-      expect(result[19]![c]).toBeNull();
-    }
-    for (let c = 0; c < 10; c++) {
-      expect(result[18]![c]).toBeNull();
-    }
-  });
-
-  test('clearing 3 full rows (TST scenario)', () => {
-    const board = emptyBoard();
-    for (let r = 17; r <= 19; r++) {
-      for (let c = 0; c < 10; c++) {
-        board[r]![c] = 'I';
-      }
-    }
-    board[16]![5] = 'L';
-
-    const field = boardToField(board);
-    clearLines(field);
-    const result = fieldToBoard(field);
-
-    expect(result[19]![5]).toBe('L');
-    for (let r = 0; r < 19; r++) {
-      for (let c = 0; c < 10; c++) {
-        expect(result[r]![c]).toBeNull();
-      }
-    }
-  });
-
-  test('non-full rows are not cleared', () => {
-    const board = emptyBoard();
-    for (let c = 0; c < 9; c++) {
-      board[19]![c] = 'I';
-    }
-    const field = boardToField(board);
-    clearLines(field);
-    const result = fieldToBoard(field);
-
-    for (let c = 0; c < 9; c++) {
-      expect(result[19]![c]).toBe('I');
-    }
-    expect(result[19]![9]).toBeNull();
-  });
-});
-
 // ── 5. Gravity validation ──
 
 describe('Gravity validation', () => {
@@ -277,18 +158,6 @@ describe('Gravity validation', () => {
     expect(floating).toEqual([{ col: 0, row: 17 }]);
   });
 
-  test('assertNoFloatingCells throws on floating board', () => {
-    const board = emptyBoard();
-    board[5]![5] = 'Z';
-    expect(() => assertNoFloatingCells(board)).toThrow('Floating cells detected');
-  });
-
-  test('assertNoFloatingCells passes on valid board', () => {
-    const board = emptyBoard();
-    board[19]![0] = 'I';
-    board[18]![0] = 'T';
-    expect(() => assertNoFloatingCells(board)).not.toThrow();
-  });
 });
 
 // ── 6. Fumen encode/decode round-trip ──
@@ -324,39 +193,6 @@ describe('Fumen encode/decode', () => {
     const board = fumenToBoard(fumen);
     expect(board.length).toBe(20);
     expect(board[0]!.length).toBe(10);
-  });
-});
-
-// ── 7. computePostTst ──
-
-describe('computePostTst', () => {
-  test('clears 3 lines when T fills the TST slot on a full TD board', () => {
-    const board = emptyBoard();
-
-    for (let r = 17; r <= 19; r++) {
-      for (let c = 0; c < 10; c++) {
-        board[r]![c] = 'I';
-      }
-    }
-    // Carve T-slot: T reverse at (4,18) = center(4,18), left(3,18), right(5,18), bottom(4,19)
-    board[18]![3] = null;
-    board[18]![4] = null;
-    board[18]![5] = null;
-    board[19]![4] = null;
-
-    board[16]![0] = 'L';
-
-    const result = computePostTst(board, { col: 4, row: 18, rotation: 2 });
-
-    expect(result[19]![0]).toBe('L');
-
-    let count = 0;
-    for (const row of result) {
-      for (const cell of row) {
-        if (cell !== null) count++;
-      }
-    }
-    expect(count).toBe(1);
   });
 });
 
@@ -608,82 +444,6 @@ describe('placePieceFromCells', () => {
     // The physics engine places it, but gravity validation catches it
     const floating = findFloatingCells(result);
     expect(floating.length).toBeGreaterThan(0);
-  });
-});
-
-// ── 11. buildBoardFromPlacements ──
-
-describe('buildBoardFromPlacements', () => {
-  test('produces correct board from multiple placements', () => {
-    const base = emptyBoard();
-    const result = buildBoardFromPlacements(base, [
-      {
-        piece: 'I',
-        cells: [
-          { col: 0, row: 16 },
-          { col: 0, row: 17 },
-          { col: 0, row: 18 },
-          { col: 0, row: 19 },
-        ],
-      },
-      {
-        piece: 'O',
-        cells: [
-          { col: 8, row: 18 },
-          { col: 9, row: 18 },
-          { col: 8, row: 19 },
-          { col: 9, row: 19 },
-        ],
-      },
-    ]);
-    expect(result[16]![0]).toBe('I');
-    expect(result[19]![0]).toBe('I');
-    expect(result[18]![8]).toBe('O');
-    expect(result[19]![9]).toBe('O');
-  });
-
-  test('Bag 1 step-by-step matches golden fumen for MS2', () => {
-    const base = emptyBoard();
-    // MS2 full placement data
-    const placements = [
-      { piece: 'I' as PieceType, cells: [{ col: 0, row: 16 }, { col: 0, row: 17 }, { col: 0, row: 18 }, { col: 0, row: 19 }] },
-      { piece: 'T' as PieceType, cells: [{ col: 7, row: 17 }, { col: 6, row: 18 }, { col: 7, row: 18 }, { col: 7, row: 19 }] },
-      { piece: 'J' as PieceType, cells: [{ col: 1, row: 18 }, { col: 1, row: 19 }, { col: 2, row: 19 }, { col: 3, row: 19 }] },
-      { piece: 'S' as PieceType, cells: [{ col: 1, row: 16 }, { col: 1, row: 17 }, { col: 2, row: 17 }, { col: 2, row: 18 }] },
-      { piece: 'Z' as PieceType, cells: [{ col: 4, row: 18 }, { col: 5, row: 18 }, { col: 5, row: 19 }, { col: 6, row: 19 }] },
-      { piece: 'O' as PieceType, cells: [{ col: 8, row: 18 }, { col: 9, row: 18 }, { col: 8, row: 19 }, { col: 9, row: 19 }] },
-    ];
-    const result = buildBoardFromPlacements(base, placements);
-    const fumen = boardToFumen(result);
-    // This should match the golden fumen from the existing tests
-    const seq = getOpenerSequence('ms2', false);
-    const seqFinal = seq.steps[seq.steps.length - 1]!.board;
-    expect(result).toEqual(seqFinal);
-  });
-
-  test('Bag 2 boards grow step-by-step (each step adds 4 cells or overwrites)', async () => {
-    const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const bag2 = getBag2Sequence('honey_cup', false, 0);
-    expect(bag2).not.toBeNull();
-    // Each step should have >= the previous step's filled cells
-    for (let i = 2; i < bag2!.steps.length; i++) {
-      const prevFilled = bag2!.steps[i - 1]!.board.flat().filter(c => c !== null).length;
-      const currFilled = bag2!.steps[i]!.board.flat().filter(c => c !== null).length;
-      expect(currFilled).toBeGreaterThanOrEqual(prevFilled);
-    }
-  });
-
-  test('Bag 2 steps have different highlight cells', async () => {
-    const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
-    const bag2 = getBag2Sequence('ms2', false, 0);
-    expect(bag2).not.toBeNull();
-    // Each Bag 2 step (1-6) should have different newCells
-    const allCellSets = new Set<string>();
-    for (let i = 1; i < bag2!.steps.length; i++) {
-      const key = bag2!.steps[i]!.newCells.map(c => `${c.col},${c.row}`).sort().join('|');
-      expect(allCellSets.has(key)).toBe(false);
-      allCellSets.add(key);
-    }
   });
 });
 

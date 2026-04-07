@@ -3,14 +3,15 @@ import {
   findAllPlacements,
   lockAndClear,
   isPlacementReachable,
-  getColumnHeights,
   createBoard,
+} from '../src/core/engine.ts';
+import {
   isValidPosition,
   getPieceCells,
   hardDrop,
   spawnPiece,
-} from '../src/core/cold-clear.ts';
-import type { Board, ActivePiece } from '../src/core/cold-clear.ts';
+} from '../src/core/srs.ts';
+import type { Board, ActivePiece } from '../src/core/srs.ts';
 import type { PieceType } from '../src/core/types.ts';
 
 // ── Helpers ──
@@ -264,33 +265,6 @@ describe('lockAndClear', () => {
   });
 });
 
-// ── getColumnHeights ──
-
-describe('getColumnHeights', () => {
-  test('empty board has all zero heights', () => {
-    const board = emptyBoard();
-    const heights = getColumnHeights(board);
-    expect(heights).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  });
-
-  test('single block at bottom', () => {
-    const board = emptyBoard();
-    board[19]![3] = 'T';
-    const heights = getColumnHeights(board);
-    expect(heights[3]).toBe(1);
-    expect(heights[0]).toBe(0);
-  });
-
-  test('stacked blocks', () => {
-    const board = emptyBoard();
-    board[19]![0] = 'I';
-    board[18]![0] = 'I';
-    board[17]![0] = 'I';
-    const heights = getColumnHeights(board);
-    expect(heights[0]).toBe(3);
-  });
-});
-
 // ── SRS kick into T-spin slot ──
 
 describe('SRS kick into T-spin slot', () => {
@@ -362,7 +336,8 @@ describe('isPlacementReachable', () => {
   test('reachable placement returns true', () => {
     const board = emptyBoard();
     // T piece at bottom center should be reachable
-    expect(isPlacementReachable(board, 'T', 3, 18, 0)).toBe(true);
+    const cells = getPieceCells({ type: 'T', rotation: 0, col: 3, row: 18 } as ActivePiece);
+    expect(isPlacementReachable(board, 'T', cells)).toBe(true);
   });
 
   test('unreachable placement in sealed cavity returns false', () => {
@@ -373,6 +348,7 @@ describe('isPlacementReachable', () => {
     for (let col = 2; col < 10; col++) board[18]![col] = 'I';
     for (let col = 2; col < 10; col++) board[19]![col] = 'I';
     // O at (0,18) is sealed under the complete rows
-    expect(isPlacementReachable(board, 'O', 0, 18, 0)).toBe(false);
+    const cells = getPieceCells({ type: 'O', rotation: 0, col: 0, row: 18 } as ActivePiece);
+    expect(isPlacementReachable(board, 'O', cells)).toBe(false);
   });
 });

@@ -1,16 +1,11 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { OPENERS } from '../openers/decision.ts';
-import {
-  boardToField,
-  fieldToBoard,
-  placePieceFromCells,
-} from '../core/field-engine.ts';
-import { buildSteps } from '../core/sequence.ts';
+import { buildSteps, emptyBoard, cloneBoard } from '../core/engine.ts';
 
 // ── Types ──
 
-import type { Step } from '../core/sequence.ts';
+import type { Step } from '../core/engine.ts';
 export type { Step };
 export type PlacementStep = Step; // compat alias
 
@@ -50,16 +45,6 @@ export interface VisualizerState {
   bag1End: number;       // index after last Bag 1 step
   currentStep: number;   // 0 = empty board, 1..steps.length
   routeIndex: number;    // -1 = bag1 only, 0+ = bag2 route
-}
-
-// ── Board helpers ──
-
-function emptyBoard(): (PieceType | null)[][] {
-  return Array.from({ length: 20 }, () => Array(10).fill(null) as (PieceType | null)[]);
-}
-
-function cloneBoard(board: (PieceType | null)[][]): (PieceType | null)[][] {
-  return board.map((row) => [...row]);
 }
 
 // ── Placement data ──
@@ -436,45 +421,6 @@ function mirrorPlacementData(data: OpenerPlacementData): OpenerPlacementData {
   };
 }
 
-// ── Build sequence from placement data ──
-
-function buildSequence(
-  openerId: OpenerID,
-  mirror: boolean,
-  holdPiece: PieceType,
-  data: OpenerPlacementData,
-): OpenerSequence {
-  const steps: PlacementStep[] = [];
-  let currentBoard = emptyBoard();
-
-  // Bag 1: step-by-step construction through the physics engine
-  for (const placement of data.placements) {
-    currentBoard = cloneBoard(currentBoard);
-    const field = boardToField(currentBoard);
-    placePieceFromCells(field, placement.piece, placement.cells);
-    currentBoard = fieldToBoard(field);
-    steps.push({
-      piece: placement.piece,
-      board: cloneBoard(currentBoard),
-      newCells: [...placement.cells],
-      hint: placement.hint,
-    });
-  }
-
-  const bag = steps.map((s) => s.piece);
-  // Insert hold piece at a reasonable position (it was held, so not placed)
-  bag.push(holdPiece);
-
-  return {
-    openerId,
-    mirror,
-    bag,
-    holdPiece,
-    steps,
-    tSpinSlots: data.tSpinSlots,
-  };
-}
-
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
 // Bag 2 pieces are placed directly on the Bag 1 final board.
 // Some pieces may visually "float" — this is correct per SRS (reachable via kicks).
@@ -670,7 +616,9 @@ export function getOpenerSequence(openerId: OpenerID, mirror: boolean): OpenerSe
   const holdPiece = mirror ? def.holdPieceMirror : def.holdPiece;
   const rawData = OPENER_PLACEMENT_DATA[openerId];
   const data = mirror ? mirrorPlacementData(rawData) : rawData;
-  return buildSequence(openerId, mirror, holdPiece, data);
+  const steps = buildSteps(data.placements);
+  const bag = [...steps.map(s => s.piece), holdPiece];
+  return { openerId, mirror, bag, holdPiece, steps, tSpinSlots: data.tSpinSlots };
 }
 
 export function createVisualizerState(

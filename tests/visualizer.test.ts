@@ -145,7 +145,7 @@ describe('V1: Opener placement data exists for all 4 openers', () => {
 describe('V1a: findFloatingPieces — piece-level physics', () => {
   test('T-spin overhang is valid piece-level physics', async () => {
     const { createBoard } = await import('../src/core/srs.ts');
-    const { findFloatingCells, findFloatingPieces } = await import('../src/core/field-engine.ts');
+    const { findFloatingCells, findFloatingPieces } = await import('../src/core/engine.ts');
 
     const board = createBoard();
     board[19]![4] = 'T'; // one cell on floor
@@ -164,7 +164,7 @@ describe('V1a: findFloatingPieces — piece-level physics', () => {
 
   test('genuinely floating piece is detected', async () => {
     const { createBoard } = await import('../src/core/srs.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+    const { findFloatingPieces } = await import('../src/core/engine.ts');
 
     const board = createBoard();
     // O piece floating in mid-air (row 10-11, no support below)
@@ -180,7 +180,7 @@ describe('V1a: findFloatingPieces — piece-level physics', () => {
 
   test('piece on floor is not floating', async () => {
     const { createBoard } = await import('../src/core/srs.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+    const { findFloatingPieces } = await import('../src/core/engine.ts');
 
     const board = createBoard();
     board[19]![0] = 'I';
@@ -194,7 +194,7 @@ describe('V1a: findFloatingPieces — piece-level physics', () => {
 
   test('piece resting on different piece is not floating', async () => {
     const { createBoard } = await import('../src/core/srs.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+    const { findFloatingPieces } = await import('../src/core/engine.ts');
 
     const board = createBoard();
     // I piece on floor
@@ -214,7 +214,7 @@ describe('V1a: findFloatingPieces — piece-level physics', () => {
 
   test('two pieces of same type are treated as separate components', async () => {
     const { createBoard } = await import('../src/core/srs.ts');
-    const { findFloatingPieces } = await import('../src/core/field-engine.ts');
+    const { findFloatingPieces } = await import('../src/core/engine.ts');
 
     const board = createBoard();
     // First I piece on floor (cols 0-3)
@@ -834,7 +834,7 @@ describe('V13: Strict engine validation — zero allowOverwrite', () => {
         const { getOpenerSequence, getBag2Routes } =
           await import('../src/modes/visualizer.ts');
         const { boardToField, placePieceFromCells, fieldToBoard } =
-          await import('../src/core/field-engine.ts');
+          await import('../src/core/engine.ts');
 
         const bag1Seq = getOpenerSequence(id, mirror);
         const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;

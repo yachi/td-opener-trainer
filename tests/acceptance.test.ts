@@ -15,7 +15,7 @@ import { describe, test, expect } from 'bun:test';
 import type { OpenerID } from '../src/openers/types.ts';
 import type { PieceType } from '../src/core/types.ts';
 import { getOpenerSequence, getBag2Routes, createVisualizerState } from '../src/modes/visualizer.ts';
-import { findFloatingCells } from '../src/core/field-engine.ts';
+import { findFloatingCells } from '../src/core/engine.ts';
 import { PIECE_DEFINITIONS } from '../src/core/pieces.ts';
 import goldenData from './fixtures/bag2-golden.json';
 
