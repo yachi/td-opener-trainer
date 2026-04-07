@@ -236,6 +236,10 @@ When verifying, navigate to the exact screen. When checking, run the exact comma
 **Correction**: "dont order me, help me"
 **Rule**: When verifying with Playwright, navigate to the exact screen the user needs to see. Don't tell them to do it themselves. I have the tools — use them.
 
+### 41. Use the engine you already have — stop encoding game knowledge as manual data
+**Mistake**: Spent 10 hours adding manual fields (holdInsertIndex, bag1PieceCount, holdPlacement, TST-derived clears) to work around placement conflicts. Each field fixed one bug and created another. The Cold Clear SRS engine (isPlacementReachable, findAllPlacements, lockAndClear) was ported on day 1 and can compute ALL of this automatically: which pieces go first (support ordering), which Bag 1 pieces to include (reachability determines this), where the hold piece fits (BFS finds valid positions).
+**Rule**: Before adding a manual data field to work around a game physics issue, ask: "can the engine compute this?" If the engine has BFS reachability, gravity simulation, and line clears, it can compute placement order, support dependencies, and conflict resolution. Manual data fields are game knowledge that rots — the engine is always correct.
+
 ### 40. Board state is a fold — one engine, zero hacks
 **Mistake**: Maintained separate `getOpenerSequence` (Bag 1) and `getBag2Sequence` (Bag 2) with a manufactured "base board" between them. Every bug (17 fix commits) was in that gap: residual hacks, TST-clear derivation, allowOverwrite bypasses, fixture lookups, 'G' type hack.
 **Discovery**: Board state is a fold over placements. `buildSteps([...bag1, hold, ...bag2])` with `placePieceFromCells` (strict). TST-derived clears handle conflicts (only Gamushiro Form 2 has any — 4 cells). The base board is derived from the fold state at the boundary. No separate construction needed.
