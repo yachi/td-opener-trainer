@@ -1,5 +1,4 @@
 export type PieceType = 'I' | 'T' | 'O' | 'S' | 'Z' | 'L' | 'J';
-export type CellType = PieceType | 'G';
 export type Offset = readonly [col: number, row: number];
 
 export interface PieceDefinition {

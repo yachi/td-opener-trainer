@@ -1,10 +1,10 @@
-import type { PieceType, CellType } from './types';
+import type { PieceType } from './types';
 import { BOARD_WIDTH, BOARD_VISIBLE_HEIGHT } from './types';
 import { PIECE_DEFINITIONS } from './pieces';
 
 // ── Types ──
 
-export type Board = (CellType | null)[][];
+export type Board = (PieceType | null)[][];
 
 export interface ActivePiece {
   type: PieceType;

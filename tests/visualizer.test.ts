@@ -821,42 +821,53 @@ describe('V9: Bag 2 base board matches route residual', () => {
   });
 });
 
-// ── V12: Wiki fixture integrity (residual data completeness) ──
+// ── V12: Base board cells are Bag 1 pieces or hold piece (no unknown types) ──
 
-describe('V12: Wiki fixture has valid residual data for all routes', () => {
+describe('V12: Base board = Bag 1 + hold piece', () => {
   const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
 
-  test('every route has residual with valid coords in bag2-golden.json', async () => {
-    const { getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const bag2Golden = (await import('../src/data/bag2-golden.json')).default;
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
 
-    const issues: string[] = [];
+      test(`${label}: every base board cell is Bag 1 piece or hold piece`, async () => {
+        const { getOpenerSequence, getBag2Sequence, getBag2Routes } =
+          await import('../src/modes/visualizer.ts');
 
-    for (const id of OPENER_IDS) {
-      const routes = getBag2Routes(id, false);
-      const wikiRoutes = bag2Golden[id] as Record<string, { residual?: { col: number; row: number }[] }>;
+        const bag1Seq = getOpenerSequence(id, mirror);
+        const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
+        const holdPiece = bag1Seq.holdPiece;
 
-      for (const route of routes) {
-        const wikiRoute = wikiRoutes[route.routeId];
-        if (!wikiRoute?.residual) {
-          issues.push(`${id}/${route.routeId}: missing residual in fixture`);
-          continue;
-        }
+        const routes = getBag2Routes(id, mirror);
+        if (routes.length === 0) return;
 
-        if (wikiRoute.residual.length < 20 || wikiRoute.residual.length > 30) {
-          issues.push(`${id}/${route.routeId}: unexpected residual count ${wikiRoute.residual.length}`);
-        }
+        const bag2Seq = getBag2Sequence(id, mirror, 0);
+        if (!bag2Seq?.baseBoard) return;
 
-        for (const c of wikiRoute.residual) {
-          if (c.row < 0 || c.row > 19 || c.col < 0 || c.col > 9) {
-            issues.push(`${id}/${route.routeId}: out of bounds (${c.col},${c.row})`);
+        const issues: string[] = [];
+        for (let r = 0; r < 20; r++) {
+          for (let c = 0; c < 10; c++) {
+            const cell = bag2Seq.baseBoard[r]![c];
+            if (cell === null) continue;
+            const bag1Cell = bag1Final[r]![c];
+            if (bag1Cell !== null) {
+              // Should match Bag 1
+              if (cell !== bag1Cell) {
+                issues.push(`(${c},${r}): expected Bag1 ${bag1Cell}, got ${cell}`);
+              }
+            } else {
+              // Not in Bag 1 — must be hold piece
+              if (cell !== holdPiece) {
+                issues.push(`(${c},${r}): expected holdPiece ${holdPiece}, got ${cell}`);
+              }
+            }
           }
         }
-      }
-    }
 
-    if (issues.length > 0) {
-      throw new Error(`Fixture issues:\n${issues.join('\n')}`);
+        if (issues.length > 0) {
+          throw new Error(`${label}: ${issues.length} type mismatches:\n${issues.join('\n')}`);
+        }
+      });
     }
-  });
+  }
 });

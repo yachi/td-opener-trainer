@@ -479,8 +479,6 @@ function buildSequence(
   };
 }
 
-// ── Post-TST residual computation ──
-
 // ── Bag 2 Route Data (from Hard Drop wiki) ──
 // Bag 2 pieces are placed directly on the Bag 1 final board.
 // Some pieces may visually "float" — this is correct per SRS (reachable via kicks).
@@ -762,16 +760,15 @@ export function getBag2Sequence(
 
   const steps: PlacementStep[] = [];
 
-  // Build base board from post-TST residual (wiki data).
-  // The TST fires during Bag 2, clearing 3 rows. The residual shape
-  // is different from the pre-TST Bag 1 board — it extends higher
-  // where Bag 1 pieces survived above the cleared zone.
+  // Build base board: Bag 1 final + held piece at gap-filler position.
+  // The wiki shows Bag 2 pieces on this combined base. Non-Bag1 residual
+  // cells are the held piece from Bag 1 placed as a pre-TST gap-filler.
   const bag1Final = bag1Seq.steps.length > 0
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
-  // Start with Bag 1 final (preserves piece colors), then add extra
-  // residual cells above row 16 that survive the TST clear.
-  // Residual loaded from wiki fixture (bag2-golden.json) — authoritative source.
+  // Build base board: Bag 1 final + held piece at gap-filler position.
+  // The wiki shows Bag 2 pieces on this combined base (no TST simulation).
+  // Non-Bag1 residual cells are the held piece from Bag 1 placed as a gap-filler.
   const baseBoard = cloneBoard(bag1Final);
   const wikiRoutes = (bag2GoldenData as Record<string, Record<string, { residual?: { col: number; row: number }[] }>>)[openerId];
   const rawResidual = wikiRoutes?.[route.routeId]?.residual ?? [];
@@ -780,7 +777,7 @@ export function getBag2Sequence(
     : rawResidual;
   for (const cell of residualCells) {
     if (baseBoard[cell.row]![cell.col] === null) {
-      baseBoard[cell.row]![cell.col] = bag1Final[cell.row]?.[cell.col] ?? 'G';
+      baseBoard[cell.row]![cell.col] = bag1Final[cell.row]?.[cell.col] ?? bag1Seq.holdPiece;
     }
   }
   let currentBoard = baseBoard;

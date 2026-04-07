@@ -22,7 +22,7 @@ export const LAYOUT = {
 } as const;
 
 export const COLORS = {
-  pieces: { I: '#00E5FF', T: '#AA00FF', O: '#FFD600', S: '#69F0AE', Z: '#FF1744', L: '#FF9100', J: '#2979FF', G: '#555577' } as Record<string, string>,
+  pieces: { I: '#00E5FF', T: '#AA00FF', O: '#FFD600', S: '#69F0AE', Z: '#FF1744', L: '#FF9100', J: '#2979FF' } as Record<PieceType, string>,
   ghostOpacity: 0.3,
   boardBg: '#0A0A0A',
   gridLine: '#1A1A2E',
