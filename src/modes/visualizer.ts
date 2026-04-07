@@ -6,7 +6,6 @@ import {
   fieldToBoard,
   placePieceFromCells,
 } from '../core/field-engine.ts';
-import bag2GoldenData from '../data/bag2-golden.json';
 
 // ── Types ──
 
@@ -39,6 +38,7 @@ export interface Bag2Route {
   condition: string;        // 'S first among {I,O,S}'
   conditionPieces: PieceType[];
   placements: RawPlacement[];
+  holdPlacement: RawPlacement | null; // Held piece gap-filler (placed on Bag 1 to form base board)
   tstStepIndex: number;     // which step fires the TST
 }
 
@@ -513,6 +513,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'O', cells: [{ col: 6, row: 14 }, { col: 7, row: 14 }, { col: 6, row: 15 }, { col: 7, row: 15 }], hint: 'O flat, cols 6-7' },
       { piece: 'I', cells: [{ col: 0, row: 13 }, { col: 1, row: 13 }, { col: 2, row: 13 }, { col: 3, row: 13 }], hint: 'I horizontal, cols 0-3' },
     ],
+    holdPlacement: null,
     tstStepIndex: -1,
   },
   {
@@ -528,6 +529,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'O', cells: [{ col: 1, row: 14 }, { col: 2, row: 14 }, { col: 1, row: 15 }, { col: 2, row: 15 }], hint: 'O flat, cols 1-2' },
       { piece: 'J', cells: [{ col: 1, row: 13 }, { col: 2, row: 13 }, { col: 3, row: 13 }, { col: 3, row: 14 }], hint: 'J horizontal, cols 1-3' },
     ],
+    holdPlacement: null,
     tstStepIndex: -1,
   },
 ];
@@ -547,6 +549,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }, { col: 9, row: 15 }], hint: 'I vertical, col 9, right wall' },
       { piece: 'L', cells: [{ col: 0, row: 12 }, { col: 1, row: 12 }, { col: 1, row: 13 }, { col: 1, row: 14 }], hint: 'L vertical, cols 0-1' },
     ],
+    holdPlacement: { piece: 'L', cells: [{ col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }, { col: 1, row: 15 }], hint: 'Hold L, left wall gap-filler' },
     tstStepIndex: -1,
   },
   {
@@ -562,6 +565,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'L', cells: [{ col: 1, row: 13 }, { col: 2, row: 13 }, { col: 3, row: 13 }, { col: 1, row: 14 }], hint: 'L horizontal, cols 1-3' },
       { piece: 'I', cells: [{ col: 0, row: 12 }, { col: 1, row: 12 }, { col: 2, row: 12 }, { col: 3, row: 12 }], hint: 'I horizontal, cols 0-3' },
     ],
+    holdPlacement: { piece: 'L', cells: [{ col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }, { col: 1, row: 15 }], hint: 'Hold L, left wall gap-filler' },
     tstStepIndex: -1,
   },
 ];
@@ -581,6 +585,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'J', cells: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 7, row: 15 }, { col: 8, row: 15 }], hint: 'J vertical, cols 7-8' },
       { piece: 'O', cells: [{ col: 6, row: 13 }, { col: 7, row: 13 }, { col: 6, row: 14 }, { col: 7, row: 14 }], hint: 'O flat, cols 6-7' },
     ],
+    holdPlacement: { piece: 'Z', cells: [{ col: 7, row: 16 }, { col: 8, row: 16 }, { col: 8, row: 17 }, { col: 9, row: 17 }], hint: 'Hold Z, right side gap-filler' },
     tstStepIndex: -1,
   },
   {
@@ -596,6 +601,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'J', cells: [{ col: 6, row: 14 }, { col: 7, row: 14 }, { col: 8, row: 14 }, { col: 8, row: 15 }], hint: 'J horizontal, cols 6-8' },
       { piece: 'Z', cells: [{ col: 2, row: 12 }, { col: 1, row: 13 }, { col: 2, row: 13 }, { col: 1, row: 14 }], hint: 'Z vertical, cols 1-2' },
     ],
+    holdPlacement: { piece: 'Z', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 1, row: 16 }, { col: 2, row: 16 }], hint: 'Hold Z, left side gap-filler' },
     tstStepIndex: -1,
   },
 ];
@@ -615,6 +621,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 0, row: 12 }, { col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }], hint: 'I vertical, col 0, left wall' },
       { piece: 'O', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 8, row: 13 }, { col: 9, row: 13 }], hint: 'O flat, cols 8-9' },
     ],
+    holdPlacement: null,
     tstStepIndex: -1,
   },
   {
@@ -630,6 +637,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 0, row: 12 }, { col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }], hint: 'I vertical, col 0, left wall' },
       { piece: 'L', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }], hint: 'L vertical, cols 8-9' },
     ],
+    holdPlacement: { piece: 'L', cells: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'Hold L, right side gap-filler' },
     tstStepIndex: -1,
   },
 ];
@@ -651,6 +659,11 @@ function mirrorBag2Route(route: Bag2Route): Bag2Route {
       cells: p.cells.map((c) => ({ col: 9 - c.col, row: c.row })),
       hint: p.hint + ' (mirrored)',
     })),
+    holdPlacement: route.holdPlacement ? {
+      piece: mirrorPiece(route.holdPlacement.piece),
+      cells: route.holdPlacement.cells.map((c) => ({ col: 9 - c.col, row: c.row })),
+      hint: route.holdPlacement.hint + ' (mirrored)',
+    } : null,
   };
 }
 
@@ -760,24 +773,20 @@ export function getBag2Sequence(
 
   const steps: PlacementStep[] = [];
 
-  // Build base board: Bag 1 final + held piece at gap-filler position.
-  // The wiki shows Bag 2 pieces on this combined base. Non-Bag1 residual
-  // cells are the held piece from Bag 1 placed as a pre-TST gap-filler.
+  // Build base board: Bag 1 final + held piece placed by engine.
+  // Every cell is engine-computed — no external fixture lookup, no ?? fallback.
   const bag1Final = bag1Seq.steps.length > 0
     ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
     : emptyBoard();
-  // Build base board: Bag 1 final + held piece at gap-filler position.
-  // The wiki shows Bag 2 pieces on this combined base (no TST simulation).
-  // Non-Bag1 residual cells are the held piece from Bag 1 placed as a gap-filler.
   const baseBoard = cloneBoard(bag1Final);
-  const wikiRoutes = (bag2GoldenData as Record<string, Record<string, { residual?: { col: number; row: number }[] }>>)[openerId];
-  const rawResidual = wikiRoutes?.[route.routeId]?.residual ?? [];
-  const residualCells = mirror
-    ? rawResidual.map(c => ({ col: 9 - c.col, row: c.row }))
-    : rawResidual;
-  for (const cell of residualCells) {
-    if (baseBoard[cell.row]![cell.col] === null) {
-      baseBoard[cell.row]![cell.col] = bag1Final[cell.row]?.[cell.col] ?? bag1Seq.holdPiece;
+  if (route.holdPlacement) {
+    const field = boardToField(baseBoard);
+    placePieceFromCells(field, route.holdPlacement.piece, route.holdPlacement.cells, { allowOverwrite: true });
+    const placed = fieldToBoard(field);
+    for (let r = 0; r < 20; r++) {
+      for (let c = 0; c < 10; c++) {
+        if (placed[r]![c] !== null) baseBoard[r]![c] = placed[r]![c];
+      }
     }
   }
   let currentBoard = baseBoard;

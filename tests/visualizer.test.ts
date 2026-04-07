@@ -681,7 +681,7 @@ describe('V7: Bag 2 routes', () => {
 // ── V10: Complete Board Oracle Test ──
 
 describe('V10: Bag 2 final board matches Hard Drop wiki golden data', () => {
-  const golden = require('../src/data/bag2-golden.json');
+  const golden = require('./fixtures/bag2-golden.json');
   const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
 
   for (const id of OPENER_IDS) {
@@ -784,7 +784,7 @@ describe('V11: Bag 1→2 transition preserves Bag 1 cells in baseBoard', () => {
 describe('V9: Bag 2 base board matches route residual', () => {
   test('every residual cell is present in Bag 2 step 0 for all openers', async () => {
     const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
-    const bag2Golden = (await import('../src/data/bag2-golden.json')).default;
+    const bag2Golden = (await import('./fixtures/bag2-golden.json')).default;
     const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
     const missing: string[] = [];
 
