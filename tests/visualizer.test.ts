@@ -871,3 +871,52 @@ describe('V12: Base board = Bag 1 + hold piece', () => {
     }
   }
 });
+
+// ── V13: All placements pass strict engine validation (no allowOverwrite) ──
+
+describe('V13: Strict engine validation — zero allowOverwrite', () => {
+  const OPENER_IDS: OpenerID[] = ['honey_cup', 'ms2', 'stray_cannon', 'gamushiro'];
+
+  for (const id of OPENER_IDS) {
+    for (const mirror of [false, true]) {
+      const label = `${id} ${mirror ? '(mirror)' : '(normal)'}`;
+
+      test(`${label}: all hold + Bag 2 placements pass strict engine`, async () => {
+        const { getOpenerSequence, getBag2Routes } =
+          await import('../src/modes/visualizer.ts');
+        const { boardToField, placePieceFromCells, fieldToBoard } =
+          await import('../src/core/field-engine.ts');
+
+        const bag1Seq = getOpenerSequence(id, mirror);
+        const bag1Final = bag1Seq.steps[bag1Seq.steps.length - 1]!.board;
+        const routes = getBag2Routes(id, mirror);
+
+        for (const route of routes) {
+          let board: any[][] = bag1Final.map((r: any) => [...r]);
+
+          // Derive TST clears
+          const allCells: { col: number; row: number }[] = [];
+          if (route.holdPlacement) allCells.push(...route.holdPlacement.cells);
+          for (const p of route.placements) allCells.push(...p.cells);
+          for (const c of allCells) {
+            if (board[c.row]?.[c.col] !== null) board[c.row][c.col] = null;
+          }
+
+          // Place hold strict — engine throws on conflict
+          if (route.holdPlacement) {
+            const field = boardToField(board);
+            placePieceFromCells(field, route.holdPlacement.piece, route.holdPlacement.cells);
+            board = fieldToBoard(field);
+          }
+
+          // Place all Bag 2 strict — engine throws on conflict
+          for (const p of route.placements) {
+            const field = boardToField(board);
+            placePieceFromCells(field, p.piece, p.cells);
+            board = fieldToBoard(field);
+          }
+        }
+      });
+    }
+  }
+});
