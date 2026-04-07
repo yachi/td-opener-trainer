@@ -199,9 +199,9 @@ function buildOnboardingRenderState(state: AppState): OnboardingRenderState {
 // ── Visualizer Mode Renderer ──
 
 function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: VisualizerState): void {
-  const { sequence, currentStep } = vizState;
-  const inBag2 = vizState.bag === 2;
-  const activeSequence = inBag2 && vizState.bag2Sequence ? vizState.bag2Sequence : sequence;
+  const { steps, currentStep, openerId, mirror, bag1End } = vizState;
+  const inBag2 = currentStep > bag1End;
+  const hasRoute = vizState.routeIndex >= 0;
   const FONT = '-apple-system, sans-serif';
   const boardX = 120;
   const boardY = 60;
@@ -211,8 +211,8 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   const visibleRows = 8;
 
   // Title
-  const openerDef = OPENERS[sequence.openerId];
-  const title = `${openerDef.nameEn} ${sequence.mirror ? '(Mirror)' : ''}`;
+  const openerDef = OPENERS[openerId];
+  const title = `${openerDef.nameEn} ${mirror ? '(Mirror)' : ''}`;
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `bold 20px ${FONT}`;
   ctx.textAlign = 'center';
@@ -224,9 +224,9 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   ctx.fillText(`(${openerDef.nameCn})`, CANVAS_W / 2, 75);
 
   // Bag 2 route label and condition
-  const bag2Routes = getBag2Routes(sequence.openerId, sequence.mirror);
-  if (inBag2 && bag2Routes.length > 0) {
-    const route = bag2Routes[vizState.bag2RouteIndex];
+  const bag2Routes = getBag2Routes(openerId, mirror);
+  if (inBag2 && hasRoute && bag2Routes.length > 0) {
+    const route = bag2Routes[vizState.routeIndex];
     if (route) {
       ctx.fillStyle = '#CCAA44';
       ctx.font = `bold 13px ${FONT}`;
@@ -237,13 +237,15 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
     }
   }
 
-  // Step indicator
-  const stepTotal = activeSequence.steps.length;
+  // Step indicator — derive local step within bag
+  const bag2Start = inBag2 ? bag1End + (vizState.routeIndex >= 0 && bag2Routes.length > 0 && bag2Routes[vizState.routeIndex]?.routeLabel ? 1 : 0) : 0;
+  const displayStep = inBag2 ? currentStep - bag1End : currentStep;
+  const displayTotal = inBag2 ? steps.length - bag1End : bag1End;
   const bagLabel = inBag2 ? 'Bag 2' : 'Bag 1';
   ctx.fillStyle = '#B0B0D0';
   ctx.font = `14px ${FONT}`;
   const stepY = inBag2 ? 122 : 95;
-  ctx.fillText(`${bagLabel} · Step ${currentStep} / ${stepTotal}`, CANVAS_W / 2, stepY);
+  ctx.fillText(`${bagLabel} · Step ${displayStep} / ${displayTotal}`, CANVAS_W / 2, stepY);
 
   // Board background
   const boardTopY = 120;
@@ -273,33 +275,21 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   ctx.lineWidth = 2;
   ctx.strokeRect(boardX, boardTopY, boardW, boardH);
 
-  // Get the current board state
+  // Get the current board state — one line, no special cases
   const board = currentStep === 0
-    ? (inBag2 && activeSequence.baseBoard
-        ? activeSequence.baseBoard
-        : (inBag2 && activeSequence.steps.length > 0
-            ? activeSequence.steps[0]!.board
-            : Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null))))
-    : activeSequence.steps[currentStep - 1]!.board;
+    ? Array.from({ length: 20 }, () => new Array<PieceType | null>(10).fill(null))
+    : steps[currentStep - 1]!.board;
 
-  // Get new cells for highlighting (only when step > 0)
-  const newCells = currentStep > 0 ? activeSequence.steps[currentStep - 1]!.newCells : [];
+  // Get new cells for highlighting
+  const newCells = currentStep > 0 ? steps[currentStep - 1]!.newCells : [];
 
-  // Build a set of Bag 1 cells for dimming when in Bag 2
-  // These are the base board cells (Bag 1 final + residual)
+  // Bag 1 cells for dimming — derived from the board state at bag1End
   const bag1CellSet = new Set<string>();
-  if (inBag2) {
-    const bag1Board = activeSequence.baseBoard
-      ?? (activeSequence.steps.length > 0 ? activeSequence.steps[0]!.board : null);
-    if (bag1Board) {
-      for (let r = 0; r < 20; r++) {
-        for (let c = 0; c < 10; c++) {
-          if (bag1Board[r]?.[c] !== null) {
-            bag1CellSet.add(`${r},${c}`);
-          }
-        }
-      }
-    }
+  if (inBag2 && bag1End > 0) {
+    const bag1Final = steps[bag1End - 1]!.board;
+    for (let r = 0; r < 20; r++)
+      for (let c = 0; c < 10; c++)
+        if (bag1Final[r]?.[c] !== null) bag1CellSet.add(`${r},${c}`);
   }
 
   // Draw filled cells (bottom 8 rows = rows 12-19)
@@ -351,11 +341,12 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   ctx.strokeStyle = COLORS.boardBorder;
   ctx.lineWidth = 1;
   ctx.strokeRect(holdX, holdY, 80, 72);
-  drawPieceInBox(ctx, sequence.holdPiece, holdX, holdY, 80, 72, 14);
+  const holdPiece = mirror ? openerDef.holdPieceMirror : openerDef.holdPiece;
+  drawPieceInBox(ctx, holdPiece, holdX, holdY, 80, 72, 14);
 
   // Current step hint
   if (currentStep > 0) {
-    const step = activeSequence.steps[currentStep - 1]!;
+    const step = steps[currentStep - 1]!;
     const hintY = boardTopY + boardH + 20;
 
     if (step.newCells.length > 0) {
@@ -409,7 +400,7 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   let btnX = (CANVAS_W - totalBtnW) / 2;
 
   for (let i = 0; i < openerIds.length; i++) {
-    const isActive = openerIds[i] === sequence.openerId;
+    const isActive = openerIds[i] === openerId;
     ctx.fillStyle = isActive ? '#2A2A5C' : '#1A1A3A';
     roundRect(ctx, btnX, btnY, btnW, 32, 6);
     ctx.fill();
@@ -436,7 +427,7 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
 
     for (let i = 0; i < bag2Routes.length; i++) {
       const route = bag2Routes[i]!;
-      const isActive = inBag2 && vizState.bag2RouteIndex === i;
+      const isActive = inBag2 && vizState.routeIndex === i;
       ctx.fillStyle = isActive ? '#3A3A2C' : '#1A1A3A';
       roundRect(ctx, routeBtnX, routeBtnY, routeBtnW, 28, 6);
       ctx.fill();
@@ -456,7 +447,7 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
   }
 
   // Status bar
-  const statusStepTotal = inBag2 ? activeSequence.steps.length : sequence.steps.length;
+  const statusStepTotal = inBag2 ? steps.length - bag1End : bag1End;
   const statusBag = inBag2 ? 'Bag 2' : 'Bag 1';
   drawStatusBar(ctx, `${title} · ${statusBag} · Step ${currentStep}/${statusStepTotal} · ←→: step · M: mirror`);
 }

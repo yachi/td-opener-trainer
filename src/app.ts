@@ -18,7 +18,6 @@ import {
 import type { OnboardingProgress } from './modes/onboarding.ts';
 import { OPENERS } from './openers/decision.ts';
 import {
-  getOpenerSequence,
   createVisualizerState,
   getBag2Routes,
 } from './modes/visualizer.ts';
@@ -76,7 +75,7 @@ const state: FullAppState = {
   stats: getDisplayStats(loadQuizStats()),
   onboarding: onboardingProgress,
   onboardingDrill: createOnboardingDrill(),
-  visualizer: createVisualizerState(getOpenerSequence('ms2', false)),
+  visualizer: createVisualizerState('ms2', false),
   drill: null,
   drillSelector: { selectedIndex: 0 },
 };
@@ -598,9 +597,7 @@ canvas.addEventListener('click', (e) => {
         const bx = startX + i * (btnW + 8);
         if (x >= bx && x <= bx + btnW) {
           const viz = state.visualizer!;
-          state.visualizer = createVisualizerState(
-            getOpenerSequence(openerIds[i]!, viz.sequence.mirror)
-          );
+          state.visualizer = createVisualizerState(openerIds[i]!, viz.mirror);
           dirty = true;
           return;
         }

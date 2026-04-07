@@ -2,10 +2,11 @@ import type { OpenerID } from '../openers/types.ts';
 import type { VisualizerState } from '../modes/visualizer.ts';
 import {
   createVisualizerState,
-  getOpenerSequence,
   stepForward,
   stepBackward,
-  switchBag2Route,
+  switchRoute,
+  switchOpener,
+  toggleMirror,
   getBag2Routes,
 } from '../modes/visualizer.ts';
 
@@ -35,35 +36,24 @@ export function dispatchVisualizerAction(
       const idx = action === 'option_1' ? 0
         : action === 'option_2' ? 1
         : action === 'option_3' ? 2 : 3;
-      const id = OPENER_IDS[idx]!;
-      container.visualizer = createVisualizerState(
-        getOpenerSequence(id, viz.sequence.mirror),
-      );
+      container.visualizer = switchOpener(OPENER_IDS[idx]!, viz.mirror);
       return true;
     }
     case 'option_5':
     case 'option_6': {
       const routeIdx = action === 'option_5' ? 0 : 1;
-      const routes = getBag2Routes(viz.sequence.openerId, viz.sequence.mirror);
+      const routes = getBag2Routes(viz.openerId, viz.mirror);
       if (routeIdx < routes.length) {
-        switchBag2Route(viz, routeIdx);
-        if (viz.bag !== 2) {
-          viz.bag = 2;
-          viz.currentStep = 0;
-        }
+        container.visualizer = switchRoute(viz, routeIdx);
         return true;
       }
       return false;
     }
-    case 'toggle_mode': {
-      const seq = getOpenerSequence(viz.sequence.openerId, !viz.sequence.mirror);
-      container.visualizer = createVisualizerState(seq);
+    case 'toggle_mode':
+      container.visualizer = toggleMirror(viz);
       return true;
-    }
     case 'reset_stats':
-      container.visualizer = createVisualizerState(
-        getOpenerSequence(viz.sequence.openerId, viz.sequence.mirror),
-      );
+      container.visualizer = createVisualizerState(viz.openerId, viz.mirror);
       return true;
     default:
       return false;

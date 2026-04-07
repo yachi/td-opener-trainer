@@ -10,25 +10,21 @@ import { buildSteps } from '../core/sequence.ts';
 
 // ── Types ──
 
-export interface PlacementStep {
-  piece: PieceType;
-  board: (PieceType | null)[][];
-  newCells: { col: number; row: number }[];
-  hint: string;
-}
+import type { Step } from '../core/sequence.ts';
+export type { Step };
+export type PlacementStep = Step; // compat alias
 
+/** Compat type for getOpenerSequence — used by drill.ts and tests */
 export interface OpenerSequence {
   openerId: OpenerID;
   mirror: boolean;
   bag: PieceType[];
   holdPiece: PieceType;
-  steps: PlacementStep[];
+  steps: Step[];
   tSpinSlots: {
     tst: { col: number; row: number; rotation: number } | null;
     tsd: { col: number; row: number; rotation: number } | null;
   };
-  /** Base board for Bag 2: Bag 1 final + residual cells merged. Used as step 0 display. */
-  baseBoard?: (PieceType | null)[][];
 }
 
 // ── Bag 2 Route Types ──
@@ -48,13 +44,12 @@ export interface Bag2Data {
 }
 
 export interface VisualizerState {
-  sequence: OpenerSequence;
-  currentStep: number;
-  playing: boolean;
-  // Bag 2 navigation
-  bag: 1 | 2;
-  bag2RouteIndex: number;
-  bag2Sequence: OpenerSequence | null;
+  openerId: OpenerID;
+  mirror: boolean;
+  steps: Step[];         // flat: bag1 + hold? + bag2
+  bag1End: number;       // index after last Bag 1 step
+  currentStep: number;   // 0 = empty board, 1..steps.length
+  routeIndex: number;    // -1 = bag1 only, 0+ = bag2 route
 }
 
 // ── Board helpers ──
@@ -678,79 +673,62 @@ export function getOpenerSequence(openerId: OpenerID, mirror: boolean): OpenerSe
   return buildSequence(openerId, mirror, holdPiece, data);
 }
 
-export function createVisualizerState(sequence: OpenerSequence): VisualizerState {
+export function createVisualizerState(
+  openerId: OpenerID,
+  mirror: boolean,
+  routeIndex: number = 0,
+): VisualizerState {
+  const rawData = OPENER_PLACEMENT_DATA[openerId];
+  const data = mirror ? mirrorPlacementData(rawData) : rawData;
+  const bag1Placements: RawPlacement[] = data.placements;
+
+  const routes = getBag2Routes(openerId, mirror);
+  const route = routes[routeIndex] ?? null;
+
+  const allPlacements: RawPlacement[] = route
+    ? [...bag1Placements, ...(route.holdPlacement ? [route.holdPlacement] : []), ...route.placements]
+    : [...bag1Placements];
+
   return {
-    sequence,
+    openerId,
+    mirror,
+    steps: buildSteps(allPlacements),
+    bag1End: bag1Placements.length,
     currentStep: 0,
-    playing: false,
-    bag: 1,
-    bag2RouteIndex: 0,
-    bag2Sequence: null,
+    routeIndex: route ? routeIndex : -1,
   };
 }
 
 export function stepForward(state: VisualizerState): void {
-  if (state.bag === 1) {
-    const maxStep = state.sequence.steps.length;
-    if (state.currentStep < maxStep) {
-      state.currentStep++;
-    } else {
-      // At the end of Bag 1 — try to transition to Bag 2
-      const routes = getBag2Routes(state.sequence.openerId, state.sequence.mirror);
-      if (routes.length > 0) {
-        const bag2Seq = getBag2Sequence(
-          state.sequence.openerId,
-          state.sequence.mirror,
-          state.bag2RouteIndex,
-        );
-        if (bag2Seq) {
-          state.bag = 2;
-          state.bag2Sequence = bag2Seq;
-          state.currentStep = 0;
-        }
-      }
-    }
-  } else if (state.bag === 2 && state.bag2Sequence) {
-    const maxStep = state.bag2Sequence.steps.length;
-    if (state.currentStep < maxStep) {
-      state.currentStep++;
-    }
-  }
+  if (state.currentStep < state.steps.length) state.currentStep++;
 }
 
 export function stepBackward(state: VisualizerState): void {
-  if (state.bag === 2) {
-    if (state.currentStep > 0) {
-      state.currentStep--;
-    } else {
-      // At step 0 of Bag 2 — go back to last Bag 1 step
-      state.bag = 1;
-      state.bag2Sequence = null;
-      state.currentStep = state.sequence.steps.length;
-    }
-  } else {
-    if (state.currentStep > 0) {
-      state.currentStep--;
-    }
-  }
+  if (state.currentStep > 0) state.currentStep--;
 }
 
 export function jumpToStep(state: VisualizerState, step: number): void {
-  const maxStep = state.sequence.steps.length;
-  state.currentStep = Math.max(0, Math.min(step, maxStep));
+  state.currentStep = Math.max(0, Math.min(step, state.steps.length));
 }
 
 export function getCurrentBoard(state: VisualizerState): (PieceType | null)[][] {
-  if (state.bag === 2 && state.bag2Sequence) {
-    if (state.currentStep === 0) {
-      return state.bag2Sequence.baseBoard ?? state.bag2Sequence.steps[0]!.board;
-    }
-    return state.bag2Sequence.steps[state.currentStep - 1]!.board;
-  }
-  if (state.currentStep === 0) {
-    return emptyBoard();
-  }
-  return state.sequence.steps[state.currentStep - 1]!.board;
+  return state.currentStep === 0
+    ? emptyBoard()
+    : state.steps[state.currentStep - 1]!.board;
+}
+
+export function switchRoute(state: VisualizerState, routeIndex: number): VisualizerState {
+  const newState = createVisualizerState(state.openerId, state.mirror, routeIndex);
+  newState.currentStep = newState.bag1End; // jump to Bag 2 start
+  return newState;
+}
+
+export function switchOpener(openerId: OpenerID, mirror: boolean): VisualizerState {
+  return createVisualizerState(openerId, mirror);
+}
+
+export function toggleMirror(state: VisualizerState): VisualizerState {
+  return createVisualizerState(state.openerId, !state.mirror, Math.max(0, state.routeIndex));
 }
 
 // ── Bag 2 Public API ──
@@ -761,61 +739,27 @@ export function getBag2Routes(openerId: OpenerID, mirror: boolean): Bag2Route[] 
   return mirror ? data.routes.map(mirrorBag2Route) : [...data.routes];
 }
 
-export function getBag2Sequence(
-  openerId: OpenerID,
-  mirror: boolean,
-  routeIndex: number,
-): OpenerSequence | null {
+
+/** Compat: build Bag 2 steps for tests that need them. Returns steps + baseBoard. */
+export function getBag2Sequence(openerId: OpenerID, mirror: boolean, routeIndex: number) {
   const routes = getBag2Routes(openerId, mirror);
   if (routeIndex < 0 || routeIndex >= routes.length) return null;
   const route = routes[routeIndex]!;
+  const state = createVisualizerState(openerId, mirror, routeIndex);
+  // Skip hold step — only return route placement steps
+  const holdOffset = route.holdPlacement ? 1 : 0;
+  const bag2Steps = state.steps.slice(state.bag1End + holdOffset);
+  const baseBoardIdx = state.bag1End + holdOffset - 1;
+  const baseBoard = baseBoardIdx >= 0 ? state.steps[baseBoardIdx]!.board : emptyBoard();
   const bag1Seq = getOpenerSequence(openerId, mirror);
-
-  // Build as one fold: Bag 1 + hold + Bag 2, all through the engine.
-  // buildSteps handles TST-derived clears for conflicting cells.
-  const bag1Placements = bag1Seq.steps.map(s => ({
-    piece: s.piece, cells: s.newCells, hint: s.hint,
-  }));
-  const allPlacements = [
-    ...bag1Placements,
-    ...(route.holdPlacement ? [route.holdPlacement] : []),
-    ...route.placements,
-  ];
-  const allSteps = buildSteps(allPlacements);
-
-  // Split: Bag 2 steps start after Bag 1 + hold
-  const bag2Start = bag1Placements.length + (route.holdPlacement ? 1 : 0);
-  const steps = allSteps.slice(bag2Start);
-
-  // Base board = state just before first Bag 2 piece
-  const baseBoard = bag2Start > 0
-    ? cloneBoard(allSteps[bag2Start - 1]!.board)
-    : emptyBoard();
-
   return {
-    openerId,
-    mirror,
-    bag: route.placements.map(p => p.piece),
-    holdPiece: bag1Seq.holdPiece,
-    steps,
+    openerId, mirror,
+    bag: routes[routeIndex]!.placements.map(p => p.piece),
+    holdPiece: mirror ? OPENERS[openerId].holdPieceMirror : OPENERS[openerId].holdPiece,
+    steps: bag2Steps,
     tSpinSlots: bag1Seq.tSpinSlots,
     baseBoard,
   };
-}
-
-export function switchBag2Route(state: VisualizerState, routeIndex: number): void {
-  const routes = getBag2Routes(state.sequence.openerId, state.sequence.mirror);
-  if (routeIndex < 0 || routeIndex >= routes.length) return;
-  state.bag2RouteIndex = routeIndex;
-  const bag2Seq = getBag2Sequence(
-    state.sequence.openerId,
-    state.sequence.mirror,
-    routeIndex,
-  );
-  state.bag2Sequence = bag2Seq;
-  if (state.bag === 2) {
-    state.currentStep = 0;
-  }
 }
 
 export function getAvailableOpeners(): { id: OpenerID; nameEn: string; nameCn: string }[] {

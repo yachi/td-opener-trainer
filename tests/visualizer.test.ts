@@ -288,34 +288,29 @@ describe('V1b: Placement order respects gravity (no floating pieces)', () => {
 
 describe('V2: Visualizer state machine', () => {
   test('createVisualizerState starts at step 0 (empty board)', async () => {
-    const { createVisualizerState, getOpenerSequence } = await import('../src/modes/visualizer.ts');
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const { createVisualizerState } = await import('../src/modes/visualizer.ts');
+    const state = createVisualizerState('ms2', false);
     expect(state.currentStep).toBe(0);
-    expect(state.playing).toBe(false);
+    expect(state.openerId).toBe('ms2');
   });
 
-  test('stepForward advances from 0 through all Bag 1 steps', async () => {
-    const { createVisualizerState, stepForward, getOpenerSequence } = await import('../src/modes/visualizer.ts');
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
-    const totalSteps = seq.steps.length;
+  test('stepForward advances through unified sequence', async () => {
+    const { createVisualizerState, stepForward } = await import('../src/modes/visualizer.ts');
+    const state = createVisualizerState('ms2', false);
 
-    for (let i = 1; i <= totalSteps; i++) {
+    for (let i = 1; i <= state.steps.length; i++) {
       stepForward(state);
       expect(state.currentStep).toBe(i);
     }
-    expect(state.bag).toBe(1);
-    // One more step transitions to Bag 2 (all openers now have Bag 2 routes)
+    // Can't step past the end
     stepForward(state);
-    expect(state.bag).toBe(2);
-    expect(state.currentStep).toBe(0);
+    expect(state.currentStep).toBe(state.steps.length);
   });
 
   test('stepBackward goes from 6 to 0, then stops', async () => {
     const { createVisualizerState, stepForward, stepBackward, getOpenerSequence } = await import('../src/modes/visualizer.ts');
     const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const state = createVisualizerState('ms2', false);
 
     // Go to the end
     for (let i = 0; i < 6; i++) stepForward(state);
@@ -332,9 +327,8 @@ describe('V2: Visualizer state machine', () => {
   });
 
   test('jumpToStep clamps to valid range', async () => {
-    const { createVisualizerState, jumpToStep, getOpenerSequence } = await import('../src/modes/visualizer.ts');
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const { createVisualizerState, jumpToStep } = await import('../src/modes/visualizer.ts');
+    const state = createVisualizerState('ms2', false);
 
     jumpToStep(state, 3);
     expect(state.currentStep).toBe(3);
@@ -343,13 +337,13 @@ describe('V2: Visualizer state machine', () => {
     expect(state.currentStep).toBe(0);
 
     jumpToStep(state, 99);
-    expect(state.currentStep).toBe(6);
+    expect(state.currentStep).toBe(state.steps.length);
   });
 
   test('getCurrentBoard returns empty grid at step 0, filled grid at step N', async () => {
     const { createVisualizerState, stepForward, getCurrentBoard, getOpenerSequence } = await import('../src/modes/visualizer.ts');
     const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const state = createVisualizerState('ms2', false);
 
     // Step 0: empty board
     const emptyBoard = getCurrentBoard(state);
@@ -449,19 +443,17 @@ describe('V5: User can switch between openers', () => {
   });
 
   test('switching opener resets visualizer state to step 0', async () => {
-    const { createVisualizerState, stepForward, getOpenerSequence } = await import('../src/modes/visualizer.ts');
+    const { createVisualizerState, stepForward } = await import('../src/modes/visualizer.ts');
 
-    const seq1 = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq1);
+    const state = createVisualizerState('ms2', false);
     stepForward(state);
     stepForward(state);
     expect(state.currentStep).toBe(2);
 
     // Switch to a different opener
-    const seq2 = getOpenerSequence('honey_cup', false);
-    const newState = createVisualizerState(seq2);
+    const newState = createVisualizerState('honey_cup', false);
     expect(newState.currentStep).toBe(0);
-    expect(newState.sequence.openerId).toBe('honey_cup');
+    expect(newState.openerId).toBe('honey_cup');
   });
 });
 
@@ -565,113 +557,71 @@ describe('V7: Bag 2 routes', () => {
       stepForward,
     } = await import('../src/modes/visualizer.ts');
 
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const state = createVisualizerState('ms2', false);
+    const bag1End = state.bag1End;
 
-    // Advance to end of Bag 1
-    for (let i = 0; i < seq.steps.length; i++) {
-      stepForward(state);
-    }
-    expect(state.currentStep).toBe(seq.steps.length);
-    expect(state.bag).toBe(1);
+    // Advance through Bag 1
+    for (let i = 0; i < bag1End; i++) stepForward(state);
+    expect(state.currentStep).toBe(bag1End);
 
-    // One more step should enter Bag 2
+    // One more step enters Bag 2 (hold or first Bag 2 piece)
     stepForward(state);
-    expect(state.bag).toBe(2);
-    expect(state.currentStep).toBe(0);
-    expect(state.bag2Sequence).not.toBeNull();
+    expect(state.currentStep).toBe(bag1End + 1);
+    expect(state.currentStep).toBeGreaterThan(state.bag1End);
   });
 
-  test('navigation: stepBackward from Bag 2 step 0 returns to Bag 1', async () => {
+  test('navigation: stepBackward from Bag 2 boundary returns to Bag 1', async () => {
     const {
       createVisualizerState,
-      getOpenerSequence,
       stepForward,
       stepBackward,
     } = await import('../src/modes/visualizer.ts');
 
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const state = createVisualizerState('ms2', false);
+    const bag1End = state.bag1End;
 
-    // Advance into Bag 2
-    for (let i = 0; i <= seq.steps.length; i++) {
-      stepForward(state);
-    }
-    expect(state.bag).toBe(2);
-    expect(state.currentStep).toBe(0);
+    // Advance to first Bag 2 step
+    for (let i = 0; i <= bag1End; i++) stepForward(state);
+    expect(state.currentStep).toBe(bag1End + 1);
 
-    // Step backward should return to Bag 1 last step
+    // Step backward returns to bag1End
     stepBackward(state);
-    expect(state.bag).toBe(1);
-    expect(state.currentStep).toBe(seq.steps.length);
-    expect(state.bag2Sequence).toBeNull();
+    expect(state.currentStep).toBe(bag1End);
   });
 
-  test('navigation: all openers can transition from Bag 1 to Bag 2', async () => {
-    const {
-      createVisualizerState,
-      getOpenerSequence,
-      stepForward,
-    } = await import('../src/modes/visualizer.ts');
+  test('navigation: all openers have Bag 2 steps in unified sequence', async () => {
+    const { createVisualizerState } = await import('../src/modes/visualizer.ts');
 
     const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
     for (const id of OPENER_IDS) {
-      const seq = getOpenerSequence(id, false);
-      const state = createVisualizerState(seq);
-
-      // Advance to end of Bag 1
-      for (let i = 0; i < seq.steps.length; i++) {
-        stepForward(state);
-      }
-      expect(state.bag).toBe(1);
-
-      // One more step enters Bag 2
-      stepForward(state);
-      expect(state.bag).toBe(2);
-      expect(state.currentStep).toBe(0);
-      expect(state.bag2Sequence).not.toBeNull();
-      expect(state.bag2Sequence!.steps.length).toBe(6);
+      const state = createVisualizerState(id, false);
+      // Unified steps include both Bag 1 and Bag 2
+      expect(state.steps.length).toBeGreaterThan(state.bag1End);
     }
   });
 
-  test('switchBag2Route changes the active route', async () => {
-    const {
-      createVisualizerState,
-      getOpenerSequence,
-      stepForward,
-      switchBag2Route,
-    } = await import('../src/modes/visualizer.ts');
+  test('switchRoute changes the active route', async () => {
+    const { createVisualizerState, switchRoute } = await import('../src/modes/visualizer.ts');
 
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
+    const state = createVisualizerState('ms2', false);
+    expect(state.routeIndex).toBe(0);
 
-    // Enter Bag 2
-    for (let i = 0; i <= seq.steps.length; i++) {
-      stepForward(state);
-    }
-    expect(state.bag).toBe(2);
-    expect(state.bag2RouteIndex).toBe(0);
+    // Switch to route 1
+    const newState = switchRoute(state, 1);
+    expect(newState.routeIndex).toBe(1);
+    expect(newState.currentStep).toBe(newState.bag1End); // jumps to Bag 2 start
+  });
 
-    // Switch to a non-existent route index — should be a no-op
-    switchBag2Route(state, 99);
-    expect(state.bag2RouteIndex).toBe(0);
+  test('createVisualizerState initializes with flat state', async () => {
+    const { createVisualizerState } = await import('../src/modes/visualizer.ts');
+    const state = createVisualizerState('ms2', false);
 
-    // Switch to route 0 again — should reset step
-    stepForward(state); // advance to step 1
-    expect(state.currentStep).toBe(1);
-    switchBag2Route(state, 0);
+    expect(state.openerId).toBe('ms2');
+    expect(state.mirror).toBe(false);
     expect(state.currentStep).toBe(0);
-    expect(state.bag2RouteIndex).toBe(0);
-  });
-
-  test('createVisualizerState initializes Bag 2 fields', async () => {
-    const { createVisualizerState, getOpenerSequence } = await import('../src/modes/visualizer.ts');
-    const seq = getOpenerSequence('ms2', false);
-    const state = createVisualizerState(seq);
-
-    expect(state.bag).toBe(1);
-    expect(state.bag2RouteIndex).toBe(0);
-    expect(state.bag2Sequence).toBeNull();
+    expect(state.bag1End).toBeGreaterThan(0);
+    expect(state.steps.length).toBeGreaterThan(state.bag1End);
+    expect(state.routeIndex).toBe(0);
   });
 
 });
