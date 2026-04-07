@@ -65,25 +65,28 @@ export function buildSteps(placements: Placement[]): Step[] {
   for (const p of placements) {
     board = cloneBoard(board);
 
-    // TST-derived clear: remove cells that this piece needs
-    // In the real game, the TST clears these rows before the piece is placed
-    for (const cell of p.cells) {
-      if (board[cell.row]?.[cell.col] !== null) {
-        board[cell.row]![cell.col] = null;
-      }
-    }
-
-    // Place through engine — strict, no allowOverwrite
+    // Place through engine — strict, no allowOverwrite, no implicit clears.
+    // If a placement conflicts (e.g. Gamushiro Form 2 O vs Bag 1 L),
+    // skip it — the route needs TST simulation we don't have yet.
     const field = boardToField(board);
-    placePieceFromCells(field, p.piece, p.cells);
-    board = fieldToBoard(field);
-
-    steps.push({
-      piece: p.piece,
-      board: cloneBoard(board),
-      newCells: [...p.cells],
-      hint: p.hint,
-    });
+    try {
+      placePieceFromCells(field, p.piece, p.cells);
+      board = fieldToBoard(field);
+      steps.push({
+        piece: p.piece,
+        board: cloneBoard(board),
+        newCells: [...p.cells],
+        hint: p.hint,
+      });
+    } catch {
+      // Conflict — skip this placement (logged for investigation)
+      steps.push({
+        piece: p.piece,
+        board: cloneBoard(board),
+        newCells: [],
+        hint: `${p.hint} [skipped: conflicts with existing cells]`,
+      });
+    }
   }
 
   return steps;

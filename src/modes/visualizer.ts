@@ -633,7 +633,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 0, row: 12 }, { col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }], hint: 'I vertical, col 0, left wall' },
       { piece: 'L', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 9, row: 13 }, { col: 9, row: 14 }], hint: 'L vertical, cols 8-9' },
     ],
-    holdPlacement: { piece: 'L', cells: [{ col: 8, row: 13 }, { col: 8, row: 14 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'Hold L, right side gap-filler' },
+    holdPlacement: null, // Hold L overlaps Bag 1 L — needs TST simulation to model correctly
     tstStepIndex: -1,
   },
 ];
