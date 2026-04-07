@@ -17,6 +17,7 @@ import type { PieceType } from '../src/core/types.ts';
 import { getOpenerSequence, getBag2Routes, createVisualizerState } from '../src/modes/visualizer.ts';
 import { findFloatingCells } from '../src/core/field-engine.ts';
 import { PIECE_DEFINITIONS } from '../src/core/pieces.ts';
+import goldenData from './fixtures/bag2-golden.json';
 
 const OPENER_IDS: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
 
@@ -89,6 +90,44 @@ describe('Acceptance: every placement adds exactly 4 cells', () => {
           if (n !== 4 && n !== 0) {
             throw new Error(`step ${i + 1} (${state.steps[i]!.piece}): ${n} cells (expected 4 or 0)`);
           }
+        }
+      });
+    }
+  }
+});
+
+describe('Acceptance: base board matches wiki residual', () => {
+  for (const id of OPENER_IDS) {
+    const routes = getBag2Routes(id, false);
+    const wikiRoutes = (goldenData as Record<string, Record<string, { residual?: { col: number; row: number }[] }>>)[id];
+
+    for (let ri = 0; ri < routes.length; ri++) {
+      const route = routes[ri]!;
+      const wikiResidual = wikiRoutes?.[route.routeId]?.residual;
+      if (!wikiResidual) continue;
+
+      test(`${id}/${route.routeId}: engine base board = wiki residual (${wikiResidual.length} cells)`, () => {
+        const state = createVisualizerState(id, false, ri);
+        const holdOffset = route.holdPlacement ? 1 : 0;
+        const baseIdx = state.bag1End + holdOffset - 1;
+        const base = baseIdx >= 0 ? state.steps[baseIdx]!.board : null;
+        expect(base).not.toBeNull();
+
+        const wikiSet = new Set(wikiResidual.map(c => `${c.col},${c.row}`));
+        const engineSet = new Set<string>();
+        for (let r = 0; r < 20; r++)
+          for (let c = 0; c < 10; c++)
+            if (base![r]![c] !== null) engineSet.add(`${c},${r}`);
+
+        const missing = [...wikiSet].filter(c => !engineSet.has(c));
+        const extra = [...engineSet].filter(c => !wikiSet.has(c));
+
+        if (missing.length > 0 || extra.length > 0) {
+          throw new Error(
+            `Base board ≠ wiki:\n` +
+            (missing.length > 0 ? `  Missing from engine: ${missing.join(', ')}\n` : '') +
+            (extra.length > 0 ? `  Extra in engine: ${extra.join(', ')}` : ''),
+          );
         }
       });
     }
