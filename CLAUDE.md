@@ -236,6 +236,11 @@ When verifying, navigate to the exact screen. When checking, run the exact comma
 **Correction**: "dont order me, help me"
 **Rule**: When verifying with Playwright, navigate to the exact screen the user needs to see. Don't tell them to do it themselves. I have the tools — use them.
 
+### 40. Board state is a fold — one engine, zero hacks
+**Mistake**: Maintained separate `getOpenerSequence` (Bag 1) and `getBag2Sequence` (Bag 2) with a manufactured "base board" between them. Every bug (17 fix commits) was in that gap: residual hacks, TST-clear derivation, allowOverwrite bypasses, fixture lookups, 'G' type hack.
+**Discovery**: Board state is a fold over placements. `buildSteps([...bag1, hold, ...bag2])` with `placePieceFromCells` (strict). TST-derived clears handle conflicts (only Gamushiro Form 2 has any — 4 cells). The base board is derived from the fold state at the boundary. No separate construction needed.
+**Rule**: When you find yourself building intermediate state with special cases, you're missing an abstraction. The fold eliminates ALL base board hacks because the base board is just `steps[bag2Start - 1].board`.
+
 ### 39. The wiki visualization is pre-clear, not post-clear — residual = Bag 1 + hold piece
 **Mistake**: Assumed the wiki's Bag 2 base board was a "post-TST residual" that required simulating line clears and gravity. Built engine computation, tried multiple clear patterns, none matched. The 4-19 "unknown" cells were labeled 'G' (gray) because we couldn't determine their piece type.
 **Discovery**: All 24 Bag 1 cells in the residual are at their ORIGINAL positions (no gravity shift). The extra cells per route form the exact shape of the opener's hold piece (L for MS2/Gamushiro, Z for Stray Cannon). The base board is simply `Bag 1 + hold piece` — no TST simulation needed.
