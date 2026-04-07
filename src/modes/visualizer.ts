@@ -6,6 +6,7 @@ import {
   fieldToBoard,
   placePieceFromCells,
 } from '../core/field-engine.ts';
+import { buildSteps } from '../core/sequence.ts';
 
 // ── Types ──
 
@@ -768,71 +769,37 @@ export function getBag2Sequence(
   const routes = getBag2Routes(openerId, mirror);
   if (routeIndex < 0 || routeIndex >= routes.length) return null;
   const route = routes[routeIndex]!;
-
   const bag1Seq = getOpenerSequence(openerId, mirror);
 
-  const steps: PlacementStep[] = [];
+  // Build as one fold: Bag 1 + hold + Bag 2, all through the engine.
+  // buildSteps handles TST-derived clears for conflicting cells.
+  const bag1Placements = bag1Seq.steps.map(s => ({
+    piece: s.piece, cells: s.newCells, hint: s.hint,
+  }));
+  const allPlacements = [
+    ...bag1Placements,
+    ...(route.holdPlacement ? [route.holdPlacement] : []),
+    ...route.placements,
+  ];
+  const allSteps = buildSteps(allPlacements);
 
-  // Build base board: all placements go through the engine. No allowOverwrite.
-  //
-  // Algorithm:
-  // 1. Start with Bag 1 final (already engine-placed)
-  // 2. Clear Bag 1 cells that conflict with hold/Bag 2 placements (TST-derived)
-  // 3. Place hold piece through engine (strict)
-  // 4. Place Bag 2 pieces through engine (strict)
-  //
-  // For 7/8 routes, step 2 clears 0 cells (no TST overlap).
-  // For Gamushiro Form 2, step 2 clears 4 cells (Bag 1 L cleared by TST).
-  const bag1Final = bag1Seq.steps.length > 0
-    ? bag1Seq.steps[bag1Seq.steps.length - 1]!.board
+  // Split: Bag 2 steps start after Bag 1 + hold
+  const bag2Start = bag1Placements.length + (route.holdPlacement ? 1 : 0);
+  const steps = allSteps.slice(bag2Start);
+
+  // Base board = state just before first Bag 2 piece
+  const baseBoard = bag2Start > 0
+    ? cloneBoard(allSteps[bag2Start - 1]!.board)
     : emptyBoard();
-  const baseBoard = cloneBoard(bag1Final);
-
-  // Step 2: derive TST clears — remove Bag 1 cells where hold/Bag 2 pieces go
-  const allPlacementCells: { col: number; row: number }[] = [];
-  if (route.holdPlacement) allPlacementCells.push(...route.holdPlacement.cells);
-  for (const p of route.placements) allPlacementCells.push(...p.cells);
-  for (const cell of allPlacementCells) {
-    if (baseBoard[cell.row]![cell.col] !== null) {
-      baseBoard[cell.row]![cell.col] = null; // TST cleared this cell
-    }
-  }
-
-  // Step 3: place hold piece through engine (strict — no allowOverwrite)
-  if (route.holdPlacement) {
-    const holdField = boardToField(baseBoard);
-    placePieceFromCells(holdField, route.holdPlacement.piece, route.holdPlacement.cells);
-    const holdResult = fieldToBoard(holdField);
-    for (let r = 0; r < 20; r++)
-      for (let c = 0; c < 10; c++)
-        baseBoard[r]![c] = holdResult[r]![c];
-  }
-
-  // Step 4: place Bag 2 pieces through engine (strict — no allowOverwrite)
-  let currentBoard = baseBoard;
-  for (const placement of route.placements) {
-    currentBoard = cloneBoard(currentBoard);
-    const field = boardToField(currentBoard);
-    placePieceFromCells(field, placement.piece, placement.cells);
-    currentBoard = fieldToBoard(field);
-    steps.push({
-      piece: placement.piece,
-      board: cloneBoard(currentBoard),
-      newCells: [...placement.cells],
-      hint: placement.hint,
-    });
-  }
-
-  const bag: PieceType[] = route.placements.map((p) => p.piece);
 
   return {
     openerId,
     mirror,
-    bag,
+    bag: route.placements.map(p => p.piece),
     holdPiece: bag1Seq.holdPiece,
     steps,
     tSpinSlots: bag1Seq.tSpinSlots,
-    baseBoard: cloneBoard(baseBoard),
+    baseBoard,
   };
 }
 
