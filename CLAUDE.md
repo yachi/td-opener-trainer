@@ -119,17 +119,15 @@ Trigger: user says **"L8"**, "L8 mode", or "work on X as a google l8 engineer".
 
 **Core rule: ALL work happens in spawned agents. The main session only orchestrates, reviews diffs, and commits. Never write code directly in the main session — it pollutes context and makes reverting hard.**
 
-### Phase 1: Research Agent (spawn 1 opus agent)
-Spawn a single agent to do ALL deep research. Prompt must include:
-- Read every file in scope, map all callers/imports
-- Grep to verify dead code — never assume
-- Reference industrial standards
+### Phase 1: Research Agents (spawn 2-3 opus agents in parallel)
+Split research by angle — e.g., agent 1 maps current architecture, agent 2 researches industrial standards, agent 3 traces all callers/tests. Each prompt must include:
+- Specific research scope (don't overlap)
+- "DO NOT write code or edit files. Research only."
 - Convergence loop: draft design, adversarial review, gap scan, repeat until 0 new findings
 - Output: exact file-by-file change list with line numbers
-- "DO NOT write code or edit files. Research only."
 
-### Phase 2: Review research output
-Main session reads the agent's output. Sanity-check the plan. Ask user for approval if scope is large.
+### Phase 2: Converge & Review
+Main session reads all agent outputs. Build cross-agent disagreement table, resolve to 0 disagreements. Ask user for approval if scope is large.
 
 ### Phase 3: Implementation Agents (spawn 2-3 opus agents in parallel)
 Split the work into independent slices. Each agent gets:
