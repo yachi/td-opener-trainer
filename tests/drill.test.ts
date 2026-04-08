@@ -26,6 +26,33 @@ import { getOpenerSequence } from '../src/modes/visualizer.ts';
 
 const OPENER_IDS: OpenerID[] = ['stray_cannon', 'honey_cup', 'gamushiro', 'ms2'];
 
+/** Build a minimal DrillState for testing (Bag 1 defaults). */
+function makeDrillState(overrides: Partial<DrillState> & Pick<DrillState, 'openerId'>): DrillState {
+  return {
+    phase: 'playing',
+    mirror: false,
+    board: createBoard(),
+    activePiece: null,
+    holdPiece: null,
+    holdUsed: false,
+    queue: [],
+    piecesPlaced: 0,
+    bagPieces: [],
+    guided: true,
+    bagNumber: 1,
+    routeIndex: -1,
+    targetPieceCount: 6,
+    bag1Board: null,
+    cachedSteps: null,
+    ...overrides,
+  };
+}
+
+/** Get expected board for an opener (convenience for tests). */
+function expectedBoardFor(openerId: OpenerID, mirror: boolean = false, pieceCount: number = 6): ReturnType<typeof getExpectedBoard> {
+  return getExpectedBoard(makeDrillState({ openerId, mirror, targetPieceCount: pieceCount }));
+}
+
 // A known buildable bag for MS2 (J before L): J appears at index 0, L at index 6
 const MS2_BAG: PieceType[] = ['J', 'T', 'S', 'Z', 'I', 'O', 'L'];
 
@@ -460,7 +487,7 @@ describe('D9: checkOpenerMatch', () => {
 
   test('board matching expected shape returns true', () => {
     // Build the expected board manually and stuff it into state
-    const expected = getExpectedBoard('ms2', false);
+    const expected = expectedBoardFor('ms2', false);
     const state: DrillState = {
       phase: 'playing',
       openerId: 'ms2',
@@ -478,7 +505,7 @@ describe('D9: checkOpenerMatch', () => {
 
   test('shape match ignores piece types (colors)', () => {
     // Take the expected board and replace all piece types with 'T'
-    const expected = getExpectedBoard('ms2', false);
+    const expected = expectedBoardFor('ms2', false);
     const recolored = expected.map((row) =>
       row.map((cell) => (cell !== null ? ('T' as PieceType) : null))
     );
@@ -498,7 +525,7 @@ describe('D9: checkOpenerMatch', () => {
   });
 
   test('board with one extra cell does not match', () => {
-    const expected = getExpectedBoard('ms2', false);
+    const expected = expectedBoardFor('ms2', false);
     const modified = expected.map((row) => [...row]);
     // Add an extra cell in an empty spot on row 19
     for (let col = 0; col < 10; col++) {
@@ -523,7 +550,7 @@ describe('D9: checkOpenerMatch', () => {
   });
 
   test('board with one missing cell does not match', () => {
-    const expected = getExpectedBoard('ms2', false);
+    const expected = expectedBoardFor('ms2', false);
     const modified = expected.map((row) => [...row]);
     // Remove a filled cell from row 19
     for (let col = 0; col < 10; col++) {
@@ -566,19 +593,13 @@ describe('D9b: openers with hold piece in placement steps (7 steps, 6 placeable)
       }
     }
 
-    const state: DrillState = {
-      phase: 'playing',
+    const state = makeDrillState({
       openerId: 'honey_cup',
-      mirror: false,
       board,
-      activePiece: null,
-      holdPiece: 'J', // J ended up in hold (couldn't place it, no queue left)
-      holdUsed: false,
-      queue: [],
+      holdPiece: 'J',
       piecesPlaced: 6,
       bagPieces: ['O', 'I', 'Z', 'T', 'L', 'S', 'J'],
-      guided: true,
-    };
+    });
 
     // This SHOULD match — the user placed 6 pieces correctly
     expect(checkOpenerMatch(state)).toBe(true);
@@ -597,39 +618,27 @@ describe('D9b: openers with hold piece in placement steps (7 steps, 6 placeable)
       }
     }
 
-    const state: DrillState = {
-      phase: 'playing',
+    const state = makeDrillState({
       openerId: 'gamushiro',
-      mirror: false,
       board,
-      activePiece: null,
       holdPiece: 'L',
-      holdUsed: false,
-      queue: [],
       piecesPlaced: 6,
       bagPieces: ['J', 'S', 'I', 'T', 'Z', 'O', 'L'],
-      guided: true,
-    };
+    });
 
     expect(checkOpenerMatch(state)).toBe(true);
   });
 
   test('RED TEST: MS2 — 6 steps, no hold in steps, should still work', () => {
     // MS2 has 6 steps, hold L not in steps. Sanity check — this should pass as before.
-    const expected = getExpectedBoard('ms2', false);
-    const state: DrillState = {
-      phase: 'playing',
+    const expected = expectedBoardFor('ms2', false);
+    const state = makeDrillState({
       openerId: 'ms2',
-      mirror: false,
       board: expected,
-      activePiece: null,
       holdPiece: 'L',
-      holdUsed: false,
-      queue: [],
       piecesPlaced: 6,
       bagPieces: MS2_BAG,
-      guided: true,
-    };
+    });
     expect(checkOpenerMatch(state)).toBe(true);
   });
 });
@@ -639,7 +648,7 @@ describe('D9b: openers with hold piece in placement steps (7 steps, 6 placeable)
 describe('D10: getExpectedBoard', () => {
   test('returns a 20x10 board for each opener', () => {
     for (const id of OPENER_IDS) {
-      const board = getExpectedBoard(id, false);
+      const board = expectedBoardFor(id, false);
       expect(board.length).toBe(20);
       for (const row of board) {
         expect(row.length).toBe(10);
@@ -649,7 +658,7 @@ describe('D10: getExpectedBoard', () => {
 
   test('expected board has filled cells in bottom rows', () => {
     for (const id of OPENER_IDS) {
-      const board = getExpectedBoard(id, false);
+      const board = expectedBoardFor(id, false);
       // Bottom 2 rows should have some filled cells
       const bottom2 = [...board[18]!, ...board[19]!];
       const filledCount = bottom2.filter((c) => c !== null).length;
@@ -658,8 +667,8 @@ describe('D10: getExpectedBoard', () => {
   });
 
   test('mirror board is horizontally flipped', () => {
-    const normal = getExpectedBoard('ms2', false);
-    const mirror = getExpectedBoard('ms2', true);
+    const normal = expectedBoardFor('ms2', false);
+    const mirror = expectedBoardFor('ms2', true);
     // Check that row 19 is mirrored (col i <-> col 9-i) in terms of filled/empty
     for (let col = 0; col < 10; col++) {
       const normalFilled = normal[19]![col] !== null;

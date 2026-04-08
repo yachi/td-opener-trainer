@@ -13,7 +13,8 @@ import { stampCells, cloneBoard, buildSteps } from '../core/engine.ts';
 import type { Step } from '../core/engine.ts';
 import { generateBag } from '../core/bag.ts';
 import { OPENERS, bestBag2Route } from '../openers/decision.ts';
-import { getOpenerSequence, getBag2Routes } from './visualizer.ts';
+import { OPENER_PLACEMENT_DATA, mirrorPlacementData } from '../openers/placements.ts';
+import { getBag2Routes } from '../openers/bag2-routes.ts';
 
 // ── Types ──
 
@@ -33,6 +34,7 @@ export interface DrillState {
   routeIndex: number;         // Bag 2 route (-1 for Bag 1)
   targetPieceCount: number;   // how many pieces to place in current bag
   bag1Board: Board | null;    // board state after Bag 1 completion
+  cachedSteps: Step[] | null; // lazy-computed steps (invalidated on new state)
 }
 
 export interface TargetPlacement {
@@ -49,14 +51,23 @@ const MAX_BAG_ATTEMPTS = 1000;
 // ── Helpers ──
 
 /**
+ * Build opener steps for Bag 1 using placement data directly (no getOpenerSequence).
+ */
+function buildBag1Steps(openerId: OpenerID, mirror: boolean): Step[] {
+  const rawData = OPENER_PLACEMENT_DATA[openerId];
+  const data = mirror ? mirrorPlacementData(rawData) : rawData;
+  return buildSteps(data.placements);
+}
+
+/**
  * Check if a bag can be played using the opener's targets with a single hold.
  * Simulates processing pieces in bag order: each piece is either placed
  * (if its target is supported), held, or swapped with the current hold.
  */
 function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): boolean {
-  const sequence = getOpenerSequence(openerId, mirror);
+  const steps = buildBag1Steps(openerId, mirror);
   const targetMap = new Map<PieceType, { col: number; row: number }[]>();
-  for (const step of sequence.steps) {
+  for (const step of steps) {
     targetMap.set(step.piece, step.newCells);
   }
 
@@ -195,6 +206,7 @@ export function createDrillState(openerId: OpenerID): DrillState {
     routeIndex: -1,
     targetPieceCount,
     bag1Board: null,
+    cachedSteps: null,
   };
 }
 
@@ -220,6 +232,7 @@ export function createDrillStateWithBag(openerId: OpenerID, bag: PieceType[], mi
     routeIndex: -1,
     targetPieceCount,
     bag1Board: null,
+    cachedSteps: null,
   };
 }
 
@@ -253,6 +266,7 @@ export function hardDropPiece(state: DrillState): DrillState {
       activePiece: null,
       piecesPlaced: newPiecesPlaced,
       holdUsed: false,
+      cachedSteps: null,
     };
     const matched = checkOpenerMatch(completionState);
 
@@ -281,6 +295,7 @@ export function hardDropPiece(state: DrillState): DrillState {
       activePiece: null,
       piecesPlaced: newPiecesPlaced,
       phase: 'failed',
+      cachedSteps: null,
     };
   }
 
@@ -291,6 +306,7 @@ export function hardDropPiece(state: DrillState): DrillState {
     queue: spawn.remaining,
     piecesPlaced: newPiecesPlaced,
     holdUsed: false,
+    cachedSteps: null,
   };
 }
 
@@ -331,9 +347,7 @@ export function softDropPiece(state: DrillState): DrillState {
 }
 
 export function checkOpenerMatch(state: DrillState): boolean {
-  const expected = state.bagNumber === 2
-    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex, state.bag1Board!)
-    : getExpectedBoard(state.openerId, state.mirror, state.targetPieceCount);
+  const expected = getExpectedBoard(state);
 
   // Compare full board (not just rows 14-19)
   for (let row = 0; row < 20; row++) {
@@ -367,6 +381,7 @@ export function resetDrill(state: DrillState): DrillState {
       routeIndex: state.routeIndex,
       targetPieceCount: state.targetPieceCount,
       bag1Board: state.bag1Board,
+      cachedSteps: null,
     };
   }
 
@@ -390,6 +405,7 @@ export function resetDrill(state: DrillState): DrillState {
     routeIndex: -1,
     targetPieceCount: state.targetPieceCount,
     bag1Board: null,
+    cachedSteps: null,
   };
 }
 
@@ -414,20 +430,65 @@ function isTargetSupported(board: Board, cells: { col: number; row: number }[]):
   return false;
 }
 
+// ── Unified Step Source ──
+
+/**
+ * Compute drill steps for both Bag 1 and Bag 2.
+ * Bag 1: buildSteps from opener placement data, sliced to targetPieceCount.
+ * Bag 2: buildSteps from route placements on the player's actual bag1Board.
+ */
+function getDrillSteps(state: DrillState): Step[] {
+  if (state.bagNumber === 2) {
+    if (!state.bag1Board) return [];
+    const routes = getBag2Routes(state.openerId, state.mirror);
+    const route = routes[state.routeIndex];
+    if (!route) return [];
+    const allPlacements = [
+      ...(route.holdPlacement ? [route.holdPlacement] : []),
+      ...route.placements,
+    ];
+    return buildSteps(allPlacements, state.bag1Board);
+  }
+  // Bag 1
+  const steps = buildBag1Steps(state.openerId, state.mirror);
+  return steps.slice(0, state.targetPieceCount);
+}
+
+/**
+ * Lazy-cached steps. The cache auto-invalidates because DrillState is
+ * immutable — every state-changing function returns a new object without
+ * cachedSteps, so the next call recomputes.
+ */
+function getCachedSteps(state: DrillState): Step[] {
+  if (!state.cachedSteps) {
+    // Mutate the cache slot on first access (safe: same object, no structural change)
+    (state as { cachedSteps: Step[] | null }).cachedSteps = getDrillSteps(state);
+  }
+  return state.cachedSteps!;
+}
+
 export function getTargetPlacement(state: DrillState): TargetPlacement | null {
   if (!state.guided || state.phase !== 'playing' || !state.activePiece) return null;
 
-  if (state.bagNumber === 2) {
-    return getBag2TargetPlacement(state);
+  const pieceType = state.activePiece.type;
+
+  // Bag 1 hold-piece check: don't show target for the piece being held
+  if (state.bagNumber === 1) {
+    const def = OPENERS[state.openerId];
+    const holdPiece = state.mirror ? def.holdPieceMirror : def.holdPiece;
+    if (pieceType === holdPiece && state.holdPiece === null) return null;
   }
 
-  const sequence = getOpenerSequence(state.openerId, state.mirror);
-  if (state.activePiece.type === sequence.holdPiece && state.holdPiece === null) return null;
-  const placeableSteps = sequence.steps.slice(0, state.targetPieceCount);
-  const step = placeableSteps.find((s) => s.piece === state.activePiece!.type);
+  const steps = getCachedSteps(state);
+  const step = steps.find((s) => s.piece === pieceType);
   if (!step) return null;
-  const supported = isTargetSupported(state.board, step.newCells);
-  return { cells: step.newCells, hint: step.hint, supported };
+
+  // Filter out cells already placed on the board
+  const cells = step.newCells.filter(({ col, row }) => state.board[row]?.[col] === null);
+  if (cells.length === 0) return null;
+
+  const supported = isTargetSupported(state.board, cells);
+  return { piece: pieceType, cells, hint: step.hint, supported };
 }
 
 /**
@@ -437,22 +498,15 @@ export function getTargetPlacement(state: DrillState): TargetPlacement | null {
 export function getAllTargets(state: DrillState): TargetPlacement[] {
   if (!state.guided || state.phase !== 'playing') return [];
 
-  if (state.bagNumber === 2) {
-    return getBag2AllTargets(state);
-  }
-
-  const sequence = getOpenerSequence(state.openerId, state.mirror);
-  const placeableSteps = sequence.steps.slice(0, state.targetPieceCount);
+  const steps = getCachedSteps(state);
   const targets: TargetPlacement[] = [];
 
-  for (const step of placeableSteps) {
-    const alreadyPlaced = step.newCells.every(
-      ({ col, row }) => state.board[row]?.[col] !== null,
-    );
-    if (alreadyPlaced) continue;
+  for (const step of steps) {
+    const cells = step.newCells.filter(({ col, row }) => state.board[row]?.[col] === null);
+    if (cells.length === 0) continue;
 
-    const supported = isTargetSupported(state.board, step.newCells);
-    targets.push({ cells: step.newCells, hint: step.hint, supported, piece: step.piece });
+    const supported = isTargetSupported(state.board, cells);
+    targets.push({ cells, hint: step.hint, supported, piece: step.piece });
   }
   return targets;
 }
@@ -463,81 +517,27 @@ export function getHoldSuggestion(state: DrillState): PieceType | null {
   // No hold suggestion during Bag 2 (hold carries from Bag 1, no suggestion needed)
   if (state.bagNumber === 2) return null;
 
-  const sequence = getOpenerSequence(state.openerId, state.mirror);
-  if (state.activePiece.type === sequence.holdPiece && state.holdPiece === null) {
-    return sequence.holdPiece;
+  const def = OPENERS[state.openerId];
+  const holdPiece = state.mirror ? def.holdPieceMirror : def.holdPiece;
+  if (state.activePiece.type === holdPiece && state.holdPiece === null) {
+    return holdPiece;
   }
   return null;
 }
 
 /**
- * Get the expected board for comparison after a 7-bag drill.
- * With 7 bag pieces and 1 hold, only 6 end up on the board.
- * For openers with 7 placement steps (hold piece also placed via swap),
- * use the board after step 6 (not 7).
+ * Get the expected board after completing the current bag.
+ * Uses cached steps — no redundant BFS.
  */
-export function getExpectedBoard(openerId: OpenerID, mirror: boolean, pieceCount: number = 6): Board {
-  const seq = getOpenerSequence(openerId, mirror);
-  // Use pieceCount to determine which step's board to return
-  const stepIndex = Math.min(seq.steps.length, pieceCount) - 1;
-  const step = seq.steps[stepIndex];
-  if (!step) return createBoard();
-  return step.board.map((row) => [...row]);
-}
-
-/**
- * Get the expected board after Bag 2 completion.
- * Computes from the player's actual bag1Board + route placements,
- * NOT from the visualizer's ideal board (which assumes all 7 Bag 1 pieces).
- */
-export function getExpectedBoardBag2(openerId: OpenerID, mirror: boolean, routeIndex: number, bag1Board: Board): Board {
-  const steps = getBag2Steps(openerId, mirror, routeIndex, bag1Board);
+export function getExpectedBoard(state: DrillState): Board {
+  const steps = getCachedSteps(state);
   const lastStep = steps[steps.length - 1];
-  if (!lastStep) return bag1Board ? bag1Board.map((row) => [...row]) : createBoard();
-  return lastStep.board.map((row) => [...row]);
-}
-
-// ── Bag 2 Helpers ──
-
-function getBag2Steps(openerId: OpenerID, mirror: boolean, routeIndex: number, bag1Board: Board): Step[] {
-  const routes = getBag2Routes(openerId, mirror);
-  const route = routes[routeIndex];
-  if (!route) return [];
-  // Combine holdPlacement (Bag 1 held piece) + route placements
-  const allPlacements = [
-    ...(route.holdPlacement ? [route.holdPlacement] : []),
-    ...route.placements,
-  ];
-  // Build steps starting from the player's actual board, not an ideal board
-  return buildSteps(allPlacements, bag1Board);
-}
-
-function getBag2TargetPlacement(state: DrillState): TargetPlacement | null {
-  if (!state.activePiece || !state.bag1Board) return null;
-  const steps = getBag2Steps(state.openerId, state.mirror, state.routeIndex, state.bag1Board);
-  const step = steps.find((s) => s.piece === state.activePiece!.type);
-  if (!step) return null;
-  // For Bag 2, cells may overlap with Bag 1 board — only show cells that are new (empty on board)
-  const newCells = step.newCells.filter(({ col, row }) => state.board[row]?.[col] === null);
-  if (newCells.length === 0) return null;
-  const supported = isTargetSupported(state.board, newCells);
-  return { cells: newCells, hint: step.hint, supported, piece: step.piece };
-}
-
-function getBag2AllTargets(state: DrillState): TargetPlacement[] {
-  if (!state.bag1Board) return [];
-  const steps = getBag2Steps(state.openerId, state.mirror, state.routeIndex, state.bag1Board);
-  const targets: TargetPlacement[] = [];
-
-  for (const step of steps) {
-    // Only show cells that aren't yet placed
-    const newCells = step.newCells.filter(({ col, row }) => state.board[row]?.[col] === null);
-    if (newCells.length === 0) continue;
-
-    const supported = isTargetSupported(state.board, newCells);
-    targets.push({ cells: newCells, hint: step.hint, supported, piece: step.piece });
+  if (!lastStep) {
+    return state.bagNumber === 2 && state.bag1Board
+      ? cloneBoard(state.bag1Board)
+      : createBoard();
   }
-  return targets;
+  return lastStep.board.map((row) => [...row]);
 }
 
 /**
@@ -571,8 +571,11 @@ export function transitionToBag2(state: DrillState): DrillState {
   }
 
   // Count how many pieces to place: route placements + holdPlacement if exists
-  const bag2Steps = getBag2Steps(state.openerId, state.mirror, chosenRouteIndex, bag1Board);
-  const targetPieceCount = bag2Steps.length;
+  const routes = getBag2Routes(state.openerId, state.mirror);
+  const route = routes[chosenRouteIndex];
+  const targetPieceCount = route
+    ? (route.holdPlacement ? 1 : 0) + route.placements.length
+    : 0;
 
   const queue = [...bag2];
   const spawn = spawnNextFromQueue(queue);
@@ -593,6 +596,7 @@ export function transitionToBag2(state: DrillState): DrillState {
     routeIndex: chosenRouteIndex,
     targetPieceCount,
     bag1Board: state.bag1Board,
+    cachedSteps: null,
   };
 }
 

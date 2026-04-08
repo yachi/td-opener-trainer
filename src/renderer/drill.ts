@@ -3,7 +3,7 @@ import type { DrillState } from '../modes/drill';
 import type { OpenerID } from '../openers/types';
 import { getPieceCells, getGhostPosition } from '../core/srs';
 import { OPENERS } from '../openers/decision';
-import { getExpectedBoard, getExpectedBoardBag2, getTargetPlacement, getHoldSuggestion, getAllTargets, getBag2RouteLabel } from '../modes/drill';
+import { getExpectedBoard, getTargetPlacement, getHoldSuggestion, getAllTargets, getBag2RouteLabel } from '../modes/drill';
 import {
   COLORS,
   CANVAS_W,
@@ -357,9 +357,7 @@ function drawFailedPhase(ctx: CanvasRenderingContext2D, state: DrillState): void
   drawMiniBoard(ctx, state.board, startX, startY, smallCell);
 
   // Expected board (right)
-  const expected = state.bagNumber === 2
-    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex, state.bag1Board!)
-    : getExpectedBoard(state.openerId, state.mirror, state.targetPieceCount);
+  const expected = getExpectedBoard(state);
   drawMiniBoard(ctx, expected, startX + smallBoardW + gap, startY, smallCell);
 
   // Failed text
