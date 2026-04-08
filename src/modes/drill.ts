@@ -9,7 +9,7 @@ import {
   hardDrop,
   lockPiece,
 } from '../core/srs.ts';
-import { stampCells, cloneBoard, buildSteps } from '../core/engine.ts';
+import { stampCells, cloneBoard, buildSteps, isPlacementReachable } from '../core/engine.ts';
 import type { Step } from '../core/engine.ts';
 import { generateBag } from '../core/bag.ts';
 import { OPENERS, bestBag2Route } from '../openers/decision.ts';
@@ -77,7 +77,7 @@ function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): b
 
   for (const pieceType of bag) {
     const target = targetMap.get(pieceType);
-    if (target && isTargetSupported(board, target)) {
+    if (target && isPlacementReachable(board, pieceType, target)) {
       board = stampCells(board, pieceType, target);
       holdUsed = false;
       continue;
@@ -89,7 +89,7 @@ function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): b
         continue;
       }
       const holdTarget = targetMap.get(hold);
-      if (holdTarget && isTargetSupported(board, holdTarget)) {
+      if (holdTarget && isPlacementReachable(board, hold!, holdTarget)) {
         board = stampCells(board, hold, holdTarget);
         hold = pieceType;
         holdUsed = true;
@@ -134,7 +134,7 @@ function isBag2Playable(
 
   for (const pieceType of bag) {
     const target = targetMap.get(pieceType);
-    if (target && isTargetSupported(board, target)) {
+    if (target && isPlacementReachable(board, pieceType, target)) {
       board = stampCells(board, pieceType, target);
       holdUsed = false;
       continue;
@@ -146,7 +146,7 @@ function isBag2Playable(
         continue;
       }
       const holdTarget = targetMap.get(hold);
-      if (holdTarget && isTargetSupported(board, holdTarget)) {
+      if (holdTarget && isPlacementReachable(board, hold!, holdTarget)) {
         board = stampCells(board, hold, holdTarget);
         hold = pieceType;
         holdUsed = true;
