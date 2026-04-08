@@ -75,8 +75,8 @@ const OPENER_DISPLAY: Record<OpenerID, string> = {
 // ── Main HUD draw ──
 
 export function drawQuizHUD(ctx: CanvasRenderingContext2D, data: QuizHUDData): void {
-  // Bag 2 context line
-  if (data.quizType === 'bag2' && data.bag1OpenerName) {
+  // Bag 2 context line (hidden in answered state — feedback/explanation takes over this space)
+  if (data.quizType === 'bag2' && data.bag1OpenerName && data.phase === 'showing' && !data.reviewingPrevious) {
     ctx.fillStyle = '#CCAA44';
     ctx.font = 'bold 14px -apple-system, sans-serif';
     ctx.textAlign = 'center';
