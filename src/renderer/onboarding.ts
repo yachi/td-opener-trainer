@@ -2,7 +2,7 @@ import type { PieceType } from '../core/types';
 import type { OpenerID } from '../openers/types';
 import type { OnboardingProgress, WorkedExample } from '../modes/onboarding';
 import type { QuizQueueOptions } from './queue';
-import { getWorkedExamples } from '../modes/onboarding';
+import { getWorkedExamples, STAGE_ORDER } from '../modes/onboarding';
 import { OPENERS, DECISION_PIECES } from '../openers/decision';
 import { CANVAS_W, CANVAS_H, COLORS, drawPieceInBox, roundRect, drawCell } from './board';
 import { drawQuizQueue } from './queue';
@@ -17,19 +17,6 @@ const CARD_BORDER = '#3A3A5C';
 const CARD_RADIUS = 12;
 const MUTED = '#8888AA';
 const HINT_COLOR = '#9999BB'; // was #666688 — too faint, user couldn't see "[Space] to continue"
-
-const OPENER_DISPLAY: Record<OpenerID, { en: string; cn: string }> = {
-  ms2: { en: 'MS2 / Gamushiro', cn: '山岳·糖漿炮' },
-  gamushiro: { en: 'MS2 / Gamushiro', cn: '山岳·糖漿炮' },
-  honey_cup: { en: 'Honey Cup', cn: '蜜蜂炮' },
-  stray_cannon: { en: 'Stray Cannon', cn: '迷走炮' },
-};
-
-const STAGE_LABELS: Record<string, { index: number; total: number }> = {
-  ms2: { index: 1, total: 3 },
-  honey_cup: { index: 2, total: 3 },
-  stray_cannon: { index: 3, total: 3 },
-};
 
 // ── Interfaces ──
 
@@ -60,10 +47,15 @@ function centerX(): number {
   return CANVAS_W / 2;
 }
 
+function openerDisplay(openerId: OpenerID): { en: string; cn: string } {
+  const def = OPENERS[openerId];
+  return { en: def.nameEn, cn: def.nameCn };
+}
+
 function stageLabel(openerId: OpenerID): string {
-  const info = STAGE_LABELS[openerId];
-  if (!info) return `Learning ${OPENER_DISPLAY[openerId].en}`;
-  return `Stage ${info.index} of ${info.total}`;
+  const idx = STAGE_ORDER.indexOf(openerId);
+  if (idx < 0) return `Learning ${openerDisplay(openerId).en}`;
+  return `Stage ${idx + 1} of ${STAGE_ORDER.length}`;
 }
 
 function drawSeparator(ctx: CanvasRenderingContext2D, y: number, margin = 80): void {
@@ -83,7 +75,7 @@ export function drawShapePreview(
   stepIndex: number,
   totalSteps: number,
 ): void {
-  const display = OPENER_DISPLAY[openerId];
+  const display = openerDisplay(openerId);
   const def = OPENERS[openerId];
   const cx = centerX();
 
@@ -213,7 +205,7 @@ export function drawShapePreview(
 // ── 1. Rule Card ──
 
 export function drawRuleCard(ctx: CanvasRenderingContext2D, openerId: OpenerID): void {
-  const display = OPENER_DISPLAY[openerId];
+  const display = openerDisplay(openerId);
   const def = OPENERS[openerId];
   const decision = DECISION_PIECES[openerId];
   const cx = centerX();
@@ -304,7 +296,7 @@ export function drawWorkedExample(
   const example = examples[exampleIndex];
   if (!example) return;
 
-  const display = OPENER_DISPLAY[openerId];
+  const display = openerDisplay(openerId);
   const cx = centerX();
 
   // Title
@@ -368,7 +360,7 @@ export function drawWorkedExample(
 // ── 3. Binary Drill ──
 
 export function drawDrill(ctx: CanvasRenderingContext2D, data: DrillRenderData): void {
-  const display = OPENER_DISPLAY[data.openerId];
+  const display = openerDisplay(data.openerId);
   const cx = centerX();
 
   // Title with progress
@@ -505,7 +497,7 @@ function drawDrillButton(
 // ── 4. Celebration ──
 
 export function drawCelebration(ctx: CanvasRenderingContext2D, data: CelebrationData): void {
-  const display = OPENER_DISPLAY[data.openerId];
+  const display = openerDisplay(data.openerId);
   const cx = centerX();
 
   // Checkmark + title
@@ -572,8 +564,8 @@ export function renderOnboardingMode(
   const { progress } = state;
   const stage = progress.currentStage;
 
-  // Only render for opener stages (not full_quiz or complete)
-  if (stage === 'full_quiz' || stage === 'complete') return;
+  // Only render for opener stages (not complete)
+  if (stage === 'complete') return;
 
   const openerId = stage as OpenerID;
 
@@ -606,7 +598,7 @@ export function renderOnboardingMode(
   }
 
   // Status bar text
-  const display = OPENER_DISPLAY[openerId];
+  const display = openerDisplay(openerId);
   const phaseLabels: Record<string, string> = {
     shape_preview: `Learning ${display.en} · Shape Preview`,
     rule_card: `Learning ${display.en} · ${stageLabel(openerId)}`,

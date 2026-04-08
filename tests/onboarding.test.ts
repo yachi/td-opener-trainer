@@ -10,9 +10,10 @@ import {
   checkMastery,
   getWorkedExamples,
   generateDrillBag,
-  runPlacementTest,
+  isBuildableForDrill,
   saveOnboardingProgress,
   loadOnboardingProgress,
+  STAGE_ORDER,
 } from '../src/modes/onboarding.ts';
 import type { OnboardingProgress } from '../src/modes/onboarding.ts';
 
@@ -26,10 +27,9 @@ describe('O1: Onboarding State Management', () => {
     expect(progress.stagePhase).toBe('shape_preview');
     expect(progress.exampleIndex).toBe(0);
     expect(progress.exampleStep).toBe(0);
-    expect(progress.placementTestTaken).toBe(false);
     expect(progress.lastActiveAt).toBeGreaterThan(0);
-    // Mastery records exist for each opener
-    for (const id of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    // Mastery records exist for each opener in STAGE_ORDER
+    for (const id of STAGE_ORDER) {
       expect(progress.mastery[id]).toBeDefined();
       expect(progress.mastery[id].total).toBe(0);
       expect(progress.mastery[id].correct).toBe(0);
@@ -63,32 +63,24 @@ describe('O1: Onboarding State Management', () => {
     expect(progress.stagePhase).toBe('rule_card');
   });
 
-  test('stage advances from ms2 → honey_cup → stray_cannon → full_quiz → complete', () => {
+  test('stage advances through all STAGE_ORDER openers then complete', () => {
     const progress = createOnboardingProgress();
-    expect(progress.currentStage).toBe('ms2');
+    expect(progress.currentStage).toBe(STAGE_ORDER[0]);
 
-    // Complete MS2, advance to next stage
-    progress.stagePhase = 'celebration';
-    progress.mastery.ms2.completed = true;
-    advancePhase(progress);
-    expect(progress.currentStage).toBe('honey_cup');
-    expect(progress.stagePhase).toBe('shape_preview');
+    for (let i = 0; i < STAGE_ORDER.length; i++) {
+      const currentId = STAGE_ORDER[i]!;
+      expect(progress.currentStage).toBe(currentId);
 
-    // Complete Honey Cup
-    progress.stagePhase = 'celebration';
-    progress.mastery.honey_cup.completed = true;
-    advancePhase(progress);
-    expect(progress.currentStage).toBe('stray_cannon');
-    expect(progress.stagePhase).toBe('shape_preview');
+      progress.stagePhase = 'celebration';
+      progress.mastery[currentId]!.completed = true;
+      advancePhase(progress);
 
-    // Complete Stray Cannon
-    progress.stagePhase = 'celebration';
-    progress.mastery.stray_cannon.completed = true;
-    advancePhase(progress);
-    expect(progress.currentStage).toBe('full_quiz');
+      if (i < STAGE_ORDER.length - 1) {
+        expect(progress.currentStage).toBe(STAGE_ORDER[i + 1]);
+        expect(progress.stagePhase).toBe('shape_preview');
+      }
+    }
 
-    // Complete full quiz
-    advancePhase(progress);
     expect(progress.currentStage).toBe('complete');
   });
 
@@ -323,14 +315,14 @@ describe('O3: Binary Drill Logic', () => {
 
 describe('O4: Worked Example Data', () => {
   test('each opener has exactly 3 worked examples', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       expect(examples).toHaveLength(3);
     }
   });
 
   test('example 1 is a positive case (opener IS buildable)', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       const ex1 = examples[0];
       const def = OPENERS[openerId];
@@ -348,9 +340,9 @@ describe('O4: Worked Example Data', () => {
     expect(OPENERS.honey_cup.canBuildMirror(honeyEx2.bag)).toBe(false);
     expect(honeyEx2.expectedAnswer).toBe(false);
 
-    // MS2 and Stray Cannon are always buildable on at least one side.
-    // Example 2 shows a bag where the NORMAL side fails.
-    for (const openerId of ['ms2', 'stray_cannon'] as OpenerID[]) {
+    // MS2, Stray Cannon, Gamushiro are always buildable on at least one side.
+    // Example 2 shows a bag where the NORMAL side fails (drill checks normal only).
+    for (const openerId of ['ms2', 'stray_cannon', 'gamushiro'] as OpenerID[]) {
       const examples = getWorkedExamples(openerId);
       const ex2 = examples[1]!;
       expect(OPENERS[openerId].canBuild(ex2.bag)).toBe(false); // normal fails
@@ -359,18 +351,17 @@ describe('O4: Worked Example Data', () => {
   });
 
   test('example 3 is a guided fill-in (can be either)', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       const ex3 = examples[2];
-      const def = OPENERS[openerId];
-      const buildable = def.canBuild(ex3.bag) || def.canBuildMirror(ex3.bag);
+      const buildable = isBuildableForDrill(openerId, ex3.bag);
       // The expectedAnswer should match actual buildability
       expect(ex3.expectedAnswer).toBe(buildable);
     }
   });
 
   test('each example has explanation text', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       for (const ex of examples) {
         expect(ex.explanation).toBeTruthy();
@@ -381,7 +372,7 @@ describe('O4: Worked Example Data', () => {
   });
 
   test('each example has a valid bag of 7 pieces', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       for (const ex of examples) {
         expect(ex.bag).toHaveLength(7);
@@ -393,7 +384,7 @@ describe('O4: Worked Example Data', () => {
   });
 
   test('decision pieces are correctly identified for each example', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       const expectedPieces = DECISION_PIECES[openerId].pieces;
       for (const ex of examples) {
@@ -407,7 +398,7 @@ describe('O4: Worked Example Data', () => {
   });
 
   test('each example has step-by-step walkthrough data', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       const examples = getWorkedExamples(openerId);
       for (const ex of examples) {
         // Steps: find pieces → check order → conclusion
@@ -467,76 +458,7 @@ describe('O5: Two-Opener Discrimination', () => {
 
 // ── O6: Placement Test ──
 
-describe('O6: Placement Test', () => {
-  test('placement test generates 5 questions per stage', () => {
-    const result = runPlacementTest('ms2', [true, true, true, true, true]);
-    expect(result.totalQuestions).toBe(5);
-  });
-
-  test('4/5 correct → skip that stage (passed)', () => {
-    const result = runPlacementTest('ms2', [true, true, true, true, false]);
-    expect(result.passed).toBe(true);
-    expect(result.correctCount).toBe(4);
-  });
-
-  test('5/5 correct → skip that stage (passed)', () => {
-    const result = runPlacementTest('ms2', [true, true, true, true, true]);
-    expect(result.passed).toBe(true);
-    expect(result.correctCount).toBe(5);
-  });
-
-  test('3/5 or less → start that stage onboarding (failed)', () => {
-    const result = runPlacementTest('ms2', [true, true, true, false, false]);
-    expect(result.passed).toBe(false);
-    expect(result.correctCount).toBe(3);
-  });
-
-  test('0/5 → must do onboarding', () => {
-    const result = runPlacementTest('ms2', [false, false, false, false, false]);
-    expect(result.passed).toBe(false);
-    expect(result.correctCount).toBe(0);
-  });
-
-  test('placement test uses same format as binary drill', () => {
-    // Each question should be a bag + "is this opener buildable?" format
-    const result = runPlacementTest('ms2', [true, true, true, true, true]);
-    expect(result.questions).toBeDefined();
-    expect(result.questions).toHaveLength(5);
-    for (const q of result.questions) {
-      expect(q.bag).toHaveLength(7);
-      expect(q.openerId).toBe('ms2');
-    }
-  });
-
-  test('after passing all 3 placement stages, user goes to full quiz', () => {
-    const progress = createOnboardingProgress();
-    progress.placementTestTaken = true;
-
-    // Simulate passing all three placement tests
-    const ms2Result = runPlacementTest('ms2', [true, true, true, true, true]);
-    const honeyResult = runPlacementTest('honey_cup', [true, true, true, true, true]);
-    const strayResult = runPlacementTest('stray_cannon', [true, true, true, true, true]);
-
-    expect(ms2Result.passed).toBe(true);
-    expect(honeyResult.passed).toBe(true);
-    expect(strayResult.passed).toBe(true);
-
-    // After all pass, progress should jump to full_quiz
-    if (ms2Result.passed) {
-      progress.mastery.ms2.completed = true;
-    }
-    if (honeyResult.passed) {
-      progress.mastery.honey_cup.completed = true;
-    }
-    if (strayResult.passed) {
-      progress.mastery.stray_cannon.completed = true;
-    }
-
-    // All mastered → stage should be full_quiz
-    progress.currentStage = 'full_quiz';
-    expect(progress.currentStage).toBe('full_quiz');
-  });
-});
+// O6: Placement Test — DELETED (dead code, runPlacementTest removed)
 
 // ── O7: State Persistence ──
 
@@ -704,7 +626,7 @@ describe('O8: Stage-Specific Bag Generation', () => {
   });
 
   test('generated drill bags are valid 7-piece bags', () => {
-    for (const openerId of ['ms2', 'honey_cup', 'stray_cannon'] as OpenerID[]) {
+    for (const openerId of STAGE_ORDER) {
       for (let i = 0; i < 20; i++) {
         const bag = generateDrillBag(openerId);
         expect(bag).toHaveLength(7);
@@ -827,60 +749,59 @@ describe('O10: Full Flow Integration', () => {
 
     advancePhase(progress); // → celebration
     expect(progress.stagePhase).toBe('celebration');
-    advancePhase(progress); // → full_quiz
-    expect(progress.currentStage).toBe('full_quiz');
+    advancePhase(progress); // → gamushiro
+    expect(progress.currentStage).toBe('gamushiro');
+
+    // === Stage 4: Gamushiro ===
+    advancePhase(progress); // → rule_card
+    advancePhase(progress); // → examples
+    advancePhase(progress); // → drill
+
+    for (let i = 0; i < 6; i++) {
+      recordDrillAnswer(progress, 'gamushiro', true);
+    }
+    expect(checkMastery(progress, 'gamushiro')).toBe(true);
+    progress.mastery.gamushiro.completed = true;
+
+    advancePhase(progress); // → celebration
+    expect(progress.stagePhase).toBe('celebration');
+    advancePhase(progress); // → complete
+    expect(progress.currentStage).toBe('complete');
   });
 
-  test('exactly 4 stages before reaching full quiz', () => {
-    // ms2, honey_cup, stray_cannon, and the two-opener discrimination
-    // Per spec: ms2 → honey_cup → stray_cannon → full_quiz
-    // That's 3 single-opener stages + full_quiz = 4 stages total
-    const stages: string[] = ['ms2', 'honey_cup', 'stray_cannon', 'full_quiz'];
-    expect(stages).toHaveLength(4);
-
+  test('exactly STAGE_ORDER.length stages before reaching complete', () => {
     const progress = createOnboardingProgress();
     let stageCount = 0;
 
-    // Count how many stages we pass through
-    while (progress.currentStage !== 'full_quiz' && stageCount < 10) {
+    while (progress.currentStage !== 'complete' && stageCount < 20) {
       stageCount++;
-      const currentStage = progress.currentStage;
+      const currentStage = progress.currentStage as OpenerID;
 
-      // Fast-forward through each stage
       progress.stagePhase = 'celebration';
-      if (currentStage === 'ms2') progress.mastery.ms2.completed = true;
-      if (currentStage === 'honey_cup') progress.mastery.honey_cup.completed = true;
-      if (currentStage === 'stray_cannon') progress.mastery.stray_cannon.completed = true;
-
+      progress.mastery[currentStage]!.completed = true;
       advancePhase(progress);
     }
 
-    // Should have gone through exactly 3 stages (ms2, honey_cup, stray_cannon)
-    // before arriving at full_quiz
-    expect(stageCount).toBe(3);
-    expect(progress.currentStage).toBe('full_quiz');
+    expect(stageCount).toBe(STAGE_ORDER.length);
+    expect(progress.currentStage).toBe('complete');
   });
 
-  test('total minimum questions: 6 + 6 + 6 = 18 for single-opener drills', () => {
-    // Minimum 6 attempts per opener to achieve mastery (rolling window of 6)
+  test('total minimum questions: 6 per opener × STAGE_ORDER.length', () => {
     const minPerOpener = 6;
-    const openerStages = 3; // ms2, honey_cup, stray_cannon
-    const minSingleOpener = minPerOpener * openerStages;
-    expect(minSingleOpener).toBe(18);
+    const minTotal = minPerOpener * STAGE_ORDER.length;
+    expect(minTotal).toBe(6 * STAGE_ORDER.length);
   });
 
-  test('full quiz mastery threshold is 8/10', () => {
+  test('custom mastery threshold 8/10 works for quiz mode', () => {
     const progress = createOnboardingProgress();
-    progress.currentStage = 'full_quiz';
 
-    // 8 correct + 2 wrong in 10 → mastered
+    // 8 correct + 2 wrong in 10 → mastered with custom threshold
     for (let i = 0; i < 8; i++) {
-      recordDrillAnswer(progress, 'ms2', true); // opener doesn't matter for full quiz tracking
+      recordDrillAnswer(progress, 'ms2', true);
     }
     recordDrillAnswer(progress, 'ms2', false);
     recordDrillAnswer(progress, 'ms2', false);
 
-    // Full quiz uses windowSize=10, threshold=8
     expect(checkMastery(progress, 'ms2', { windowSize: 10, threshold: 8 })).toBe(true);
   });
 
@@ -888,17 +809,13 @@ describe('O10: Full Flow Integration', () => {
     const progress = createOnboardingProgress();
 
     // Fast-forward through all stages
-    for (const stage of ['ms2', 'honey_cup', 'stray_cannon'] as const) {
+    for (const stage of STAGE_ORDER) {
       progress.currentStage = stage;
       progress.stagePhase = 'celebration';
-      progress.mastery[stage].completed = true;
+      progress.mastery[stage]!.completed = true;
       advancePhase(progress);
     }
 
-    expect(progress.currentStage).toBe('full_quiz');
-
-    // Complete full quiz
-    advancePhase(progress);
     expect(progress.currentStage).toBe('complete');
   });
 });

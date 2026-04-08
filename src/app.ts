@@ -14,6 +14,7 @@ import {
   recordDrillAnswer,
   generateDrillBag,
   getWorkedExamples,
+  STAGE_ORDER,
 } from './modes/onboarding.ts';
 import type { OnboardingProgress } from './modes/onboarding.ts';
 import { OPENERS } from './openers/decision.ts';
@@ -113,7 +114,7 @@ function leaveDrillMode(): void {
 
 function enterDrillPhase(): void {
   const stage = state.onboarding.currentStage;
-  if (stage === 'full_quiz' || stage === 'complete') return;
+  if (stage === 'complete') return;
   const bag = generateDrillBag(stage as OpenerID);
   state.onboardingDrill = {
     currentBag: bag,
@@ -125,7 +126,7 @@ function enterDrillPhase(): void {
 
 function advanceDrill(): void {
   const stage = state.onboarding.currentStage;
-  if (stage === 'full_quiz' || stage === 'complete') return;
+  if (stage === 'complete') return;
   const bag = generateDrillBag(stage as OpenerID);
   state.onboardingDrill.currentBag = bag;
   state.onboardingDrill.lastAnswer = null;
@@ -197,7 +198,7 @@ function dispatchVisualizer(action: string): void {
 function skipCurrentStage(): void {
   const { onboarding } = state;
   const stage = onboarding.currentStage;
-  if (stage === 'full_quiz' || stage === 'complete') return;
+  if (stage === 'complete') return;
 
   // Mark current stage as completed and jump to celebration
   const mastery = onboarding.mastery[stage as OpenerID];
@@ -223,7 +224,7 @@ function dispatchOnboarding(action: string): void {
   switch (phase) {
     case 'shape_preview': {
       const stage = onboarding.currentStage;
-      if (stage === 'full_quiz' || stage === 'complete') break;
+      if (stage === 'complete') break;
       if (action === 'advance') {
         const seq = getOpenerSequence(stage as OpenerID, false);
         if (state.onboardingShapeStep < seq.steps.length) {
@@ -255,7 +256,7 @@ function dispatchOnboarding(action: string): void {
     case 'examples': {
       if (action === 'advance') {
         const stage = onboarding.currentStage;
-        if (stage === 'full_quiz' || stage === 'complete') break;
+        if (stage === 'complete') break;
         const examples = getWorkedExamples(stage as OpenerID);
         const totalExamples = examples.length;
         const currentExample = examples[onboarding.exampleIndex];
@@ -288,7 +289,7 @@ function dispatchOnboarding(action: string): void {
       if (state.onboardingDrill.autoAdvanceAt !== null) break;
 
       const stage = onboarding.currentStage;
-      if (stage === 'full_quiz' || stage === 'complete') break;
+      if (stage === 'complete') break;
 
       const userAnswer = action === 'option_1'; // option_1 = Yes, option_2 = No
       const isCorrect = recordDrillAnswer(
@@ -325,11 +326,7 @@ function dispatchOnboarding(action: string): void {
         advancePhase(onboarding);
         state.onboardingShapeStep = 0;
 
-        // Check if we've moved to full_quiz or complete
-        if (
-          onboarding.currentStage === 'full_quiz' ||
-          onboarding.currentStage === 'complete'
-        ) {
+        if (onboarding.currentStage === 'complete') {
           transitionToQuiz();
         } else {
           saveOnboardingProgress(onboarding);
