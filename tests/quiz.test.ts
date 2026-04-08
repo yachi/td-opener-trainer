@@ -2,7 +2,8 @@ import { describe, test, expect } from 'bun:test';
 import { generateBag } from '../src/core/bag.ts';
 import { bestOpener, OPENERS, DECISION_PIECES } from '../src/openers/decision.ts';
 import type { OpenerID } from '../src/openers/types.ts';
-import { createQuizState, nextQuestion, submitAnswer } from '../src/modes/quiz.ts';
+import { createQuizState, nextQuestion, submitAnswer, submitBag2Answer } from '../src/modes/quiz.ts';
+import { getBag2Routes } from '../src/openers/bag2-routes.ts';
 import { ALL_PIECE_TYPES } from '../src/core/types.ts';
 import type { PieceType } from '../src/core/types.ts';
 
@@ -338,5 +339,136 @@ describe('Opener distribution is non-trivial', () => {
       seen.add(bestOpener(bag).opener.id);
     }
     expect(seen.size).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ── Bag 2 quiz mode ──
+
+describe('Bag 2 quiz mode', () => {
+  test('nextQuestion generates Bag 2 question with opener + route', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+    nextQuestion(state);
+
+    expect(state.phase).toBe('showing');
+    expect(state.bag1Opener).not.toBeNull();
+    expect(state.currentBag).toHaveLength(7); // shows Bag 2 pieces
+    expect(state.routeLabels.length).toBeGreaterThanOrEqual(2);
+    expect(state.correctRouteIndex).toBeGreaterThanOrEqual(0);
+    expect(state.correctRouteIndex).toBeLessThan(state.routeLabels.length);
+  });
+
+  test('route labels match getBag2Routes output', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+
+    for (let i = 0; i < 20; i++) {
+      nextQuestion(state);
+      const routes = getBag2Routes(state.bag1Opener!, state.bag1Mirror);
+      expect(state.routeLabels).toEqual(routes.map(r => r.routeLabel));
+    }
+  });
+
+  test('correct Bag 2 answer is marked correct', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+    nextQuestion(state);
+
+    submitBag2Answer(state, state.correctRouteIndex);
+    expect(state.isCorrect).toBe(true);
+    expect(state.phase).toBe('answered');
+    expect(state.selectedRouteIndex).toBe(state.correctRouteIndex);
+  });
+
+  test('wrong Bag 2 answer is marked incorrect', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+    nextQuestion(state);
+
+    const wrongIndex = state.correctRouteIndex === 0 ? 1 : 0;
+    submitBag2Answer(state, wrongIndex);
+    expect(state.isCorrect).toBe(false);
+    expect(state.selectedRouteIndex).toBe(wrongIndex);
+  });
+
+  test('submitBag2Answer is no-op for Bag 1 quiz type', () => {
+    const state = createQuizState();
+    state.quizType = 'bag1';
+    nextQuestion(state);
+
+    submitBag2Answer(state, 0);
+    expect(state.phase).toBe('showing'); // unchanged
+    expect(state.isCorrect).toBeNull();
+  });
+
+  test('submitAnswer is no-op for Bag 2 quiz type', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+    nextQuestion(state);
+
+    submitAnswer(state, 'ms2');
+    expect(state.phase).toBe('showing'); // unchanged
+    expect(state.isCorrect).toBeNull();
+  });
+
+  test('toggle between quiz types resets and generates new question', () => {
+    const state = createQuizState();
+    expect(state.quizType).toBe('bag1');
+
+    // Switch to bag2
+    state.quizType = 'bag2';
+    nextQuestion(state);
+    expect(state.bag1Opener).not.toBeNull();
+    expect(state.routeLabels.length).toBeGreaterThanOrEqual(2);
+
+    // Switch back to bag1
+    state.quizType = 'bag1';
+    nextQuestion(state);
+    expect(state.correctOpener).toBeDefined();
+    expect(state.alternatives).toBeDefined();
+  });
+});
+
+// ── Streak tracking ──
+
+describe('Streak tracking', () => {
+  test('streak increments on correct, resets on wrong', () => {
+    const state = createQuizState();
+    nextQuestion(state);
+
+    // Correct answer
+    submitAnswer(state, state.correctOpener);
+    expect(state.currentStreak).toBe(1);
+
+    // Another correct
+    nextQuestion(state);
+    submitAnswer(state, state.correctOpener);
+    expect(state.currentStreak).toBe(2);
+
+    // Wrong answer
+    nextQuestion(state);
+    const wrong = (['stray_cannon', 'honey_cup', 'ms2'] as OpenerID[])
+      .find(id => {
+        if (id === state.correctOpener) return false;
+        if (id === 'ms2' && state.correctOpener === 'gamushiro') return false;
+        if (id === 'gamushiro' && state.correctOpener === 'ms2') return false;
+        return true;
+      })!;
+    submitAnswer(state, wrong);
+    expect(state.currentStreak).toBe(0);
+  });
+
+  test('Bag 2 streak works', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+
+    nextQuestion(state);
+    submitBag2Answer(state, state.correctRouteIndex);
+    expect(state.currentStreak).toBe(1);
+
+    nextQuestion(state);
+    const wrongIdx = state.correctRouteIndex === 0 ? 1 : 0;
+    submitBag2Answer(state, wrongIdx);
+    expect(state.currentStreak).toBe(0);
   });
 });

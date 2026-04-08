@@ -1,7 +1,7 @@
 import { createRenderer } from './renderer/canvas.ts';
 import type { AppState } from './renderer/canvas.ts';
 import { loadQuizStats, saveQuizStats, recordAnswer, getDisplayStats } from './stats/tracker.ts';
-import { createQuizState, nextQuestion, submitAnswer, tickQuiz } from './modes/quiz.ts';
+import { createQuizState, nextQuestion, submitAnswer, submitBag2Answer, tickQuiz } from './modes/quiz.ts';
 import { setupKeyboard } from './input/keyboard.ts';
 import type { OpenerID } from './openers/types.ts';
 import type { PieceType } from './core/types.ts';
@@ -412,20 +412,36 @@ function dispatchQuiz(action: string): void {
     case 'option_2':
     case 'option_3': {
       if (state.quiz.phase !== 'showing') return;
-      const openerMap: Record<string, OpenerID> = {
-        option_1: 'stray_cannon',
-        option_2: 'honey_cup',
-        option_3: 'ms2',
-      };
-      let picked = openerMap[action]!;
 
-      // When user picks 'ms2', accept if the correct answer is 'gamushiro'
-      if (picked === 'ms2' && state.quiz.correctOpener === 'gamushiro') {
-        picked = 'gamushiro';
+      if (state.quiz.quizType === 'bag2') {
+        // Bag 2: option_1 = route 0, option_2 = route 1, option_3 = ignored
+        if (action === 'option_3') return;
+        const routeIndex = action === 'option_1' ? 0 : 1;
+        submitBag2Answer(state.quiz, routeIndex);
+      } else {
+        // Bag 1: same as before
+        const openerMap: Record<string, OpenerID> = {
+          option_1: 'stray_cannon',
+          option_2: 'honey_cup',
+          option_3: 'ms2',
+        };
+        let picked = openerMap[action]!;
+
+        // When user picks 'ms2', accept if the correct answer is 'gamushiro'
+        if (picked === 'ms2' && state.quiz.correctOpener === 'gamushiro') {
+          picked = 'gamushiro';
+        }
+
+        submitAnswer(state.quiz, picked);
       }
 
-      submitAnswer(state.quiz, picked);
-      storedStats = recordAnswer(storedStats, picked, state.quiz.isCorrect!, state.quiz.responseTimeMs!);
+      // Record stats (shared across both quiz types)
+      const opener = state.quiz.correctOpener;
+      storedStats = recordAnswer(storedStats, opener, state.quiz.isCorrect!, state.quiz.responseTimeMs!);
+      // Update best streak from current streak
+      if (state.quiz.currentStreak > storedStats.bestStreak) {
+        storedStats.bestStreak = state.quiz.currentStreak;
+      }
       saveQuizStats(storedStats);
       state.stats = getDisplayStats(storedStats);
       dirty = true;
@@ -443,10 +459,18 @@ function dispatchQuiz(action: string): void {
       dirty = true;
       break;
     }
+    case 'toggle_quiz_type': {
+      state.quiz.quizType = state.quiz.quizType === 'bag1' ? 'bag2' : 'bag1';
+      state.quiz.currentStreak = 0;
+      nextQuestion(state.quiz);
+      dirty = true;
+      break;
+    }
     case 'reset_stats': {
       storedStats = { version: 1, total: 0, correct: 0, byOpener: {} as any, responseTimes: [], bestStreak: 0 };
       saveQuizStats(storedStats);
       state.stats = getDisplayStats(storedStats);
+      state.quiz.currentStreak = 0;
       dirty = true;
       break;
     }
@@ -722,17 +746,35 @@ canvas.addEventListener('click', (e) => {
 
   // Quiz mode: answer buttons
   if (state.appMode === 'quiz' && state.quiz.phase === 'showing') {
-    // Button 1 (Stray): x=120, y=410, 180×44
-    // Button 2 (Honey): x=320, y=410, 180×44
-    // Button 3 (MS2):   x=170, y=464, 280×44
-    if (y >= 410 && y <= 454 && x >= 120 && x <= 300) {
-      dispatch('option_1'); return;
-    }
-    if (y >= 410 && y <= 454 && x >= 320 && x <= 500) {
-      dispatch('option_2'); return;
-    }
-    if (y >= 464 && y <= 508 && x >= 170 && x <= 450) {
-      dispatch('option_3'); return;
+    if (state.quiz.quizType === 'bag2') {
+      // Bag 2: 2 buttons centered, y=430, h=44
+      // Each 240px wide, 16px gap, centered in 640px canvas
+      const btnW = 240;
+      const gap = 16;
+      const totalW = state.quiz.routeLabels.length * btnW + (state.quiz.routeLabels.length - 1) * gap;
+      const startX = (640 - totalW) / 2;
+      if (y >= 430 && y <= 474) {
+        for (let i = 0; i < state.quiz.routeLabels.length; i++) {
+          const bx = startX + i * (btnW + gap);
+          if (x >= bx && x <= bx + btnW) {
+            dispatch(`option_${i + 1}`); return;
+          }
+        }
+      }
+    } else {
+      // Bag 1: 3 buttons
+      // Button 1 (Stray): x=120, y=410, 180×44
+      // Button 2 (Honey): x=320, y=410, 180×44
+      // Button 3 (MS2):   x=170, y=464, 280×44
+      if (y >= 410 && y <= 454 && x >= 120 && x <= 300) {
+        dispatch('option_1'); return;
+      }
+      if (y >= 410 && y <= 454 && x >= 320 && x <= 500) {
+        dispatch('option_2'); return;
+      }
+      if (y >= 464 && y <= 508 && x >= 170 && x <= 450) {
+        dispatch('option_3'); return;
+      }
     }
   }
 

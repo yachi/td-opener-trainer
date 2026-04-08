@@ -107,7 +107,7 @@ export function getDisplayStats(stats: StoredQuizStats): QuizStatsData {
   return {
     total: stats.total,
     correct: stats.correct,
-    streak: 0, // Streak is tracked in app state, not in stored stats
+    streak: 0, // Current streak is tracked in QuizState.currentStreak
     bestStreak: stats.bestStreak,
     avgTimeMs,
   };

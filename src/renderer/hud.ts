@@ -2,7 +2,7 @@ import type { OpenerID } from '../openers/types';
 import { LAYOUT, COLORS, CANVAS_W, roundRect } from './board';
 
 export interface QuizHUDData {
-  phase: 'showing' | 'answered' | 'transitioning';
+  phase: 'showing' | 'answered';
   selectedOpener: OpenerID | null;
   correctOpener: OpenerID;
   alternatives: OpenerID[];
@@ -10,6 +10,13 @@ export interface QuizHUDData {
   responseTimeMs: number | null;
   explanation: string;
   quizMode: 'learning' | 'speed';
+  quizType: 'bag1' | 'bag2';
+  // Bag 2 context
+  bag1OpenerName: string;
+  bag1MirrorLabel: string;
+  selectedRouteIndex: number | null;
+  correctRouteIndex: number;
+  routeLabels: string[];
   stats: {
     total: number;
     correct: number;
@@ -24,33 +31,41 @@ export interface QuizHUDData {
 interface ButtonDef {
   key: string;        // keyboard badge label
   label: string;      // display text
-  openerIds: OpenerID[]; // which openerIDs this button represents
+  id: string;         // unique identifier for hit-testing
   x: number;
   y: number;
   w: number;
   h: number;
 }
 
-const BUTTONS: ButtonDef[] = [
-  {
-    key: '1',
-    label: 'Stray (\u8FF7\u8D70\u7832)',
-    openerIds: ['stray_cannon'],
-    x: 120, y: 410, w: 180, h: 44,
-  },
-  {
-    key: '2',
-    label: 'Honey (\u8702\u8702\u7832)',
-    openerIds: ['honey_cup'],
-    x: 320, y: 410, w: 180, h: 44,
-  },
-  {
-    key: '3',
-    label: 'MS2 / Gamushiro (\u5c71\u5cb3\u00b7\u7cd6\u6f3f)',
-    openerIds: ['ms2', 'gamushiro'],
-    x: 170, y: 464, w: 280, h: 44,
-  },
+const BAG1_BUTTONS: ButtonDef[] = [
+  { key: '1', label: 'Stray (迷走炮)', id: 'stray_cannon', x: 120, y: 410, w: 180, h: 44 },
+  { key: '2', label: 'Honey (蜜蜂炮)', id: 'honey_cup', x: 320, y: 410, w: 180, h: 44 },
+  { key: '3', label: 'MS2 / Gamushiro (山岳·糖漿)', id: 'ms2', x: 170, y: 464, w: 280, h: 44 },
 ];
+
+/** Maps opener button IDs to all matching opener IDs (for correctness highlighting). */
+const BAG1_BUTTON_OPENER_IDS: Record<string, OpenerID[]> = {
+  stray_cannon: ['stray_cannon'],
+  honey_cup: ['honey_cup'],
+  ms2: ['ms2', 'gamushiro'],
+};
+
+function getBag2Buttons(routeLabels: string[]): ButtonDef[] {
+  const btnW = 240;
+  const gap = 16;
+  const totalW = routeLabels.length * btnW + (routeLabels.length - 1) * gap;
+  const startX = (CANVAS_W - totalW) / 2;
+  return routeLabels.map((label, i) => ({
+    key: `${i + 1}`,
+    label,
+    id: `route_${i}`,
+    x: startX + i * (btnW + gap),
+    y: 430,
+    w: btnW,
+    h: 44,
+  }));
+}
 
 const OPENER_DISPLAY: Record<OpenerID, string> = {
   stray_cannon: 'Stray',
@@ -62,11 +77,24 @@ const OPENER_DISPLAY: Record<OpenerID, string> = {
 // ── Main HUD draw ──
 
 export function drawQuizHUD(ctx: CanvasRenderingContext2D, data: QuizHUDData): void {
+  // Bag 2 context line
+  if (data.quizType === 'bag2' && data.bag1OpenerName) {
+    ctx.fillStyle = '#CCAA44';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(
+      `Opener: ${data.bag1OpenerName} ${data.bag1MirrorLabel}`,
+      CANVAS_W / 2,
+      390,
+    );
+  }
+
   drawButtons(ctx, data);
 
-  if (data.phase === 'answered' || data.phase === 'transitioning') {
+  if (data.phase === 'answered') {
     drawFeedback(ctx, data);
-    if (data.quizMode === 'learning' && !data.isCorrect && data.explanation) {
+    if (data.quizType === 'bag1' && data.quizMode === 'learning' && !data.isCorrect && data.explanation) {
       drawExplanation(ctx, data.explanation);
     }
   }
@@ -77,11 +105,25 @@ export function drawQuizHUD(ctx: CanvasRenderingContext2D, data: QuizHUDData): v
 // ── Buttons ──
 
 function drawButtons(ctx: CanvasRenderingContext2D, data: QuizHUDData): void {
-  const isAnswered = data.phase === 'answered' || data.phase === 'transitioning';
+  const isAnswered = data.phase === 'answered';
+  const buttons = data.quizType === 'bag2'
+    ? getBag2Buttons(data.routeLabels)
+    : BAG1_BUTTONS;
 
-  for (const btn of BUTTONS) {
-    const isCorrectButton = btn.openerIds.includes(data.correctOpener);
-    const isSelectedButton = data.selectedOpener !== null && btn.openerIds.includes(data.selectedOpener);
+  for (let btnIdx = 0; btnIdx < buttons.length; btnIdx++) {
+    const btn = buttons[btnIdx]!;
+
+    let isCorrectButton: boolean;
+    let isSelectedButton: boolean;
+
+    if (data.quizType === 'bag2') {
+      isCorrectButton = btnIdx === data.correctRouteIndex;
+      isSelectedButton = data.selectedRouteIndex === btnIdx;
+    } else {
+      const openerIds = BAG1_BUTTON_OPENER_IDS[btn.id] ?? [];
+      isCorrectButton = openerIds.includes(data.correctOpener);
+      isSelectedButton = data.selectedOpener !== null && openerIds.includes(data.selectedOpener);
+    }
 
     // Determine colors
     let bgColor = COLORS.buttonBg;
@@ -157,8 +199,13 @@ function drawFeedback(ctx: CanvasRenderingContext2D, data: QuizHUDData): void {
   } else {
     ctx.fillStyle = COLORS.incorrect;
     ctx.font = 'bold 18px -apple-system, sans-serif';
-    const correctName = OPENER_DISPLAY[data.correctOpener] ?? data.correctOpener;
-    ctx.fillText(`WRONG \u2192 ${correctName}`, centerX, feedbackY);
+    if (data.quizType === 'bag2') {
+      const correctLabel = data.routeLabels[data.correctRouteIndex] ?? '?';
+      ctx.fillText(`WRONG \u2192 ${correctLabel}`, centerX, feedbackY);
+    } else {
+      const correctName = OPENER_DISPLAY[data.correctOpener] ?? data.correctOpener;
+      ctx.fillText(`WRONG \u2192 ${correctName}`, centerX, feedbackY);
+    }
   }
 }
 
@@ -283,6 +330,7 @@ export function drawStatusBar(
   ctx: CanvasRenderingContext2D,
   text: string,
   quizMode?: 'learning' | 'speed',
+  quizType?: 'bag1' | 'bag2',
 ): void {
   const { x, y, w, h } = LAYOUT.statusBar;
 
@@ -305,5 +353,17 @@ export function drawStatusBar(
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${modeLabel} [S]`, x + w - 16, y + h / 2);
+  }
+
+  // Quiz type indicator on the left
+  if (quizType) {
+    const typeLabel = quizType === 'bag1' ? 'BAG 1' : 'BAG 2';
+    const typeColor = quizType === 'bag1' ? '#7799AA' : '#CCAA44';
+
+    ctx.fillStyle = typeColor;
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${typeLabel} [B]`, x + 16, y + h / 2);
   }
 }

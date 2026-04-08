@@ -36,7 +36,7 @@ export interface AppState {
     correctRouteIndex?: number | null;
   };
   quiz: {
-    phase: 'showing' | 'answered' | 'transitioning';
+    phase: 'showing' | 'answered';
     currentBag: PieceType[];
     correctOpener: OpenerID;
     alternatives: OpenerID[];
@@ -49,6 +49,14 @@ export interface AppState {
     explanation: string;
     autoAdvanceAt: number | null;
     mode: 'learning' | 'speed';
+    currentStreak: number;
+    quizType: 'bag1' | 'bag2';
+    bag1Opener: OpenerID | null;
+    bag1Mirror: boolean;
+    bag2Bag: PieceType[] | null;
+    correctRouteIndex: number;
+    selectedRouteIndex: number | null;
+    routeLabels: string[];
   };
   stats: QuizStatsData;
   visualizer?: VisualizerState;
@@ -84,7 +92,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         renderOnboardingMode(ctx, renderState);
       } else if (state.mode === 'quiz') {
         renderQuizMode(ctx, state);
-        drawStatusBar(ctx, 'Press 1-3 \u00b7 Space: skip \u00b7 S: mode \u00b7 R: reset', state.quiz.mode);
+        const statusHint = state.quiz.quizType === 'bag2'
+          ? 'Press 1-2 \u00b7 Space: skip \u00b7 S: mode \u00b7 B: bag type \u00b7 R: reset'
+          : 'Press 1-3 \u00b7 Space: skip \u00b7 S: mode \u00b7 B: bag type \u00b7 R: reset';
+        drawStatusBar(ctx, statusHint, state.quiz.mode, state.quiz.quizType);
       } else if (state.mode === 'visualizer' && state.visualizer) {
         renderVisualizerMode(ctx, state.visualizer);
       } else if (state.mode === 'drill') {
@@ -104,21 +115,30 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 function renderQuizMode(ctx: CanvasRenderingContext2D, state: AppState): void {
   const { quiz, stats } = state;
 
-  // Determine hold piece: show after answering
-  const isAnswered = quiz.phase === 'answered' || quiz.phase === 'transitioning';
+  // Determine hold piece: show after answering (Bag 1 only)
+  const isAnswered = quiz.phase === 'answered';
   const openerDef = OPENERS[quiz.correctOpener];
-  const holdPiece = isAnswered
+  const holdPiece = (isAnswered && quiz.quizType === 'bag1')
     ? (quiz.mirror ? openerDef.holdPieceMirror : openerDef.holdPiece)
     : null;
 
   // 3. Draw quiz queue (vertical layout)
   const queueOptions: QuizQueueOptions = {
-    decisionPieces: quiz.decisionPieces,
-    showHighlights: isAnswered,
+    decisionPieces: quiz.quizType === 'bag1' ? quiz.decisionPieces : [],
+    showHighlights: isAnswered && quiz.quizType === 'bag1',
     holdPiece,
     mirror: quiz.mirror,
   };
   drawQuizQueue(ctx, quiz.currentBag, queueOptions);
+
+  // Bag 2 context: opener name
+  let bag1OpenerName = '';
+  let bag1MirrorLabel = '';
+  if (quiz.quizType === 'bag2' && quiz.bag1Opener) {
+    const def = OPENERS[quiz.bag1Opener];
+    bag1OpenerName = def.nameEn;
+    bag1MirrorLabel = quiz.bag1Mirror ? '(Mirror)' : '';
+  }
 
   // 4. Draw HUD (buttons, feedback, stats)
   const hudData: QuizHUDData = {
@@ -130,10 +150,16 @@ function renderQuizMode(ctx: CanvasRenderingContext2D, state: AppState): void {
     responseTimeMs: quiz.responseTimeMs,
     explanation: quiz.explanation,
     quizMode: quiz.mode,
+    quizType: quiz.quizType,
+    bag1OpenerName,
+    bag1MirrorLabel,
+    selectedRouteIndex: quiz.selectedRouteIndex,
+    correctRouteIndex: quiz.correctRouteIndex,
+    routeLabels: quiz.routeLabels,
     stats: {
       total: stats.total,
       correct: stats.correct,
-      streak: stats.streak,
+      streak: quiz.currentStreak,
       bestStreak: stats.bestStreak,
       avgTimeMs: stats.avgTimeMs,
     },
