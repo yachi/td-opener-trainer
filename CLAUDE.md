@@ -108,43 +108,15 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - Use `tetris-fumen` npm package to decode: `decoder.decode('v115@...')`
 
 ### Key Files
-- `src/core/srs.ts` — SRS rotation, kick tables, `hardDrop`, `spawnPiece`, collision detection
-- `src/core/engine.ts` — unified engine: BFS `findAllPlacements`, `buildSteps`, fumen bridge, `findFloatingPieces`, `lockAndClear`
-- `src/modes/visualizer.ts` — unified `VisualizerState` (6 flat fields), placement data for all 4 openers × 8 routes
-- `src/modes/onboarding.ts` — shape_preview→rule_card→examples→drill→celebration learning flow
-- `src/modes/quiz.ts` — speed quiz (only useful after learning)
+- `src/core/srs.ts` — SRS rotation, kick tables, `hardDrop`, `spawnPiece`, readonly `Board` type
+- `src/core/engine.ts` — unified engine: BFS `findAllPlacements`, `buildSteps`, `stampCells`, `lockAndClear`, fumen bridge
+- `src/openers/placements.ts` — Bag 1 placement data for all 4 openers, mirror helpers
+- `src/openers/bag2-routes.ts` — Bag 2 route data, `canSelect` predicates, `getBag2Routes`
+- `src/openers/decision.ts` — `bestOpener`, `bestBag2Route`, `DECISION_PIECES`, opener definitions
+- `src/modes/visualizer.ts` — pure state management (162 lines), `createVisualizerState`
+- `src/modes/onboarding.ts` — data-driven onboarding, Bag 1 + Bag 2, all 4 openers
+- `src/modes/drill.ts` — Bag 1 + Bag 2 drill with guided mode, hold simulation
+- `src/modes/quiz.ts` — speed quiz: Bag 1 (which opener?) + Bag 2 (which route?), toggle with B
 - `tests/acceptance.test.ts` — 28 acceptance tests: gravity, no disappearing, cell count, wiki oracle
-- `tests/` — 460 tests across 11 files
+- `tests/` — 473 tests across 11 files
 
-## Workflow: L8 Redesign Protocol
-
-Trigger: user says **"L8"**, "L8 mode", or "work on X as a google l8 engineer".
-
-**Core rule: ALL work happens in spawned agents — including reading code for implementation prep. The main session ONLY orchestrates (spawns agents, reviews their output, commits). Never read implementation files, write code, or do pre-work in the main session — it pollutes context and makes reverting hard. If you need to understand code before giving agent instructions, spawn a research agent for that.**
-
-### L8 Mindset
-Think like a Google L8 principal engineer. The default is DELETE code and REDESIGN the system from the ground up, from first principles — not patch or extend. Every function must justify its existence with evidence (callers, tests). Dead code dies. Duplicate paths merge. If the current design is why the problem exists, fix the design — not the instance. Draft 99% of the code mentally before writing anything. Reference industrial standards (open source reference implementations, peer-reviewed learning models, formal specs).
-
-**Demotion rule**: If your L8 output has no code deletion and no large structural refactor, you are demoted to L3. An L8 redesigns the system from first principles — deleting what shouldn't exist, merging what's duplicated, rebuilding what's misarchitected. If the codebase isn't fundamentally simpler and cleaner after your change, you operated as an L3 (adding features to an existing design) not an L8 (redesigning the system). No exceptions.
-
-### Phase 1: Research Agents (spawn 2-3 opus agents in parallel)
-Split research by angle — e.g., agent 1 maps current architecture, agent 2 researches industrial standards, agent 3 traces all callers/tests. Each prompt must include:
-- Specific research scope (don't overlap)
-- "DO NOT write code or edit files. Research only."
-- Convergence loop: draft design, adversarial review, gap scan, repeat until 0 new findings
-- Output: exact file-by-file change list with line numbers, what to DELETE, what to MERGE, what's new
-
-### Phase 2: Converge & Review
-Main session reads all agent outputs. Build cross-agent disagreement table, resolve to 0 disagreements. Ask user for approval if scope is large.
-
-### Phase 3: Implementation Agents (spawn 2-3 opus agents in parallel)
-Split the work into independent slices. Each agent gets:
-- Precise instructions: exact functions to copy/delete, exact lines to change
-- `mode: bypassPermissions` (agents get blocked on Edit/Bash otherwise)
-- "DO NOT commit"
-
-### Phase 4: Verify & Commit (main session)
-1. `bun test` — all tests pass
-2. Playwright screenshot — visual verification
-3. `git diff --stat` — review total impact
-4. Commit with conventional commit message
