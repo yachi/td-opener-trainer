@@ -128,21 +128,40 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   const target = getTargetPlacement(state); // current piece's target for hint text
   for (const t of allTargets) {
     const isActive = state.activePiece && t.piece === state.activePiece.type;
-    const color = COLORS.pieces[t.piece ?? 'T'] ?? '#888888';
-    const fillAlpha = isActive ? 0.2 : 0.15;
-    const strokeAlpha = isActive ? 1.0 : 0.45;
+    const pieceColor = COLORS.pieces[t.piece ?? 'T'] ?? '#888888';
 
-    ctx.globalAlpha = fillAlpha;
-    for (const { col, row } of t.cells) {
-      if (row < 0) continue;
-      const px = BOARD_X + col * CELL_SIZE;
-      const py = BOARD_Y + row * CELL_SIZE;
-      drawCell(ctx, px, py, CELL_SIZE, color);
-    }
+    if (isActive) {
+      // Active target: bright piece color (high contrast, immediately identifiable)
+      ctx.globalAlpha = 0.2;
+      for (const { col, row } of t.cells) {
+        if (row < 0) continue;
+        const px = BOARD_X + col * CELL_SIZE;
+        const py = BOARD_Y + row * CELL_SIZE;
+        drawCell(ctx, px, py, CELL_SIZE, pieceColor);
+      }
 
-    // White inner border for inactive targets (visibility on dark bg)
-    if (!isActive) {
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = pieceColor;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      for (const { col, row } of t.cells) {
+        if (row < 0) continue;
+        const px = BOARD_X + col * CELL_SIZE;
+        const py = BOARD_Y + row * CELL_SIZE;
+        ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+      }
+      ctx.setLineDash([]);
+    } else {
+      // Inactive targets: white outlines (universally visible on dark board)
+      ctx.globalAlpha = 0.08;
+      for (const { col, row } of t.cells) {
+        if (row < 0) continue;
+        const px = BOARD_X + col * CELL_SIZE;
+        const py = BOARD_Y + row * CELL_SIZE;
+        drawCell(ctx, px, py, CELL_SIZE, '#FFFFFF');
+      }
+
+      ctx.globalAlpha = 0.35;
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
@@ -150,22 +169,10 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
         if (row < 0) continue;
         const px = BOARD_X + col * CELL_SIZE;
         const py = BOARD_Y + row * CELL_SIZE;
-        ctx.strokeRect(px + 2, py + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+        ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
       }
       ctx.setLineDash([]);
     }
-
-    ctx.globalAlpha = strokeAlpha;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = isActive ? 2 : 1;
-    ctx.setLineDash([4, 4]);
-    for (const { col, row } of t.cells) {
-      if (row < 0) continue;
-      const px = BOARD_X + col * CELL_SIZE;
-      const py = BOARD_Y + row * CELL_SIZE;
-      ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-    }
-    ctx.setLineDash([]);
   }
   ctx.globalAlpha = 1.0;
 
