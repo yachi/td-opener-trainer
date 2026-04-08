@@ -10,7 +10,7 @@ import { CANVAS_W, CANVAS_H, COLORS, LAYOUT, CELL_SIZE, drawCell, drawPieceInBox
 import { drawBoard, drawFilledCells, drawPiecePreview } from './board';
 import { drawHoldPiece, drawQueue, drawQuizQueue } from './queue';
 import { drawQuizHUD, drawTabs, drawStatusBar } from './hud';
-import { renderOnboardingMode } from './onboarding';
+import { renderOnboardingMode, renderOnboardingSelector } from './onboarding';
 import { OPENERS, DECISION_PIECES, DECISION_PIECES_MIRROR } from '../openers/decision';
 import { getBag2Routes as getBag2RoutesFromOpeners } from '../openers/bag2-routes';
 import { PIECE_DEFINITIONS } from '../core/pieces';
@@ -37,6 +37,8 @@ export interface AppState {
     selectedRouteIndex?: number | null;
     correctRouteIndex?: number | null;
   };
+  onboardingMenuOpen?: boolean;
+  onboardingMenuIndex?: number;
   quiz: QuizState;
   stats: QuizStatsData;
   visualizer?: VisualizerState;
@@ -67,9 +69,14 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       drawTabs(ctx, state.mode);
 
       if (state.mode === 'onboarding' && state.onboarding) {
-        // Build render state from progress + drill data
-        const renderState = buildOnboardingRenderState(state);
-        renderOnboardingMode(ctx, renderState);
+        if (state.onboardingMenuOpen) {
+          renderOnboardingSelector(ctx, state.onboarding, state.onboardingMenuIndex ?? 0);
+          drawStatusBar(ctx, 'Learn \u00b7 1-8: pick stage \u00b7 Enter: confirm \u00b7 Esc: return here');
+        } else {
+          // Build render state from progress + drill data
+          const renderState = buildOnboardingRenderState(state);
+          renderOnboardingMode(ctx, renderState);
+        }
       } else if (state.mode === 'quiz') {
         renderQuizMode(ctx, state);
         const accuracyLabel = state.stats.total > 0

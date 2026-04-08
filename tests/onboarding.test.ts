@@ -6,6 +6,7 @@ import type { OpenerID } from '../src/openers/types.ts';
 import {
   createOnboardingProgress,
   advancePhase,
+  goToStage,
   recordDrillAnswer,
   recordBag2DrillAnswer,
   checkMastery,
@@ -131,6 +132,82 @@ describe('O1: Onboarding State Management', () => {
     const before = Date.now();
     advancePhase(progress);
     expect(progress.lastActiveAt).toBeGreaterThanOrEqual(before);
+  });
+});
+
+// ── O1b: goToStage (Stage Selector) ──
+
+describe('O1b: goToStage (Stage Selector)', () => {
+  test('goToStage sets correct fields for Bag 1 opener', () => {
+    const progress = createOnboardingProgress();
+    // Advance to some mid-state first
+    progress.currentStage = 'honey_cup';
+    progress.stagePhase = 'drill';
+    progress.exampleIndex = 2;
+    progress.exampleStep = 1;
+
+    goToStage(progress, 'stray_cannon', 1);
+
+    expect(progress.currentStage).toBe('stray_cannon');
+    expect(progress.currentBag).toBe(1);
+    expect(progress.stagePhase).toBe('shape_preview');
+    expect(progress.exampleIndex).toBe(0);
+    expect(progress.exampleStep).toBe(0);
+  });
+
+  test('goToStage sets correct fields for Bag 2 opener', () => {
+    const progress = createOnboardingProgress();
+
+    goToStage(progress, 'gamushiro', 2);
+
+    expect(progress.currentStage).toBe('gamushiro');
+    expect(progress.currentBag).toBe(2);
+    expect(progress.stagePhase).toBe('shape_preview');
+    expect(progress.exampleIndex).toBe(0);
+    expect(progress.exampleStep).toBe(0);
+  });
+
+  test('goToStage can jump from complete back to a stage', () => {
+    const progress = createOnboardingProgress();
+    progress.currentStage = 'complete';
+
+    goToStage(progress, 'ms2', 1);
+
+    expect(progress.currentStage).toBe('ms2');
+    expect(progress.stagePhase).toBe('shape_preview');
+  });
+
+  test('goToStage updates lastActiveAt', () => {
+    const progress = createOnboardingProgress();
+    const before = Date.now();
+    goToStage(progress, 'honey_cup', 2);
+    expect(progress.lastActiveAt).toBeGreaterThanOrEqual(before);
+  });
+
+  test('goToStage preserves mastery records', () => {
+    const progress = createOnboardingProgress();
+    progress.mastery.ms2.completed = true;
+    progress.mastery.ms2.total = 10;
+    progress.mastery.ms2.correct = 8;
+
+    goToStage(progress, 'honey_cup', 1);
+
+    // MS2 mastery should be untouched
+    expect(progress.mastery.ms2.completed).toBe(true);
+    expect(progress.mastery.ms2.total).toBe(10);
+    expect(progress.mastery.ms2.correct).toBe(8);
+  });
+
+  test('all 8 stage combinations are valid targets', () => {
+    const progress = createOnboardingProgress();
+    for (const bag of [1, 2] as const) {
+      for (const openerId of STAGE_ORDER) {
+        goToStage(progress, openerId, bag);
+        expect(progress.currentStage).toBe(openerId);
+        expect(progress.currentBag).toBe(bag);
+        expect(progress.stagePhase).toBe('shape_preview');
+      }
+    }
   });
 });
 

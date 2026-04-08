@@ -16,7 +16,10 @@ export function setupKeyboard(
     Digit4: 'option_4',
     Digit5: 'option_5',
     Digit6: 'option_6',
+    Digit7: 'option_7',
+    Digit8: 'option_8',
     KeyB: 'toggle_quiz_type',
+    Escape: 'menu',
   };
 
   function onKeyDown(e: KeyboardEvent): void {

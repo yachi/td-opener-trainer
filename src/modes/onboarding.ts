@@ -74,6 +74,15 @@ export function createOnboardingProgress(): OnboardingProgress {
   };
 }
 
+export function goToStage(progress: OnboardingProgress, openerId: OpenerID, bag: 1 | 2): void {
+  progress.currentStage = openerId;
+  progress.currentBag = bag;
+  progress.stagePhase = 'shape_preview';
+  progress.exampleIndex = 0;
+  progress.exampleStep = 0;
+  progress.lastActiveAt = Date.now();
+}
+
 export function advancePhase(progress: OnboardingProgress): void {
   progress.lastActiveAt = Date.now();
 

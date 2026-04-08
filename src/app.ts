@@ -10,6 +10,7 @@ import {
   saveOnboardingProgress,
   createOnboardingProgress,
   advancePhase,
+  goToStage,
   checkMastery,
   recordDrillAnswer,
   recordBag2DrillAnswer,
@@ -63,6 +64,8 @@ interface FullAppState extends AppState {
   onboardingDrill: OnboardingDrill;
   onboardingShapeStep: number;
   onboardingBag2Route: number;
+  onboardingMenuOpen: boolean;
+  onboardingMenuIndex: number;
   drill: DrillState | null;
   drillSelector: { selectedIndex: number };
 }
@@ -92,6 +95,8 @@ const state: FullAppState = {
   onboardingDrill: createOnboardingDrill(),
   onboardingShapeStep: 0,
   onboardingBag2Route: 0,
+  onboardingMenuOpen: true,
+  onboardingMenuIndex: 0,
   visualizer: createVisualizerState('ms2', false),
   drill: null,
   drillSelector: { selectedIndex: 0 },
@@ -231,8 +236,57 @@ function skipCurrentStage(): void {
   dirty = true;
 }
 
+function selectOnboardingStage(index: number): void {
+  const bag = index < 4 ? 1 : 2;
+  const openerIndex = index % 4;
+  const openerId = STAGE_ORDER[openerIndex]!;
+  goToStage(state.onboarding, openerId, bag as 1 | 2);
+  state.onboardingMenuOpen = false;
+  state.onboardingShapeStep = 0;
+  state.onboardingBag2Route = 0;
+  if (state.onboarding.stagePhase === 'drill') {
+    enterDrillPhase();
+  }
+  saveOnboardingProgress(state.onboarding);
+  dirty = true;
+}
+
 function dispatchOnboarding(action: string): void {
   const { onboarding } = state;
+
+  // Menu action: open the stage selector
+  if (action === 'menu') {
+    state.onboardingMenuOpen = true;
+    dirty = true;
+    return;
+  }
+
+  // When menu is open, handle stage selection
+  if (state.onboardingMenuOpen) {
+    const totalItems = STAGE_ORDER.length * 2; // 8 items
+    switch (action) {
+      case 'option_1': selectOnboardingStage(0); return;
+      case 'option_2': selectOnboardingStage(1); return;
+      case 'option_3': selectOnboardingStage(2); return;
+      case 'option_4': selectOnboardingStage(3); return;
+      case 'option_5': selectOnboardingStage(4); return;
+      case 'option_6': selectOnboardingStage(5); return;
+      case 'option_7': selectOnboardingStage(6); return;
+      case 'option_8': selectOnboardingStage(7); return;
+      case 'step_back': // Arrow left = up in list
+        state.onboardingMenuIndex = Math.max(0, state.onboardingMenuIndex - 1);
+        dirty = true;
+        return;
+      case 'advance': { // Arrow right / Space = down or confirm
+        // If Space, confirm selection
+        selectOnboardingStage(state.onboardingMenuIndex);
+        return;
+      }
+    }
+    // For keys 7-8 we need option_7/option_8 which don't exist yet
+    // Use arrow navigation for those slots
+    return;
+  }
 
   // Skip stage works from any phase (press N)
   if (action === 'skip_stage') {
@@ -403,6 +457,7 @@ function dispatchOnboarding(action: string): void {
       }
       break;
     }
+    // Note: 'menu' action (Escape) is handled above before the phase switch
   }
 }
 
@@ -674,16 +729,11 @@ canvas.addEventListener('click', (e) => {
   if (y <= 40) {
     const tabIndex = Math.floor(x / (640 / 3));
     if (tabIndex === 0) {
-      // Quiz tab — goes to quiz (if complete) or onboarding
+      // Learn/Quiz tab — always enters onboarding with stage selector
       if (state.appMode === 'drill') leaveDrillMode();
-      if (state.onboarding.currentStage === 'complete') {
-        state.appMode = 'quiz';
-        state.mode = 'quiz' as any;
-        if (state.quiz.currentBag.length === 0) nextQuestion(state.quiz);
-      } else {
-        state.appMode = 'onboarding';
-        state.mode = 'onboarding' as any;
-      }
+      state.appMode = 'onboarding';
+      state.mode = 'onboarding' as any;
+      state.onboardingMenuOpen = true;
       dirty = true;
     } else if (tabIndex === 1) {
       // Visualizer tab — always accessible
@@ -776,6 +826,29 @@ canvas.addEventListener('click', (e) => {
         dispatch('option_3'); return;
       }
     }
+  }
+
+  // Onboarding selector: 8 stage buttons
+  if (state.appMode === 'onboarding' && state.onboardingMenuOpen) {
+    const btnW = 280;
+    const btnH = 40;
+    const gap = 6;
+    const sectionGap = 16;
+    const headerH = 24;
+    const bx = (640 - btnW) / 2;
+    let by = 100 + headerH; // after Bag 1 header
+
+    for (let i = 0; i < 8; i++) {
+      if (i === 4) {
+        by += sectionGap + headerH; // Bag 2 header
+      }
+      if (x >= bx && x <= bx + btnW && y >= by && y <= by + btnH) {
+        selectOnboardingStage(i);
+        return;
+      }
+      by += btnH + gap;
+    }
+    return;
   }
 
   // Onboarding drill: Yes/No buttons (same positions as quiz roughly)

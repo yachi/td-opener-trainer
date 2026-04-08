@@ -79,6 +79,141 @@ function drawSeparator(ctx: CanvasRenderingContext2D, y: number, margin = 80): v
   ctx.stroke();
 }
 
+// ── Stage Selector ──
+
+const SELECTOR_STAGES: { id: OpenerID; bag: 1 | 2; label: string }[] = [
+  { id: 'ms2', bag: 1, label: 'MS2 (山岳)' },
+  { id: 'honey_cup', bag: 1, label: 'Honey Cup (蜜蜂)' },
+  { id: 'stray_cannon', bag: 1, label: 'Stray Cannon (迷走)' },
+  { id: 'gamushiro', bag: 1, label: 'Gamushiro (糖漿)' },
+  { id: 'ms2', bag: 2, label: 'MS2 (山岳)' },
+  { id: 'honey_cup', bag: 2, label: 'Honey Cup (蜜蜂)' },
+  { id: 'stray_cannon', bag: 2, label: 'Stray Cannon (迷走)' },
+  { id: 'gamushiro', bag: 2, label: 'Gamushiro (糖漿)' },
+];
+
+export function renderOnboardingSelector(
+  ctx: CanvasRenderingContext2D,
+  progress: OnboardingProgress,
+  selectedIndex: number,
+): void {
+  const cx = centerX();
+
+  // Title
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 24px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Choose a Stage', cx, 60);
+
+  const btnW = 280;
+  const btnH = 40;
+  const gap = 6;
+  const sectionGap = 16;
+  const headerH = 24;
+
+  // Compute current stage index for "current" indicator
+  let currentIdx = -1;
+  if (progress.currentStage !== 'complete') {
+    const openerIdx = STAGE_ORDER.indexOf(progress.currentStage as OpenerID);
+    if (openerIdx >= 0) {
+      currentIdx = progress.currentBag === 2 ? openerIdx + 4 : openerIdx;
+    }
+  }
+
+  let y = 100;
+
+  // Bag 1 header
+  ctx.fillStyle = MUTED;
+  ctx.font = `bold 14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('\u2500\u2500 Bag 1 \u2500\u2500', cx, y);
+  y += headerH;
+
+  for (let i = 0; i < 8; i++) {
+    // Bag 2 header before index 4
+    if (i === 4) {
+      y += sectionGap;
+      ctx.fillStyle = MUTED;
+      ctx.font = `bold 14px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('\u2500\u2500 Bag 2 \u2500\u2500', cx, y);
+      y += headerH;
+    }
+
+    const stage = SELECTOR_STAGES[i]!;
+    const bx = (CANVAS_W - btnW) / 2;
+    const by = y;
+    const isSelected = i === selectedIndex;
+    const isCurrent = i === currentIdx;
+
+    // Completion status
+    const mastery = stage.bag === 2 ? progress.masteryBag2[stage.id] : progress.mastery[stage.id];
+    const completed = mastery?.completed ?? false;
+
+    // Button bg
+    ctx.fillStyle = isSelected ? '#2A2A5C' : '#141430';
+    roundRect(ctx, bx, by, btnW, btnH, 8);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = isSelected ? '#6A6AAC' : isCurrent ? '#AAAA6C' : '#2A2A4A';
+    ctx.lineWidth = isSelected ? 2 : 1;
+    roundRect(ctx, bx, by, btnW, btnH, 8);
+    ctx.stroke();
+
+    // Key number badge
+    const badge = String(i + 1);
+    const badgeSize = 18;
+    const badgeX = bx + 10;
+    const badgeY = by + (btnH - badgeSize) / 2;
+
+    ctx.fillStyle = '#1A1A3A';
+    roundRect(ctx, badgeX, badgeY, badgeSize, badgeSize, 4);
+    ctx.fill();
+    ctx.fillStyle = '#7777AA';
+    ctx.font = `bold 10px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badge, badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+
+    // Label
+    ctx.fillStyle = isSelected ? '#FFFFFF' : '#BBBBDD';
+    ctx.font = `bold 14px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(stage.label, bx + 38, by + btnH / 2);
+
+    // Status indicator (right side)
+    ctx.textAlign = 'right';
+    if (completed) {
+      ctx.fillStyle = '#4ADE80';
+      ctx.font = `bold 14px ${FONT}`;
+      ctx.fillText('\u2713', bx + btnW - 14, by + btnH / 2);
+    } else if (isCurrent) {
+      ctx.fillStyle = '#CCAA44';
+      ctx.font = `12px ${FONT}`;
+      ctx.fillText('\u25B6', bx + btnW - 14, by + btnH / 2);
+    } else {
+      ctx.fillStyle = '#444466';
+      ctx.font = `14px ${FONT}`;
+      ctx.fillText('\u25CB', bx + btnW - 14, by + btnH / 2);
+    }
+
+    y += btnH + gap;
+  }
+
+  // Instructions at bottom
+  y += 10;
+  ctx.fillStyle = HINT_COLOR;
+  ctx.font = `14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Press 1-8 or Enter to select \u00b7 [Esc] to return here', cx, y);
+}
+
 // ── 0. Shape Preview ──
 
 export function drawShapePreview(
@@ -953,7 +1088,7 @@ export function drawCelebration(ctx: CanvasRenderingContext2D, data: Celebration
   ctx.font = `14px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('[Space] to continue', cx, 420);
+  ctx.fillText('[Space] to continue \u00b7 [Esc] stage menu', cx, 420);
 }
 
 // ── Onboarding mode renderer ──
@@ -1032,6 +1167,6 @@ export function renderOnboardingMode(
     celebration: `${stageLabel(openerId, progress.currentBag)} complete`,
   };
 
-  const statusText = (phaseLabels[progress.stagePhase] ?? '') + ' \u00b7 N: skip';
+  const statusText = (phaseLabels[progress.stagePhase] ?? '') + ' \u00b7 N: skip \u00b7 Esc: menu';
   drawStatusBar(ctx, statusText);
 }
