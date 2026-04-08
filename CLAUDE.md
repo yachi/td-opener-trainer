@@ -117,39 +117,28 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 
 Trigger: user says **"L8"**, "L8 mode", or "work on X as a google l8 engineer".
 
-When triggered:
+**Core rule: ALL work happens in spawned agents. The main session only orchestrates, reviews diffs, and commits. Never write code directly in the main session — it pollutes context and makes reverting hard.**
 
-```
-loop until no new findings → (draft 99% of code in mind, don't write code yet, reference industrial standard)
-```
+### Phase 1: Research Agent (spawn 1 opus agent)
+Spawn a single agent to do ALL deep research. Prompt must include:
+- Read every file in scope, map all callers/imports
+- Grep to verify dead code — never assume
+- Reference industrial standards
+- Convergence loop: draft design, adversarial review, gap scan, repeat until 0 new findings
+- Output: exact file-by-file change list with line numbers
+- "DO NOT write code or edit files. Research only."
 
-Execute this protocol automatically:
+### Phase 2: Review research output
+Main session reads the agent's output. Sanity-check the plan. Ask user for approval if scope is large.
 
-### Phase 1: Deep Research (no code)
-1. Read EVERY file in scope — all source, all tests, all consumers
-2. Map every public function, every caller, every import chain
-3. Grep to verify dead code claims — never assume, always count callers
-4. Reference industrial standards (Cold Clear libtetris for engine patterns, Fitts & Posner for learning, SRS spec for tetris mechanics)
-5. Quantify: line counts, function counts, API surface, duplication
+### Phase 3: Implementation Agents (spawn 2-3 opus agents in parallel)
+Split the work into independent slices. Each agent gets:
+- Precise instructions: exact functions to copy/delete, exact lines to change
+- `mode: bypassPermissions` (agents get blocked on Edit/Bash otherwise)
+- "DO NOT commit"
 
-### Phase 2: Convergence Loop (no code)
-1. Draft the design: what moves, what dies, what's new
-2. Adversarial review: find counterarguments, type conflicts, edge cases
-3. Trace every code path mentally — line numbers, exact signatures, exact imports
-4. Run gap scan: any unverified assumption? Any untested edge case?
-5. Repeat until a round surfaces zero new findings (typically 7-17 rounds)
-6. Output: exact file-by-file change list with line numbers
-
-### Phase 3: Parallel Agent Execution
-1. Spawn 3 opus research agents in parallel — each independently verifies one slice
-2. Converge: cross-agent disagreement table, resolve to 0 disagreements
-3. Spawn 3 opus implementation agents in parallel (bypassPermissions mode)
-4. Each agent gets precise instructions: exact functions to copy, exact lines to delete, exact imports to rewrite
-5. Agent prompt MUST include "DO NOT commit"
-6. After all agents complete: run full test suite, visual verification via Playwright
-
-### Phase 4: Verify & Commit
+### Phase 4: Verify & Commit (main session)
 1. `bun test` — all tests pass
-2. Playwright screenshot — visual verification of every affected screen
+2. Playwright screenshot — visual verification
 3. `git diff --stat` — review total impact
-4. Commit with conventional commit message summarizing what changed and test results
+4. Commit with conventional commit message
