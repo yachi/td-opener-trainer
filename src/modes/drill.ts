@@ -9,10 +9,11 @@ import {
   hardDrop,
   lockPiece,
 } from '../core/srs.ts';
-import { stampCells, cloneBoard } from '../core/engine.ts';
+import { stampCells, cloneBoard, buildSteps } from '../core/engine.ts';
+import type { Step } from '../core/engine.ts';
 import { generateBag } from '../core/bag.ts';
 import { OPENERS, bestBag2Route } from '../openers/decision.ts';
-import { getOpenerSequence, createVisualizerState, getBag2Routes } from './visualizer.ts';
+import { getOpenerSequence, getBag2Routes } from './visualizer.ts';
 
 // ── Types ──
 
@@ -331,7 +332,7 @@ export function softDropPiece(state: DrillState): DrillState {
 
 export function checkOpenerMatch(state: DrillState): boolean {
   const expected = state.bagNumber === 2
-    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex)
+    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex, state.bag1Board!)
     : getExpectedBoard(state.openerId, state.mirror, state.targetPieceCount);
 
   // Compare full board (not just rows 14-19)
@@ -486,26 +487,34 @@ export function getExpectedBoard(openerId: OpenerID, mirror: boolean, pieceCount
 
 /**
  * Get the expected board after Bag 2 completion.
- * Uses the visualizer's final step board for the given route.
+ * Computes from the player's actual bag1Board + route placements,
+ * NOT from the visualizer's ideal board (which assumes all 7 Bag 1 pieces).
  */
-export function getExpectedBoardBag2(openerId: OpenerID, mirror: boolean, routeIndex: number): Board {
-  const vizState = createVisualizerState(openerId, mirror, routeIndex);
-  const lastStep = vizState.steps[vizState.steps.length - 1];
-  if (!lastStep) return createBoard();
+export function getExpectedBoardBag2(openerId: OpenerID, mirror: boolean, routeIndex: number, bag1Board: Board): Board {
+  const steps = getBag2Steps(openerId, mirror, routeIndex, bag1Board);
+  const lastStep = steps[steps.length - 1];
+  if (!lastStep) return bag1Board ? bag1Board.map((row) => [...row]) : createBoard();
   return lastStep.board.map((row) => [...row]);
 }
 
 // ── Bag 2 Helpers ──
 
-function getBag2Steps(openerId: OpenerID, mirror: boolean, routeIndex: number) {
-  const vizState = createVisualizerState(openerId, mirror, routeIndex);
-  // Bag 2 steps = everything after bag1End
-  return vizState.steps.slice(vizState.bag1End);
+function getBag2Steps(openerId: OpenerID, mirror: boolean, routeIndex: number, bag1Board: Board): Step[] {
+  const routes = getBag2Routes(openerId, mirror);
+  const route = routes[routeIndex];
+  if (!route) return [];
+  // Combine holdPlacement (Bag 1 held piece) + route placements
+  const allPlacements = [
+    ...(route.holdPlacement ? [route.holdPlacement] : []),
+    ...route.placements,
+  ];
+  // Build steps starting from the player's actual board, not an ideal board
+  return buildSteps(allPlacements, bag1Board);
 }
 
 function getBag2TargetPlacement(state: DrillState): TargetPlacement | null {
-  if (!state.activePiece) return null;
-  const steps = getBag2Steps(state.openerId, state.mirror, state.routeIndex);
+  if (!state.activePiece || !state.bag1Board) return null;
+  const steps = getBag2Steps(state.openerId, state.mirror, state.routeIndex, state.bag1Board);
   const step = steps.find((s) => s.piece === state.activePiece!.type);
   if (!step) return null;
   // For Bag 2, cells may overlap with Bag 1 board — only show cells that are new (empty on board)
@@ -516,7 +525,8 @@ function getBag2TargetPlacement(state: DrillState): TargetPlacement | null {
 }
 
 function getBag2AllTargets(state: DrillState): TargetPlacement[] {
-  const steps = getBag2Steps(state.openerId, state.mirror, state.routeIndex);
+  if (!state.bag1Board) return [];
+  const steps = getBag2Steps(state.openerId, state.mirror, state.routeIndex, state.bag1Board);
   const targets: TargetPlacement[] = [];
 
   for (const step of steps) {
@@ -561,7 +571,7 @@ export function transitionToBag2(state: DrillState): DrillState {
   }
 
   // Count how many pieces to place: route placements + holdPlacement if exists
-  const bag2Steps = getBag2Steps(state.openerId, state.mirror, chosenRouteIndex);
+  const bag2Steps = getBag2Steps(state.openerId, state.mirror, chosenRouteIndex, bag1Board);
   const targetPieceCount = bag2Steps.length;
 
   const queue = [...bag2];

@@ -230,9 +230,9 @@ export interface Step {
  * This eliminates ALL manual ordering fields (holdInsertIndex, bag1PieceCount).
  * The engine determines the correct order automatically.
  */
-export function buildSteps(placements: Placement[]): Step[] {
+export function buildSteps(placements: Placement[], startBoard?: Board): Step[] {
   const steps: Step[] = [];
-  let board = emptyBoard();
+  let board = startBoard ? cloneBoard(startBoard) : emptyBoard();
   let remaining = [...placements];
 
   while (remaining.length > 0) {

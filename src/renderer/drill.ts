@@ -358,7 +358,7 @@ function drawFailedPhase(ctx: CanvasRenderingContext2D, state: DrillState): void
 
   // Expected board (right)
   const expected = state.bagNumber === 2
-    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex)
+    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex, state.bag1Board!)
     : getExpectedBoard(state.openerId, state.mirror, state.targetPieceCount);
   drawMiniBoard(ctx, expected, startX + smallBoardW + gap, startY, smallCell);
 
