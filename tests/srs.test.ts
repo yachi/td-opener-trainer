@@ -537,41 +537,43 @@ describe('hardDrop', () => {
 // ── lockPiece ──
 
 describe('lockPiece', () => {
-  test('writes piece cells to board', () => {
-    const board = emptyBoard();
-    const piece: ActivePiece = { type: 'T', rotation: 0, col: 3, row: 18 };
-    lockPiece(board, piece);
-    // T state 0 at col=3, row=18: cells (4,18),(3,19),(4,19),(5,19)
-    expect(board[18][4]).toBe('T');
-    expect(board[19][3]).toBe('T');
-    expect(board[19][4]).toBe('T');
-    expect(board[19][5]).toBe('T');
-  });
-
-  test('does not overwrite existing cells elsewhere', () => {
-    const board = emptyBoard();
-    board[0][0] = 'I';
-    const piece: ActivePiece = { type: 'T', rotation: 0, col: 3, row: 18 };
-    lockPiece(board, piece);
-    expect(board[0][0]).toBe('I');
-  });
-
-  test('returns the board', () => {
+  test('returns new board with piece cells stamped', () => {
     const board = emptyBoard();
     const piece: ActivePiece = { type: 'T', rotation: 0, col: 3, row: 18 };
     const result = lockPiece(board, piece);
-    expect(result).toBe(board);
+    // T state 0 at col=3, row=18: cells (4,18),(3,19),(4,19),(5,19)
+    expect(result[18][4]).toBe('T');
+    expect(result[19][3]).toBe('T');
+    expect(result[19][4]).toBe('T');
+    expect(result[19][5]).toBe('T');
+    // Original board is unchanged (pure function)
+    expect(board[18][4]).toBeNull();
+  });
+
+  test('does not overwrite existing cells elsewhere', () => {
+    const board = emptyBoard() as (PieceType | null)[][];
+    board[0][0] = 'I';
+    const piece: ActivePiece = { type: 'T', rotation: 0, col: 3, row: 18 };
+    const result = lockPiece(board, piece);
+    expect(result[0][0]).toBe('I');
+  });
+
+  test('returns a new board (does not mutate original)', () => {
+    const board = emptyBoard();
+    const piece: ActivePiece = { type: 'T', rotation: 0, col: 3, row: 18 };
+    const result = lockPiece(board, piece);
+    expect(result).not.toBe(board);
   });
 
   test('locks I piece correctly', () => {
     const board = emptyBoard();
     const piece: ActivePiece = { type: 'I', rotation: 1, col: 5, row: 16 };
     // I state R: [2,0],[2,1],[2,2],[2,3] -> col 7, rows 16-19
-    lockPiece(board, piece);
-    expect(board[16][7]).toBe('I');
-    expect(board[17][7]).toBe('I');
-    expect(board[18][7]).toBe('I');
-    expect(board[19][7]).toBe('I');
+    const result = lockPiece(board, piece);
+    expect(result[16][7]).toBe('I');
+    expect(result[17][7]).toBe('I');
+    expect(result[18][7]).toBe('I');
+    expect(result[19][7]).toBe('I');
   });
 });
 

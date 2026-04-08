@@ -1,7 +1,8 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { OPENERS } from '../openers/decision.ts';
-import { buildSteps, emptyBoard, cloneBoard } from '../core/engine.ts';
+import { buildSteps, emptyBoard, cloneBoard, stampCells } from '../core/engine.ts';
+import type { Board } from '../core/engine.ts';
 
 // ── Types ──
 
@@ -680,7 +681,7 @@ export function jumpToStep(state: VisualizerState, step: number): void {
   state.currentStep = Math.max(0, Math.min(step, state.steps.length));
 }
 
-export function getCurrentBoard(state: VisualizerState): (PieceType | null)[][] {
+export function getCurrentBoard(state: VisualizerState): Board {
   return state.currentStep === 0
     ? emptyBoard()
     : state.steps[state.currentStep - 1]!.board;
@@ -722,10 +723,11 @@ export function getBag2Sequence(openerId: OpenerID, mirror: boolean, routeIndex:
   const bag2Steps = holdHint ? allBag2.filter(s => s.hint !== holdHint) : allBag2;
   // Base board = Bag 1 final + hold piece (computed directly)
   const bag1FinalBoard = state.bag1End > 0 ? state.steps[state.bag1End - 1]!.board : emptyBoard();
-  const baseBoard = bag1FinalBoard.map((r: (PieceType | null)[]) => [...r]);
+  let baseBoard = cloneBoard(bag1FinalBoard);
   if (route.holdPlacement) {
-    for (const c of route.holdPlacement.cells) {
-      if (baseBoard[c.row]![c.col] === null) baseBoard[c.row]![c.col] = route.holdPlacement.piece;
+    const emptyCells = route.holdPlacement.cells.filter(c => bag1FinalBoard[c.row]?.[c.col] === null);
+    if (emptyCells.length > 0) {
+      baseBoard = stampCells(baseBoard, route.holdPlacement.piece, emptyCells);
     }
   }
   const bag1Seq = getOpenerSequence(openerId, mirror);

@@ -51,6 +51,9 @@ If the user says "check the screen" once, check the screen every time going forw
 When verifying, navigate to the exact screen. When checking, run the exact command. When the user needs to see something, show them. Don't say "go ahead and check" — do it.
 *Lessons: #37*
 
+### P7. Research before asking — never block on the user for answerable questions
+If you have a question that can be answered by reading code, running tests, searching the web, or spawning a deep-research agent — do that instead of asking the user. Use the biggest effort available (parallel research agents, web search, exhaustive code search) to find the answer yourself. Only ask the user when the question is genuinely unanswerable from available sources (e.g., product direction, personal preference, access credentials).
+
 ---
 
 ## Core Lessons (condensed from 42 corrections — the rest are enforced by tests or absorbed by the 5 Principles above)
@@ -117,7 +120,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 
 Trigger: user says **"L8"**, "L8 mode", or "work on X as a google l8 engineer".
 
-**Core rule: ALL work happens in spawned agents. The main session only orchestrates, reviews diffs, and commits. Never write code directly in the main session — it pollutes context and makes reverting hard.**
+**Core rule: ALL work happens in spawned agents — including reading code for implementation prep. The main session ONLY orchestrates (spawns agents, reviews their output, commits). Never read implementation files, write code, or do pre-work in the main session — it pollutes context and makes reverting hard. If you need to understand code before giving agent instructions, spawn a research agent for that.**
 
 ### L8 Mindset
 Think like a Google L8 principal engineer. The default is DELETE code and REDESIGN the system, not patch or extend. Every function must justify its existence with evidence (callers, tests). Dead code dies. Duplicate paths merge. If the current design is why the problem exists, fix the design — not the instance. Draft 99% of the code mentally before writing anything. Reference industrial standards (open source reference implementations, peer-reviewed learning models, formal specs).

@@ -33,14 +33,28 @@ export type { Board, ActivePiece } from './srs.ts';
 
 // ── Board Utilities ──
 
+type MutableBoard = (PieceType | null)[][];
+
 export function emptyBoard(): Board {
-  return Array.from({ length: BOARD_VISIBLE_HEIGHT }, () =>
+  const board: MutableBoard = Array.from({ length: BOARD_VISIBLE_HEIGHT }, () =>
     new Array<PieceType | null>(BOARD_WIDTH).fill(null),
   );
+  return board;
 }
 
 export function cloneBoard(b: Board): Board {
-  return b.map(r => [...r]);
+  const clone: MutableBoard = b.map(r => [...r]);
+  return clone;
+}
+
+export function stampCells(board: Board, piece: PieceType, cells: { col: number; row: number }[]): Board {
+  const newBoard: MutableBoard = board.map(r => [...r]);
+  for (const { col, row } of cells) {
+    if (row >= 0 && row < BOARD_VISIBLE_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
+      newBoard[row]![col] = piece;
+    }
+  }
+  return newBoard;
 }
 
 // ── BFS Types ──
@@ -161,7 +175,7 @@ export function lockAndClear(
   piece: ActivePiece,
 ): { board: Board; linesCleared: number } {
   // Deep-copy the board
-  const newBoard: Board = board.map(row => [...row]);
+  const newBoard: MutableBoard = board.map(row => [...row]);
 
   // Place piece cells
   const cells = getPieceCells(piece);
@@ -229,8 +243,7 @@ export function buildSteps(placements: Placement[]): Step[] {
       const allEmpty = p.cells.every(c => board[c.row]?.[c.col] === null);
 
       if (allEmpty && isPlacementReachable(board, p.piece, p.cells)) {
-        board = cloneBoard(board);
-        for (const c of p.cells) board[c.row]![c.col] = p.piece;
+        board = stampCells(board, p.piece, p.cells);
         steps.push({
           piece: p.piece,
           board: cloneBoard(board),
@@ -311,7 +324,9 @@ export function boardToField(board: Board): Field {
  * Only reads the visible 20 rows (fumen y 0..19).
  */
 export function fieldToBoard(field: Field): Board {
-  const board: Board = createBoard();
+  const board: MutableBoard = Array.from({ length: BOARD_ROWS }, () =>
+    new Array<PieceType | null>(BOARD_COLS).fill(null),
+  );
   for (let row = 0; row < BOARD_ROWS; row++) {
     const fumenY = rowToFumenY(row);
     for (let col = 0; col < BOARD_COLS; col++) {

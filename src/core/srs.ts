@@ -4,7 +4,9 @@ import { PIECE_DEFINITIONS } from './pieces';
 
 // ── Types ──
 
-export type Board = (PieceType | null)[][];
+export type Board = ReadonlyArray<ReadonlyArray<PieceType | null>>;
+
+type MutableBoard = (PieceType | null)[][];
 
 export interface ActivePiece {
   type: PieceType;
@@ -61,9 +63,10 @@ function getKickTable(type: PieceType): KickTable {
 // ── Board ──
 
 export function createBoard(): Board {
-  return Array.from({ length: BOARD_VISIBLE_HEIGHT }, () =>
+  const board: MutableBoard = Array.from({ length: BOARD_VISIBLE_HEIGHT }, () =>
     Array.from({ length: BOARD_WIDTH }, () => null)
   );
+  return board;
 }
 
 // ── Piece Cells ──
@@ -140,13 +143,14 @@ export function hardDrop(board: Board, piece: ActivePiece): ActivePiece {
 // ── Lock Piece ──
 
 export function lockPiece(board: Board, piece: ActivePiece): Board {
+  const newBoard: MutableBoard = board.map(row => [...row]);
   const cells = getPieceCells(piece);
   for (const { col, row } of cells) {
     if (row >= 0 && row < BOARD_VISIBLE_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
-      board[row][col] = piece.type;
+      newBoard[row]![col] = piece.type;
     }
   }
-  return board;
+  return newBoard;
 }
 
 // ── Spawn ──

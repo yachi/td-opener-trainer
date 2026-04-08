@@ -327,7 +327,7 @@ function drawLockedCells(ctx: CanvasRenderingContext2D, state: DrillState): void
 
 function drawMiniBoard(
   ctx: CanvasRenderingContext2D,
-  board: (PieceType | null)[][],
+  board: ReadonlyArray<ReadonlyArray<PieceType | null>>,
   x: number,
   y: number,
   cellSz: number,

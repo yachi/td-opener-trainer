@@ -9,6 +9,7 @@ import {
   hardDrop,
   lockPiece,
 } from '../core/srs.ts';
+import { stampCells } from '../core/engine.ts';
 import { generateBag } from '../core/bag.ts';
 import { OPENERS } from '../openers/decision.ts';
 import { getOpenerSequence } from './visualizer.ts';
@@ -42,10 +43,6 @@ const MAX_BAG_ATTEMPTS = 1000;
 
 // ── Helpers ──
 
-function cloneBoard(board: Board): Board {
-  return board.map((row) => [...row]);
-}
-
 /**
  * Simulate whether a bag can be placed using the opener's placement order
  * with a single hold. Returns true if every piece can either:
@@ -63,9 +60,7 @@ function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): b
     targetMap.set(step.piece, step.newCells);
   }
 
-  const board: (PieceType | null)[][] = Array.from({ length: 20 }, () =>
-    Array.from({ length: 10 }, () => null),
-  );
+  let board: Board = createBoard();
   let hold: PieceType | null = null;
   let holdUsed = false;
 
@@ -74,10 +69,7 @@ function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): b
 
     // Can this piece be placed now?
     if (target && isTargetSupported(board, target)) {
-      // Place it
-      for (const { col, row } of target) {
-        board[row]![col] = pieceType;
-      }
+      board = stampCells(board, pieceType, target);
       holdUsed = false;
       continue;
     }
@@ -93,10 +85,7 @@ function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): b
       // Swap with hold
       const holdTarget = targetMap.get(hold);
       if (holdTarget && isTargetSupported(board, holdTarget)) {
-        // Place the held piece, hold the current one
-        for (const { col, row } of holdTarget) {
-          board[row]![col] = hold;
-        }
+        board = stampCells(board, hold, holdTarget);
         hold = pieceType;
         holdUsed = true;
         continue;
@@ -193,7 +182,7 @@ export function hardDropPiece(state: DrillState): DrillState {
 
   // Drop to bottom and lock
   const dropped = hardDrop(state.board, state.activePiece);
-  const newBoard = lockPiece(cloneBoard(state.board), dropped);
+  const newBoard = lockPiece(state.board, dropped);
   const newPiecesPlaced = state.piecesPlaced + 1;
 
   // Check completion: 6 pieces placed (+ 1 held = 7 bag pieces)
