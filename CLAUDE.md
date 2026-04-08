@@ -119,12 +119,15 @@ Trigger: user says **"L8"**, "L8 mode", or "work on X as a google l8 engineer".
 
 **Core rule: ALL work happens in spawned agents. The main session only orchestrates, reviews diffs, and commits. Never write code directly in the main session — it pollutes context and makes reverting hard.**
 
+### L8 Mindset
+Think like a Google L8 principal engineer. The default is DELETE code and REDESIGN the system, not patch or extend. Every function must justify its existence with evidence (callers, tests). Dead code dies. Duplicate paths merge. If the current design is why the problem exists, fix the design — not the instance. Draft 99% of the code mentally before writing anything. Reference industrial standards (open source reference implementations, peer-reviewed learning models, formal specs).
+
 ### Phase 1: Research Agents (spawn 2-3 opus agents in parallel)
 Split research by angle — e.g., agent 1 maps current architecture, agent 2 researches industrial standards, agent 3 traces all callers/tests. Each prompt must include:
 - Specific research scope (don't overlap)
 - "DO NOT write code or edit files. Research only."
 - Convergence loop: draft design, adversarial review, gap scan, repeat until 0 new findings
-- Output: exact file-by-file change list with line numbers
+- Output: exact file-by-file change list with line numbers, what to DELETE, what to MERGE, what's new
 
 ### Phase 2: Converge & Review
 Main session reads all agent outputs. Build cross-agent disagreement table, resolve to 0 disagreements. Ask user for approval if scope is large.
