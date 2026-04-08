@@ -231,12 +231,12 @@ function drawExplanation(ctx: CanvasRenderingContext2D, explanation: string): vo
 function drawRulePanel(ctx: CanvasRenderingContext2D, ruleLines: string[]): void {
   if (ruleLines.length === 0) return;
 
-  const panelX = 430;
-  const panelY = 60;
+  const panelX = 130;
+  const panelY = 210;
   const lineH = 18;
   const padX = 10;
   const padY = 8;
-  const panelW = 200;
+  const panelW = 250;
   const panelH = padY * 2 + ruleLines.length * lineH;
 
   // Panel background
