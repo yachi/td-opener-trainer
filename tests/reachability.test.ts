@@ -1,7 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import {
   createBoard,
-  lockPiece,
   getPieceCells,
   spawnPiece,
 } from '../src/core/srs.ts';

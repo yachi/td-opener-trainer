@@ -18,7 +18,11 @@ export interface ActivePiece {
 // ── SRS Kick Tables ──
 // Convention: [dx, dy] where +dx = right, +dy = DOWN (row 0 = top)
 
-type KickKey = `${0 | 1 | 2 | 3}->${0 | 1 | 2 | 3}`;
+type KickKey =
+  | '0->1' | '1->0'
+  | '1->2' | '2->1'
+  | '2->3' | '3->2'
+  | '3->0' | '0->3';
 type KickTable = Record<KickKey, readonly [number, number][]>;
 
 const JLSZT_KICKS: KickTable = {
@@ -92,7 +96,7 @@ export function isValidPosition(board: Board, piece: ActivePiece): boolean {
     // Above top is OK (buffer zone), skip board check
     if (row < 0) continue;
     // Overlapping locked cell
-    if (board[row][col] !== null) return false;
+    if (board[row]![col] !== null) return false;
   }
   return true;
 }

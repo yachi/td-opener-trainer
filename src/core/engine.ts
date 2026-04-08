@@ -114,7 +114,7 @@ export function findAllPlacements(board: Board, pieceType: PieceType): BfsPlacem
 
   let head = 0;
   while (head < queue.length) {
-    const current = queue[head++];
+    const current = queue[head++]!;
 
     // Try locking at current position (hard-drop from here)
     const dropped = hardDrop(board, current);
@@ -167,7 +167,7 @@ export function isPlacementReachable(
  * Lock a piece and clear completed lines. Returns the new board and
  * number of lines cleared.
  *
- * Unlike srs.ts lockPiece (which mutates and doesn't clear lines),
+ * Unlike srs.ts lockPiece (which doesn't clear lines),
  * this creates a fresh board with line clearing applied.
  */
 export function lockAndClear(
@@ -181,14 +181,14 @@ export function lockAndClear(
   const cells = getPieceCells(piece);
   for (const { col, row } of cells) {
     if (row >= 0 && row < BOARD_VISIBLE_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
-      newBoard[row][col] = piece.type;
+      newBoard[row]![col] = piece.type;
     }
   }
 
   // Remove full lines
   let linesCleared = 0;
   for (let row = BOARD_VISIBLE_HEIGHT - 1; row >= 0; row--) {
-    if (newBoard[row].every(cell => cell !== null)) {
+    if (newBoard[row]!.every(cell => cell !== null)) {
       newBoard.splice(row, 1);
       linesCleared++;
     }
@@ -309,7 +309,7 @@ export function boardToField(board: Board): Field {
   for (let row = 0; row < BOARD_ROWS; row++) {
     const fumenY = rowToFumenY(row);
     for (let col = 0; col < BOARD_COLS; col++) {
-      const cell = board[row]![col];
+      const cell = board[row]![col] as PieceType | null;
       if (cell !== null) {
         field.set(col, fumenY, ourTypeToFumen(cell));
       }
@@ -482,7 +482,7 @@ export function findFloatingPieces(
   for (let row = 0; row < BOARD_ROWS; row++) {
     for (let col = 0; col < BOARD_COLS; col++) {
       if (visited[row]![col]) continue;
-      const cellType = board[row]![col];
+      const cellType = board[row]![col] as PieceType | null;
       if (cellType === null) continue;
 
       // Flood-fill to find all connected cells of the same type
