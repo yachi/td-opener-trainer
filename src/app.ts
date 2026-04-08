@@ -1,7 +1,7 @@
 import { createRenderer } from './renderer/canvas.ts';
 import type { AppState } from './renderer/canvas.ts';
 import { loadQuizStats, saveQuizStats, recordAnswer, getDisplayStats } from './stats/tracker.ts';
-import { createQuizState, nextQuestion, submitAnswer, submitBag2Answer, tickQuiz } from './modes/quiz.ts';
+import { createQuizState, nextQuestion, submitAnswer, submitBag2Answer } from './modes/quiz.ts';
 import { setupKeyboard } from './input/keyboard.ts';
 import type { OpenerID } from './openers/types.ts';
 import type { PieceType } from './core/types.ts';
@@ -448,15 +448,22 @@ function dispatchQuiz(action: string): void {
       break;
     }
     case 'advance': {
-      if (state.quiz.phase === 'answered') {
+      if (state.quiz.reviewingPrevious) {
+        // Return from reviewing previous question
+        state.quiz.reviewingPrevious = false;
+        dirty = true;
+      } else if (state.quiz.phase === 'answered') {
         nextQuestion(state.quiz);
         dirty = true;
       }
       break;
     }
-    case 'toggle_mode': {
-      state.quiz.mode = state.quiz.mode === 'learning' ? 'speed' : 'learning';
-      dirty = true;
+    case 'step_back': {
+      // Review previous question (1-deep history)
+      if (state.quiz.previousQuestion && !state.quiz.reviewingPrevious) {
+        state.quiz.reviewingPrevious = true;
+        dirty = true;
+      }
       break;
     }
     case 'toggle_quiz_type': {
@@ -609,13 +616,6 @@ function dispatchDrill(action: string): void {
 // ── Render Loop ──
 
 function frame(now: number): void {
-  // Auto-advance for quiz answers
-  if (state.appMode === 'quiz' && state.quiz.phase === 'answered') {
-    if (tickQuiz(state.quiz)) {
-      dirty = true;
-    }
-  }
-
   // Auto-advance for onboarding drill answers
   if (
     state.appMode === 'onboarding' &&

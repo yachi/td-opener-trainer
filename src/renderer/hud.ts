@@ -9,7 +9,6 @@ export interface QuizHUDData {
   isCorrect: boolean | null;
   responseTimeMs: number | null;
   explanation: string;
-  quizMode: 'learning' | 'speed';
   quizType: 'bag1' | 'bag2';
   // Bag 2 context
   bag1OpenerName: string;
@@ -17,13 +16,12 @@ export interface QuizHUDData {
   selectedRouteIndex: number | null;
   correctRouteIndex: number;
   routeLabels: string[];
-  stats: {
-    total: number;
-    correct: number;
-    streak: number;
-    bestStreak: number;
-    avgTimeMs: number;
-  };
+  // Rule panel data (shown during 'showing' phase)
+  ruleLines: string[];
+  // Reviewing previous question
+  reviewingPrevious: boolean;
+  // Inline accuracy
+  accuracyLabel: string;
 }
 
 // ── Button definitions ──
@@ -90,16 +88,25 @@ export function drawQuizHUD(ctx: CanvasRenderingContext2D, data: QuizHUDData): v
     );
   }
 
+  // Rule panel during showing phase (or reviewing previous)
+  if (data.phase === 'showing' || data.reviewingPrevious) {
+    drawRulePanel(ctx, data.ruleLines);
+  }
+
+  // Reviewing previous indicator
+  if (data.reviewingPrevious) {
+    drawReviewIndicator(ctx);
+  }
+
   drawButtons(ctx, data);
 
-  if (data.phase === 'answered') {
+  if (data.phase === 'answered' || data.reviewingPrevious) {
     drawFeedback(ctx, data);
-    if (data.quizType === 'bag1' && data.quizMode === 'learning' && !data.isCorrect && data.explanation) {
+    // Always show explanation (bag1 + bag2, correct + wrong)
+    if (data.explanation) {
       drawExplanation(ctx, data.explanation);
     }
   }
-
-  drawStatsStrip(ctx, data.stats);
 }
 
 // ── Buttons ──
@@ -219,73 +226,52 @@ function drawExplanation(ctx: CanvasRenderingContext2D, explanation: string): vo
   ctx.fillText(explanation, CANVAS_W / 2, 395);
 }
 
-// ── Stats strip ──
+// ── Rule panel (shown during 'showing' phase) ──
 
-function drawStatsStrip(
-  ctx: CanvasRenderingContext2D,
-  stats: { total: number; correct: number; streak: number; bestStreak: number; avgTimeMs: number },
-): void {
-  const stripY = 530;
-  const stripH = 36;
+function drawRulePanel(ctx: CanvasRenderingContext2D, ruleLines: string[]): void {
+  if (ruleLines.length === 0) return;
 
-  // Three cards
-  const cards: { label: string; value: string; w: number; color?: string }[] = [
-    {
-      label: 'ACCURACY',
-      value: stats.total > 0
-        ? `${Math.round((stats.correct / stats.total) * 100)}% (${stats.correct}/${stats.total})`
-        : '0%',
-      w: 160,
-    },
-    {
-      label: 'STREAK',
-      value: `${stats.streak} (best: ${stats.bestStreak})`,
-      w: 150,
-    },
-    {
-      label: 'AVG TIME',
-      value: stats.total > 0 ? `${Math.round(stats.avgTimeMs)}ms` : '--',
-      w: 120,
-      color: getTimeColor(stats.avgTimeMs),
-    },
-  ];
+  const panelX = 430;
+  const panelY = 60;
+  const lineH = 18;
+  const padX = 10;
+  const padY = 8;
+  const panelW = 200;
+  const panelH = padY * 2 + ruleLines.length * lineH;
 
-  const totalW = cards.reduce((sum, c) => sum + c.w, 0) + (cards.length - 1) * 12;
-  let cx = (CANVAS_W - totalW) / 2;
+  // Panel background
+  ctx.fillStyle = 'rgba(20, 20, 40, 0.85)';
+  roundRect(ctx, panelX, panelY, panelW, panelH, 6);
+  ctx.fill();
 
-  for (const card of cards) {
-    // Card bg
-    ctx.fillStyle = COLORS.statCardBg;
-    roundRect(ctx, cx, stripY, card.w, stripH, 4);
-    ctx.fill();
+  ctx.strokeStyle = '#444466';
+  ctx.lineWidth = 1;
+  roundRect(ctx, panelX, panelY, panelW, panelH, 6);
+  ctx.stroke();
 
-    ctx.strokeStyle = COLORS.statCardBorder;
-    ctx.lineWidth = 1;
-    roundRect(ctx, cx, stripY, card.w, stripH, 4);
-    ctx.stroke();
+  // Title
+  ctx.fillStyle = '#8888BB';
+  ctx.font = 'bold 11px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Rules:', panelX + padX, panelY + padY);
 
-    // Label
-    ctx.fillStyle = COLORS.statLabel;
-    ctx.font = 'bold 10px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(card.label, cx + card.w / 2, stripY + 4);
-
-    // Value
-    ctx.fillStyle = card.color ?? COLORS.statValue;
-    ctx.font = 'bold 14px -apple-system, sans-serif';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(card.value, cx + card.w / 2, stripY + stripH - 3);
-
-    cx += card.w + 12;
+  // Rule lines
+  ctx.fillStyle = '#B0B0D0';
+  ctx.font = '11px -apple-system, sans-serif';
+  for (let i = 0; i < ruleLines.length; i++) {
+    ctx.fillText(ruleLines[i]!, panelX + padX, panelY + padY + (i + 1) * lineH);
   }
 }
 
-function getTimeColor(ms: number): string {
-  if (ms <= 0) return COLORS.statValue;
-  if (ms < 500) return COLORS.correct;
-  if (ms < 1000) return '#FFD600';
-  return COLORS.incorrect;
+// ── Review indicator ──
+
+function drawReviewIndicator(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = '#AAAA44';
+  ctx.font = 'bold 13px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('\u2190 Previous question (press \u2192 to return)', CANVAS_W / 2, 520);
 }
 
 // ── Tab bar ──
@@ -329,7 +315,6 @@ export function drawTabs(ctx: CanvasRenderingContext2D, activeMode: string): voi
 export function drawStatusBar(
   ctx: CanvasRenderingContext2D,
   text: string,
-  quizMode?: 'learning' | 'speed',
   quizType?: 'bag1' | 'bag2',
 ): void {
   const { x, y, w, h } = LAYOUT.statusBar;
@@ -342,18 +327,6 @@ export function drawStatusBar(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, y + h / 2);
-
-  // Mode indicator on the right
-  if (quizMode) {
-    const modeLabel = quizMode === 'learning' ? 'LEARNING' : 'SPEED';
-    const modeColor = quizMode === 'learning' ? '#7777AA' : '#AA77FF';
-
-    ctx.fillStyle = modeColor;
-    ctx.font = 'bold 11px -apple-system, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${modeLabel} [S]`, x + w - 16, y + h / 2);
-  }
 
   // Quiz type indicator on the left
   if (quizType) {

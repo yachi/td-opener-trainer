@@ -1,8 +1,27 @@
 import type { PieceType } from '../core/types.ts';
 import type { OpenerID } from '../openers/types.ts';
 import { generateBag } from '../core/bag.ts';
-import { bestOpener, bestBag2Route, OPENERS } from '../openers/decision.ts';
+import { bestOpener, bestBag2Route, OPENERS, indexOf } from '../openers/decision.ts';
 import { getBag2Routes } from '../openers/bag2-routes.ts';
+
+/** Snapshot of a completed question for back-navigation. */
+export interface PreviousQuestion {
+  currentBag: PieceType[];
+  correctOpener: OpenerID;
+  alternatives: OpenerID[];
+  selectedOpener: OpenerID | null;
+  isCorrect: boolean;
+  mirror: boolean;
+  decisionPieces: PieceType[];
+  explanation: string;
+  quizType: 'bag1' | 'bag2';
+  bag1Opener: OpenerID | null;
+  bag1Mirror: boolean;
+  bag2Bag: PieceType[] | null;
+  correctRouteIndex: number;
+  selectedRouteIndex: number;
+  routeLabels: string[];
+}
 
 export interface QuizState {
   phase: 'showing' | 'answered';
@@ -16,8 +35,6 @@ export interface QuizState {
   mirror: boolean;
   decisionPieces: PieceType[];
   explanation: string;
-  autoAdvanceAt: number | null;
-  mode: 'learning' | 'speed';
   currentStreak: number;
   // Quiz type: bag1 (which opener?) or bag2 (which route?)
   quizType: 'bag1' | 'bag2';
@@ -28,6 +45,9 @@ export interface QuizState {
   correctRouteIndex: number;
   selectedRouteIndex: number | null;
   routeLabels: string[];
+  // Back navigation (1-deep history)
+  previousQuestion: PreviousQuestion | null;
+  reviewingPrevious: boolean;
 }
 
 export function createQuizState(): QuizState {
@@ -43,8 +63,6 @@ export function createQuizState(): QuizState {
     mirror: false,
     decisionPieces: [],
     explanation: '',
-    autoAdvanceAt: null,
-    mode: 'learning',
     currentStreak: 0,
     quizType: 'bag1',
     bag1Opener: null,
@@ -53,10 +71,34 @@ export function createQuizState(): QuizState {
     correctRouteIndex: 0,
     selectedRouteIndex: null,
     routeLabels: [],
+    previousQuestion: null,
+    reviewingPrevious: false,
   };
 }
 
 export function nextQuestion(state: QuizState): void {
+  // Save current answered question as previous (for back navigation)
+  if (state.phase === 'answered' && state.isCorrect !== null) {
+    state.previousQuestion = {
+      currentBag: state.currentBag,
+      correctOpener: state.correctOpener,
+      alternatives: state.alternatives,
+      selectedOpener: state.selectedOpener,
+      isCorrect: state.isCorrect,
+      mirror: state.mirror,
+      decisionPieces: state.decisionPieces,
+      explanation: state.explanation,
+      quizType: state.quizType,
+      bag1Opener: state.bag1Opener,
+      bag1Mirror: state.bag1Mirror,
+      bag2Bag: state.bag2Bag,
+      correctRouteIndex: state.correctRouteIndex,
+      selectedRouteIndex: state.selectedRouteIndex ?? 0,
+      routeLabels: state.routeLabels,
+    };
+  }
+  state.reviewingPrevious = false;
+
   if (state.quizType === 'bag2') {
     nextBag2Question(state);
   } else {
@@ -99,6 +141,7 @@ function nextBag2Question(state: QuizState): void {
   state.mirror = mirror;
   state.alternatives = [];
   state.decisionPieces = [];
+  // Bag 2 explanation is generated after answering (needs selected route)
   state.explanation = '';
   resetQuestionState(state);
 }
@@ -110,7 +153,6 @@ function resetQuestionState(state: QuizState): void {
   state.isCorrect = null;
   state.questionStartTime = performance.now();
   state.responseTimeMs = null;
-  state.autoAdvanceAt = null;
 }
 
 export function submitAnswer(state: QuizState, opener: OpenerID): void {
@@ -147,20 +189,35 @@ function finishAnswer(state: QuizState): void {
     state.currentStreak = 0;
   }
 
-  // Set auto-advance timer based on mode and correctness
-  const now = performance.now();
-  if (state.mode === 'learning') {
-    state.autoAdvanceAt = now + (state.isCorrect ? 450 : 1200);
-  } else {
-    state.autoAdvanceAt = now + (state.isCorrect ? 300 : 800);
+  // Generate Bag 2 explanation after answering
+  if (state.quizType === 'bag2' && state.bag2Bag) {
+    state.explanation = generateBag2Explanation(state);
   }
 }
 
-/** Returns true if auto-advance triggered (state was mutated to next question). */
-export function tickQuiz(state: QuizState): boolean {
-  if (state.autoAdvanceAt && performance.now() >= state.autoAdvanceAt) {
-    nextQuestion(state);
-    return true;
+/** Generate explanation for Bag 2 route selection. */
+function generateBag2Explanation(state: QuizState): string {
+  const routes = getBag2Routes(state.correctOpener, state.mirror);
+  const correctRoute = routes[state.correctRouteIndex];
+  if (!correctRoute) return '';
+
+  // Default route — no condition pieces to explain
+  if (correctRoute.conditionLabel === 'Default') {
+    return `No special condition met → ${correctRoute.routeLabel}`;
   }
-  return false;
+
+  // Parse condition to find relevant pieces and show their positions
+  const bag = state.bag2Bag!;
+  const condLabel = correctRoute.conditionLabel;
+  // Extract piece letters from condition (e.g., "S before J" → S, J)
+  const pieceLetters = condLabel.match(/[IJLOSTZ]/g) ?? [];
+  const posInfo = pieceLetters
+    .map(p => {
+      const idx = indexOf(bag, p as PieceType);
+      const pos = idx === Infinity ? '?' : `${idx + 1}`;
+      return `${p}@${pos}`;
+    })
+    .join(', ');
+
+  return `${posInfo} → ${condLabel} → ${correctRoute.routeLabel}`;
 }

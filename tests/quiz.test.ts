@@ -274,41 +274,102 @@ describe('Decision explanation', () => {
   });
 });
 
-// ── Auto-advance ──
+// ── Back navigation (previous question) ──
 
-describe('Auto-advance timer', () => {
-  test('autoAdvanceAt is set after answering', () => {
+describe('Back navigation', () => {
+  test('previousQuestion is null initially', () => {
     const state = createQuizState();
-    nextQuestion(state);
-    expect(state.autoAdvanceAt).toBeNull();
-
-    submitAnswer(state, state.correctOpener);
-    expect(state.autoAdvanceAt).not.toBeNull();
+    expect(state.previousQuestion).toBeNull();
+    expect(state.reviewingPrevious).toBe(false);
   });
 
-  test('learning mode: correct=450ms, wrong=1200ms', () => {
+  test('nextQuestion saves answered state to previousQuestion', () => {
     const state = createQuizState();
-    state.mode = 'learning';
+    nextQuestion(state);
+    const firstBag = [...state.currentBag];
+    const firstCorrect = state.correctOpener;
+
+    submitAnswer(state, state.correctOpener);
     nextQuestion(state);
 
-    const beforeAnswer = performance.now();
-    submitAnswer(state, state.correctOpener);
-    const delay = state.autoAdvanceAt! - beforeAnswer;
-    // Should be approximately 450ms (allow some tolerance for execution time)
-    expect(delay).toBeGreaterThan(400);
-    expect(delay).toBeLessThan(600);
+    expect(state.previousQuestion).not.toBeNull();
+    expect(state.previousQuestion!.currentBag).toEqual(firstBag);
+    expect(state.previousQuestion!.correctOpener).toBe(firstCorrect);
+    expect(state.previousQuestion!.isCorrect).toBe(true);
   });
 
-  test('speed mode: correct=300ms, wrong=800ms', () => {
+  test('previousQuestion is NOT saved when skipping unanswered question', () => {
     const state = createQuizState();
-    state.mode = 'speed';
+    nextQuestion(state);
+    // Skip without answering (phase is still 'showing')
+    nextQuestion(state);
+    // No previous saved because prior question was never answered
+    expect(state.previousQuestion).toBeNull();
+  });
+
+  test('reviewingPrevious is reset on nextQuestion', () => {
+    const state = createQuizState();
+    nextQuestion(state);
+    submitAnswer(state, state.correctOpener);
+    nextQuestion(state);
+    state.reviewingPrevious = true;
+
+    submitAnswer(state, state.correctOpener);
+    nextQuestion(state);
+    expect(state.reviewingPrevious).toBe(false);
+  });
+
+  test('Bag 2 previous question stores route data', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
     nextQuestion(state);
 
-    const beforeAnswer = performance.now();
-    submitAnswer(state, state.correctOpener);
-    const delay = state.autoAdvanceAt! - beforeAnswer;
-    expect(delay).toBeGreaterThan(250);
-    expect(delay).toBeLessThan(450);
+    const firstRouteLabels = [...state.routeLabels];
+    const firstCorrectRoute = state.correctRouteIndex;
+
+    submitBag2Answer(state, state.correctRouteIndex);
+    nextQuestion(state);
+
+    expect(state.previousQuestion).not.toBeNull();
+    expect(state.previousQuestion!.quizType).toBe('bag2');
+    expect(state.previousQuestion!.routeLabels).toEqual(firstRouteLabels);
+    expect(state.previousQuestion!.correctRouteIndex).toBe(firstCorrectRoute);
+  });
+});
+
+// ── Always show explanation ──
+
+describe('Always show explanation', () => {
+  test('Bag 1 explanation is always populated', () => {
+    const state = createQuizState();
+    nextQuestion(state);
+    // Explanation is set during question generation for Bag 1
+    expect(state.explanation).toBeTruthy();
+  });
+
+  test('Bag 2 explanation is generated after answering', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+    nextQuestion(state);
+
+    // Before answering, explanation is empty
+    expect(state.explanation).toBe('');
+
+    submitBag2Answer(state, state.correctRouteIndex);
+    // After answering, explanation is populated
+    expect(state.explanation).toBeTruthy();
+  });
+
+  test('Bag 2 explanation mentions route label', () => {
+    const state = createQuizState();
+    state.quizType = 'bag2';
+
+    for (let i = 0; i < 20; i++) {
+      nextQuestion(state);
+      submitBag2Answer(state, state.correctRouteIndex);
+      const correctRoute = state.routeLabels[state.correctRouteIndex];
+      expect(state.explanation).toContain(correctRoute);
+    }
   });
 });
 

@@ -41,7 +41,7 @@ export const DECISION_PIECES: Record<OpenerID, { pieces: PieceType[]; rule: stri
 };
 
 /** Mirror-side decision piece groups. */
-const DECISION_PIECES_MIRROR: Record<OpenerID, { pieces: PieceType[]; rule: string }> = {
+export const DECISION_PIECES_MIRROR: Record<OpenerID, { pieces: PieceType[]; rule: string }> = {
   honey_cup: { pieces: ['J', 'O', 'T'], rule: 'J must NOT be last among J/O/T' },
   ms2: { pieces: ['L', 'J'], rule: 'L must appear before J (hold J)' },
   gamushiro: { pieces: ['L', 'J'], rule: 'L must appear before J (hold J)' },

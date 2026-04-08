@@ -11,10 +11,12 @@ import { drawBoard, drawFilledCells, drawPiecePreview } from './board';
 import { drawHoldPiece, drawQueue, drawQuizQueue } from './queue';
 import { drawQuizHUD, drawTabs, drawStatusBar } from './hud';
 import { renderOnboardingMode } from './onboarding';
-import { OPENERS } from '../openers/decision';
+import { OPENERS, DECISION_PIECES, DECISION_PIECES_MIRROR } from '../openers/decision';
+import { getBag2Routes as getBag2RoutesFromOpeners } from '../openers/bag2-routes';
 import { PIECE_DEFINITIONS } from '../core/pieces';
 import { renderDrillMode, renderDrillSelector } from './drill';
 import type { DrillState } from '../modes/drill';
+import type { QuizState, PreviousQuestion } from '../modes/quiz';
 
 export interface QuizStatsData {
   total: number;
@@ -35,29 +37,7 @@ export interface AppState {
     selectedRouteIndex?: number | null;
     correctRouteIndex?: number | null;
   };
-  quiz: {
-    phase: 'showing' | 'answered';
-    currentBag: PieceType[];
-    correctOpener: OpenerID;
-    alternatives: OpenerID[];
-    selectedOpener: OpenerID | null;
-    isCorrect: boolean | null;
-    questionStartTime: number;
-    responseTimeMs: number | null;
-    mirror: boolean;
-    decisionPieces: PieceType[];
-    explanation: string;
-    autoAdvanceAt: number | null;
-    mode: 'learning' | 'speed';
-    currentStreak: number;
-    quizType: 'bag1' | 'bag2';
-    bag1Opener: OpenerID | null;
-    bag1Mirror: boolean;
-    bag2Bag: PieceType[] | null;
-    correctRouteIndex: number;
-    selectedRouteIndex: number | null;
-    routeLabels: string[];
-  };
+  quiz: QuizState;
   stats: QuizStatsData;
   visualizer?: VisualizerState;
   drill?: DrillState | null;
@@ -92,10 +72,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         renderOnboardingMode(ctx, renderState);
       } else if (state.mode === 'quiz') {
         renderQuizMode(ctx, state);
-        const statusHint = state.quiz.quizType === 'bag2'
-          ? 'Press 1-2 \u00b7 Space: skip \u00b7 S: mode \u00b7 B: bag type \u00b7 R: reset'
-          : 'Press 1-3 \u00b7 Space: skip \u00b7 S: mode \u00b7 B: bag type \u00b7 R: reset';
-        drawStatusBar(ctx, statusHint, state.quiz.mode, state.quiz.quizType);
+        const accuracyLabel = state.stats.total > 0
+          ? `${state.stats.correct}/${state.stats.total} (${Math.round(state.stats.correct / state.stats.total * 100)}%)`
+          : '0/0';
+        const statusHint = `${accuracyLabel} \u00b7 [B] bag type \u00b7 [\u2190\u2192] navigate \u00b7 [R] reset`;
+        drawStatusBar(ctx, statusHint, state.quiz.quizType);
       } else if (state.mode === 'visualizer' && state.visualizer) {
         renderVisualizerMode(ctx, state.visualizer);
       } else if (state.mode === 'drill') {
@@ -115,56 +96,89 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 function renderQuizMode(ctx: CanvasRenderingContext2D, state: AppState): void {
   const { quiz, stats } = state;
 
+  // If reviewing previous question, show that instead
+  const reviewing = quiz.reviewingPrevious && quiz.previousQuestion;
+  const displayQuiz = reviewing ? quiz.previousQuestion! : quiz;
+
   // Determine hold piece: show after answering (Bag 1 only)
-  const isAnswered = quiz.phase === 'answered';
-  const openerDef = OPENERS[quiz.correctOpener];
-  const holdPiece = (isAnswered && quiz.quizType === 'bag1')
-    ? (quiz.mirror ? openerDef.holdPieceMirror : openerDef.holdPiece)
+  const isAnswered = reviewing || quiz.phase === 'answered';
+  const openerDef = OPENERS[displayQuiz.correctOpener];
+  const holdPiece = (isAnswered && displayQuiz.quizType === 'bag1')
+    ? (displayQuiz.mirror ? openerDef.holdPieceMirror : openerDef.holdPiece)
     : null;
 
-  // 3. Draw quiz queue (vertical layout)
+  // Draw quiz queue (vertical layout)
   const queueOptions: QuizQueueOptions = {
-    decisionPieces: quiz.quizType === 'bag1' ? quiz.decisionPieces : [],
-    showHighlights: isAnswered && quiz.quizType === 'bag1',
+    decisionPieces: displayQuiz.quizType === 'bag1' ? displayQuiz.decisionPieces : [],
+    showHighlights: isAnswered && displayQuiz.quizType === 'bag1',
     holdPiece,
-    mirror: quiz.mirror,
+    mirror: displayQuiz.mirror,
   };
-  drawQuizQueue(ctx, quiz.currentBag, queueOptions);
+  drawQuizQueue(ctx, displayQuiz.currentBag, queueOptions);
 
   // Bag 2 context: opener name
   let bag1OpenerName = '';
   let bag1MirrorLabel = '';
-  if (quiz.quizType === 'bag2' && quiz.bag1Opener) {
-    const def = OPENERS[quiz.bag1Opener];
+  if (displayQuiz.quizType === 'bag2' && displayQuiz.bag1Opener) {
+    const def = OPENERS[displayQuiz.bag1Opener];
     bag1OpenerName = def.nameEn;
-    bag1MirrorLabel = quiz.bag1Mirror ? '(Mirror)' : '';
+    bag1MirrorLabel = displayQuiz.bag1Mirror ? '(Mirror)' : '';
   }
 
-  // 4. Draw HUD (buttons, feedback, stats)
+  // Build rule lines for the rule panel
+  const ruleLines = buildRuleLines(displayQuiz.quizType, displayQuiz.bag1Opener, displayQuiz.bag1Mirror, displayQuiz.mirror);
+
+  // Inline accuracy
+  const accuracyLabel = stats.total > 0
+    ? `${stats.correct}/${stats.total} (${Math.round(stats.correct / stats.total * 100)}%)`
+    : '0/0';
+
+  // Draw HUD (buttons, feedback, rules)
   const hudData: QuizHUDData = {
-    phase: quiz.phase,
-    selectedOpener: quiz.selectedOpener,
-    correctOpener: quiz.correctOpener,
-    alternatives: quiz.alternatives,
-    isCorrect: quiz.isCorrect,
-    responseTimeMs: quiz.responseTimeMs,
-    explanation: quiz.explanation,
-    quizMode: quiz.mode,
-    quizType: quiz.quizType,
+    phase: reviewing ? 'answered' : quiz.phase,
+    selectedOpener: displayQuiz.selectedOpener,
+    correctOpener: displayQuiz.correctOpener,
+    alternatives: displayQuiz.alternatives,
+    isCorrect: displayQuiz.isCorrect,
+    responseTimeMs: reviewing ? null : quiz.responseTimeMs,
+    explanation: displayQuiz.explanation,
+    quizType: displayQuiz.quizType,
     bag1OpenerName,
     bag1MirrorLabel,
-    selectedRouteIndex: quiz.selectedRouteIndex,
-    correctRouteIndex: quiz.correctRouteIndex,
-    routeLabels: quiz.routeLabels,
-    stats: {
-      total: stats.total,
-      correct: stats.correct,
-      streak: quiz.currentStreak,
-      bestStreak: stats.bestStreak,
-      avgTimeMs: stats.avgTimeMs,
-    },
+    selectedRouteIndex: displayQuiz.selectedRouteIndex,
+    correctRouteIndex: displayQuiz.correctRouteIndex,
+    routeLabels: displayQuiz.routeLabels,
+    ruleLines,
+    reviewingPrevious: !!reviewing,
+    accuracyLabel,
   };
   drawQuizHUD(ctx, hudData);
+}
+
+/** Build rule lines for the rule panel. */
+function buildRuleLines(
+  quizType: 'bag1' | 'bag2',
+  bag1Opener: OpenerID | null,
+  bag1Mirror: boolean,
+  mirror: boolean,
+): string[] {
+  if (quizType === 'bag1') {
+    // Show all opener decision rules
+    const dp = mirror ? DECISION_PIECES_MIRROR : DECISION_PIECES;
+    return [
+      `Honey: ${dp.honey_cup.rule}`,
+      `MS2/Gamu: ${dp.ms2.rule}`,
+      `Stray: ${dp.stray_cannon.rule}`,
+    ];
+  }
+
+  if (quizType === 'bag2' && bag1Opener) {
+    // Show route conditions for this opener
+    const routes = getBag2RoutesFromOpeners(bag1Opener, bag1Mirror);
+    return routes.map((r, i) => `${i + 1}: ${r.routeLabel} \u2014 ${r.conditionLabel}`);
+  }
+
+  return [];
 }
 
 function buildOnboardingRenderState(state: AppState): OnboardingRenderState {

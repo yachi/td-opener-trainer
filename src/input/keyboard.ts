@@ -8,7 +8,6 @@ export function setupKeyboard(
     Digit2: 'option_2',
     Digit3: 'option_3',
     KeyR: 'reset_stats',
-    KeyS: 'toggle_mode',
     KeyN: 'skip_stage',
     KeyV: 'toggle_visualizer',
     ArrowRight: 'advance',
