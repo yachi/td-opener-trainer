@@ -3,7 +3,7 @@ import type { DrillState } from '../modes/drill';
 import type { OpenerID } from '../openers/types';
 import { getPieceCells, getGhostPosition } from '../core/srs';
 import { OPENERS } from '../openers/decision';
-import { getExpectedBoard, getTargetPlacement, getHoldSuggestion, getAllTargets } from '../modes/drill';
+import { getExpectedBoard, getExpectedBoardBag2, getTargetPlacement, getHoldSuggestion, getAllTargets, getBag2RouteLabel } from '../modes/drill';
 import {
   COLORS,
   CANVAS_W,
@@ -89,6 +89,9 @@ export function renderDrillMode(ctx: CanvasRenderingContext2D, state: DrillState
   switch (state.phase) {
     case 'playing':
       drawPlayingPhase(ctx, state);
+      break;
+    case 'bag1_complete':
+      drawBag1CompletePhase(ctx, state);
       break;
     case 'success':
       drawSuccessPhase(ctx, state);
@@ -209,7 +212,48 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   }
 
   const modeLabel = state.guided ? 'Guided' : 'Free';
-  drawStatusBar(ctx, `Drill · ${title} · ${modeLabel} · ${state.piecesPlaced}/6`);
+  const bagLabel = state.bagNumber === 2
+    ? `Bag 2 · ${state.piecesPlaced}/${state.targetPieceCount}`
+    : `Bag 1 · ${state.piecesPlaced}/${state.targetPieceCount}`;
+  const routeLabel = getBag2RouteLabel(state);
+  const routeStr = routeLabel ? ` · ${routeLabel}` : '';
+  drawStatusBar(ctx, `Drill · ${title} · ${modeLabel} · ${bagLabel}${routeStr}`);
+}
+
+// ── Bag 1 Complete Interstitial ──
+
+function drawBag1CompletePhase(ctx: CanvasRenderingContext2D, state: DrillState): void {
+  const openerDef = OPENERS[state.openerId];
+  const title = `${openerDef.nameEn} ${state.mirror ? '(Mirror)' : ''}`;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 18px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(title, CANVAS_W / 2, BOARD_Y - 4);
+
+  drawBoard(ctx);
+  drawLockedCells(ctx, state);
+
+  // Semi-transparent overlay
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(BOARD_X, BOARD_Y, LAYOUT.board.w, LAYOUT.board.h);
+
+  // Success message
+  ctx.fillStyle = COLORS.correct;
+  ctx.font = `bold 28px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Bag 1 Complete!', BOARD_X + LAYOUT.board.w / 2, BOARD_Y + LAYOUT.board.h / 2 - 30);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `18px ${FONT}`;
+  ctx.fillText('Space: start Bag 2', BOARD_X + LAYOUT.board.w / 2, BOARD_Y + LAYOUT.board.h / 2 + 10);
+  ctx.fillText('R: retry Bag 1', BOARD_X + LAYOUT.board.w / 2, BOARD_Y + LAYOUT.board.h / 2 + 40);
+
+  drawDrillHold(ctx, state.holdPiece, false);
+
+  drawStatusBar(ctx, 'Bag 1 complete! Space: Bag 2 · R: retry · 1-4: switch opener');
 }
 
 // ── Success Phase ──
@@ -231,11 +275,12 @@ function drawSuccessPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
   ctx.fillRect(BOARD_X, BOARD_Y, LAYOUT.board.w, LAYOUT.board.h);
 
+  const successLabel = state.bagNumber === 2 ? 'Bag 2 SUCCESS!' : 'SUCCESS!';
   ctx.fillStyle = COLORS.correct;
   ctx.font = `bold 36px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('SUCCESS!', BOARD_X + LAYOUT.board.w / 2, BOARD_Y + LAYOUT.board.h / 2 - 20);
+  ctx.fillText(successLabel, BOARD_X + LAYOUT.board.w / 2, BOARD_Y + LAYOUT.board.h / 2 - 20);
 
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `18px ${FONT}`;
@@ -249,7 +294,9 @@ function drawSuccessPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
 
   drawDrillHold(ctx, state.holdPiece, false);
 
-  drawStatusBar(ctx, 'Success! R: retry · Space: new bag · 1-4: switch opener');
+  const routeLabel = getBag2RouteLabel(state);
+  const routeStr = routeLabel ? ` · ${routeLabel}` : '';
+  drawStatusBar(ctx, `Success!${routeStr} R: retry · Space: new bag · 1-4: switch opener`);
 }
 
 // ── Failed Phase ──
@@ -288,7 +335,9 @@ function drawFailedPhase(ctx: CanvasRenderingContext2D, state: DrillState): void
   drawMiniBoard(ctx, state.board, startX, startY, smallCell);
 
   // Expected board (right)
-  const expected = getExpectedBoard(state.openerId, state.mirror);
+  const expected = state.bagNumber === 2
+    ? getExpectedBoardBag2(state.openerId, state.mirror, state.routeIndex)
+    : getExpectedBoard(state.openerId, state.mirror, state.targetPieceCount);
   drawMiniBoard(ctx, expected, startX + smallBoardW + gap, startY, smallCell);
 
   // Failed text
@@ -462,21 +511,3 @@ function drawDrillQueue(ctx: CanvasRenderingContext2D, queue: PieceType[]): void
   }
 }
 
-function drawControlsHelp(ctx: CanvasRenderingContext2D): void {
-  const y = BOARD_Y + LAYOUT.board.h + 28;
-  const controls = [
-    '\u2190\u2192: move',
-    '\u2191/X: CW',
-    'Z: CCW',
-    '\u2193: soft drop',
-    'Space: hard drop',
-    'C: hold',
-    'H: hints',
-  ];
-
-  ctx.fillStyle = '#555577';
-  ctx.font = `12px ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText(controls.join('  \u00b7  '), CANVAS_W / 2, y);
-}

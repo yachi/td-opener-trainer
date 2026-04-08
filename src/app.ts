@@ -39,6 +39,7 @@ import {
   softDropPiece,
   resetDrill,
   toggleGuided,
+  transitionToBag2,
 } from './modes/drill.ts';
 import type { DrillState } from './modes/drill.ts';
 import { setupDrillInput } from './input/drill-keyboard.ts';
@@ -529,6 +530,30 @@ function dispatchDrill(action: string): void {
         state.drill = toggleGuided(drill);
         dirty = true;
         break;
+    }
+    return;
+  }
+
+  // Bag 1 Complete interstitial
+  if (drill.phase === 'bag1_complete') {
+    switch (action) {
+      case 'hard_drop': // Space = start Bag 2
+        state.drill = transitionToBag2(drill);
+        dirty = true;
+        break;
+      case 'retry':
+        state.drill = resetDrill(drill);
+        dirty = true;
+        break;
+      case 'select_1':
+      case 'select_2':
+      case 'select_3':
+      case 'select_4': {
+        const idx = parseInt(action.slice(-1)) - 1;
+        state.drill = createDrillState(DRILL_OPENER_IDS[idx]!);
+        dirty = true;
+        break;
+      }
     }
     return;
   }
