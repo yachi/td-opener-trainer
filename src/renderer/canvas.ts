@@ -237,7 +237,7 @@ function renderVisualizerMode(ctx: CanvasRenderingContext2D, vizState: Visualize
       ctx.fillText(`Bag 2 · ${route.routeLabel}`, CANVAS_W / 2, 92);
       ctx.fillStyle = '#9999BB';
       ctx.font = `12px ${FONT}`;
-      ctx.fillText(`Condition: ${route.condition}`, CANVAS_W / 2, 108);
+      ctx.fillText(`Condition: ${route.conditionLabel}`, CANVAS_W / 2, 108);
     }
   }
 

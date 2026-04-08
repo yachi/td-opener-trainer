@@ -431,14 +431,14 @@ describe('V4: Board data is compatible with existing renderer', () => {
 // ── V5: Opener Switching ──
 
 describe('V5: User can switch between openers', () => {
-  test('getAvailableOpeners returns all 4 openers with display names', async () => {
-    const { getAvailableOpeners } = await import('../src/modes/visualizer.ts');
-    const openers = getAvailableOpeners();
-    expect(openers.length).toBe(4);
-    for (const o of openers) {
-      expect(o.id).toBeDefined();
-      expect(o.nameEn).toBeDefined();
-      expect(o.nameCn).toBeDefined();
+  test('OPENER_ORDER contains all 4 openers', async () => {
+    const { OPENER_ORDER } = await import('../src/openers/types.ts');
+    const { OPENERS } = await import('../src/openers/decision.ts');
+    expect(OPENER_ORDER.length).toBe(4);
+    for (const id of OPENER_ORDER) {
+      expect(OPENERS[id]).toBeDefined();
+      expect(OPENERS[id].nameEn).toBeDefined();
+      expect(OPENERS[id].nameCn).toBeDefined();
     }
   });
 
@@ -503,7 +503,7 @@ describe('V7: Bag 2 routes', () => {
       expect(routes.length).toBeGreaterThanOrEqual(2);
       expect(routes[0]!.routeId.length).toBeGreaterThan(0);
       expect(routes[0]!.routeLabel.length).toBeGreaterThan(0);
-      expect(routes[0]!.condition.length).toBeGreaterThan(0);
+      expect(routes[0]!.conditionLabel.length).toBeGreaterThan(0);
       expect(routes[0]!.placements.length).toBe(6); // 6 pieces after T fires TST
     }
   });

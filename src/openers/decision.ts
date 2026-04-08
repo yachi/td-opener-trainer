@@ -1,10 +1,11 @@
 import type { PieceType } from '../core/types';
 import type { OpenerDefinition, OpenerID } from './types';
+import { getBag2Routes, type Bag2Route } from './bag2-routes';
 
 // ── Helpers ──
 
 /** Returns the index of the first occurrence of `piece` in `bag`, or Infinity. */
-function indexOf(bag: PieceType[], piece: PieceType): number {
+export function indexOf(bag: PieceType[], piece: PieceType): number {
   const i = bag.indexOf(piece);
   return i === -1 ? Infinity : i;
 }
@@ -26,7 +27,7 @@ function isNotLast(bag: PieceType[], piece: PieceType, group: PieceType[]): bool
 }
 
 /** Returns true if `a` appears before `b` in `bag`. */
-function appearsBefore(bag: PieceType[], a: PieceType, b: PieceType): boolean {
+export function appearsBefore(bag: PieceType[], a: PieceType, b: PieceType): boolean {
   return indexOf(bag, a) < indexOf(bag, b);
 }
 
@@ -212,4 +213,30 @@ export function bestOpener(bag: PieceType[]): BestOpenerResult {
     decisionPieces: info.pieces,
     explanation: generateExplanation(bag, best.id, best.mirror, alternatives),
   };
+}
+
+// ── Bag 2 Route Selection ──
+
+/**
+ * Select the best Bag 2 route for a given opener and bag.
+ * Iterates routes in REVERSE order (preferred routes have higher index).
+ * Falls back to route 0 (always-true default).
+ */
+export function bestBag2Route(
+  openerId: OpenerID,
+  mirror: boolean,
+  bag2: PieceType[],
+): { route: Bag2Route; routeIndex: number } {
+  const routes = getBag2Routes(openerId, mirror);
+  if (routes.length === 0) {
+    throw new Error(`No Bag 2 routes for opener ${openerId}`);
+  }
+  // Check routes in reverse — higher-index routes are preferred when condition met
+  for (let i = routes.length - 1; i >= 0; i--) {
+    if (routes[i]!.canSelect(bag2)) {
+      return { route: routes[i]!, routeIndex: i };
+    }
+  }
+  // Fallback to route 0 (should always match since canSelect: () => true)
+  return { route: routes[0]!, routeIndex: 0 };
 }
