@@ -115,7 +115,9 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 
 ## Workflow: L8 Redesign Protocol
 
-When the user says "work on X as a google l8 engineer" or invokes this pattern:
+Trigger: user says **"L8"**, "L8 mode", or "work on X as a google l8 engineer".
+
+When triggered:
 
 ```
 loop until no new findings → (draft 99% of code in mind, don't write code yet, reference industrial standard)
