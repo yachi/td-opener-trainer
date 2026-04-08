@@ -211,6 +211,13 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
     }
   }
 
+  // Controls hint below board
+  ctx.fillStyle = '#555577';
+  ctx.font = `11px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('←→ move · ↑/X cw · Z ccw · Space drop · C hold · G guided', CANVAS_W / 2, BOARD_Y + LAYOUT.board.h + 4);
+
   const modeLabel = state.guided ? 'Guided' : 'Free';
   const bagLabel = state.bagNumber === 2
     ? `Bag 2 · ${state.piecesPlaced}/${state.targetPieceCount}`

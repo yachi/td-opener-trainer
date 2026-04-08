@@ -278,7 +278,7 @@ function drawReviewIndicator(ctx: CanvasRenderingContext2D): void {
 
 export function drawTabs(ctx: CanvasRenderingContext2D, activeMode: string): void {
   const { x, y, w, h } = LAYOUT.tabBar;
-  const tabs = ['Quiz', 'Visualizer', 'Drill'];
+  const tabs = [activeMode === 'onboarding' ? 'Learn' : 'Quiz', 'Visualizer', 'Drill'];
   const tabW = Math.floor(w / tabs.length);
 
   ctx.fillStyle = COLORS.tabBg;
@@ -286,7 +286,9 @@ export function drawTabs(ctx: CanvasRenderingContext2D, activeMode: string): voi
 
   for (let i = 0; i < tabs.length; i++) {
     const tx = x + i * tabW;
-    const isActive = tabs[i]!.toLowerCase() === activeMode.toLowerCase();
+    const isActive = i === 0
+      ? (activeMode === 'onboarding' || activeMode === 'quiz')
+      : tabs[i]!.toLowerCase() === activeMode.toLowerCase();
 
     if (isActive) {
       ctx.fillStyle = COLORS.tabActive;

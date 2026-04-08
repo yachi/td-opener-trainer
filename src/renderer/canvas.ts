@@ -69,7 +69,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       drawTabs(ctx, state.mode);
 
       if (state.mode === 'onboarding' && state.onboarding) {
-        if (state.onboardingMenuOpen) {
+        if (state.onboardingMenuOpen || state.onboarding.currentStage === 'complete') {
           renderOnboardingSelector(ctx, state.onboarding, state.onboardingMenuIndex ?? 0);
           drawStatusBar(ctx, 'Learn \u00b7 1-8: pick stage \u00b7 Enter: confirm \u00b7 Esc: return here');
         } else {
