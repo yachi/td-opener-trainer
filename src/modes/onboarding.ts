@@ -1,17 +1,20 @@
 import type { PieceType } from '../core/types';
 import { generateBag } from '../core/bag';
 import type { OpenerID } from '../openers/types';
-import { OPENERS, DECISION_PIECES, indexOf } from '../openers/decision';
+import { OPENERS, DECISION_PIECES, indexOf, bestBag2Route } from '../openers/decision';
+import { getBag2Routes } from '../openers/bag2-routes';
 
 // ── Types ──
 
 export interface OnboardingProgress {
-  version: 2;
+  version: 3;
   currentStage: OpenerID | 'complete';
+  currentBag: 1 | 2;
   stagePhase: 'shape_preview' | 'rule_card' | 'examples' | 'drill' | 'celebration';
   exampleIndex: number;
   exampleStep: number;
   mastery: Record<OpenerID, MasteryRecord>;
+  masteryBag2: Record<OpenerID, MasteryRecord>;
   lastActiveAt: number;
 }
 
@@ -53,16 +56,20 @@ function createMasteryRecord(): MasteryRecord {
 
 export function createOnboardingProgress(): OnboardingProgress {
   const mastery = {} as Record<OpenerID, MasteryRecord>;
+  const masteryBag2 = {} as Record<OpenerID, MasteryRecord>;
   for (const id of STAGE_ORDER) {
     mastery[id] = createMasteryRecord();
+    masteryBag2[id] = createMasteryRecord();
   }
   return {
-    version: 2,
+    version: 3,
     currentStage: STAGE_ORDER[0]!,
+    currentBag: 1,
     stagePhase: 'shape_preview',
     exampleIndex: 0,
     exampleStep: 0,
     mastery,
+    masteryBag2,
     lastActiveAt: Date.now(),
   };
 }
@@ -87,7 +94,8 @@ export function advancePhase(progress: OnboardingProgress): void {
     case 'drill': {
       // Only advance to celebration if mastery is completed for the current stage
       const stage = progress.currentStage as OpenerID;
-      if (progress.mastery[stage]?.completed) {
+      const record = getMasteryRecord(progress, stage);
+      if (record?.completed) {
         progress.stagePhase = 'celebration';
       }
       // Otherwise stay in drill
@@ -97,12 +105,20 @@ export function advancePhase(progress: OnboardingProgress): void {
       // Move to the next stage or complete
       const idx = STAGE_ORDER.indexOf(progress.currentStage as OpenerID);
       if (idx >= 0 && idx < STAGE_ORDER.length - 1) {
+        // Not last opener in current bag pass → advance to next opener
         progress.currentStage = STAGE_ORDER[idx + 1]!;
         progress.stagePhase = 'shape_preview';
         progress.exampleIndex = 0;
         progress.exampleStep = 0;
+      } else if (progress.currentBag === 1) {
+        // Last Bag 1 opener → start Bag 2 pass
+        progress.currentBag = 2;
+        progress.currentStage = STAGE_ORDER[0]!;
+        progress.stagePhase = 'shape_preview';
+        progress.exampleIndex = 0;
+        progress.exampleStep = 0;
       } else {
-        // Last opener → complete
+        // Last Bag 2 opener → complete
         progress.currentStage = 'complete';
       }
       break;
@@ -112,6 +128,15 @@ export function advancePhase(progress: OnboardingProgress): void {
 
 // ── Mastery Detection ──
 
+export function getMasteryRecord(
+  progress: OnboardingProgress,
+  openerId: OpenerID,
+): MasteryRecord | undefined {
+  return progress.currentBag === 2
+    ? progress.masteryBag2[openerId]
+    : progress.mastery[openerId];
+}
+
 export function checkMastery(
   progress: OnboardingProgress,
   openerId: OpenerID,
@@ -119,7 +144,7 @@ export function checkMastery(
 ): boolean {
   const windowSize = opts?.windowSize ?? 6;
   const threshold = opts?.threshold ?? 5;
-  const record = progress.mastery[openerId];
+  const record = getMasteryRecord(progress, openerId);
   if (!record) return false;
 
   const { history } = record;
@@ -161,7 +186,31 @@ export function recordDrillAnswer(
     isCorrect = answer;
   }
 
-  const record = progress.mastery[openerId];
+  const record = getMasteryRecord(progress, openerId);
+  if (record) {
+    record.total++;
+    if (isCorrect) record.correct++;
+    record.history.push(isCorrect);
+  }
+
+  return isCorrect;
+}
+
+/**
+ * Record a Bag 2 drill answer (route selection).
+ * `selectedRouteIndex` is the user's choice (0 or 1).
+ * Returns whether the answer was correct.
+ */
+export function recordBag2DrillAnswer(
+  progress: OnboardingProgress,
+  openerId: OpenerID,
+  selectedRouteIndex: number,
+  bag2: PieceType[],
+): boolean {
+  const { routeIndex: correctIndex } = bestBag2Route(openerId, false, bag2);
+  const isCorrect = selectedRouteIndex === correctIndex;
+
+  const record = progress.masteryBag2[openerId];
   if (record) {
     record.total++;
     if (isCorrect) record.correct++;
@@ -257,6 +306,107 @@ export function getWorkedExamples(openerId: OpenerID): WorkedExample[] {
   return bags.map(bag => generateWorkedExample(openerId, bag));
 }
 
+// ── Bag 2 Worked Examples ──
+
+export interface Bag2WorkedExampleStep {
+  instruction: string;
+  highlight?: PieceType[];
+}
+
+export interface Bag2WorkedExample {
+  bag2: PieceType[];
+  correctRouteIndex: number;
+  correctRouteLabel: string;
+  explanation: string;
+  steps: Bag2WorkedExampleStep[];
+}
+
+// Seed bags per opener for Bag 2 examples: [alt route, default, edge case]
+const EXAMPLE_BAG2_BAGS: Record<OpenerID, PieceType[][]> = {
+  ms2: [
+    ['L', 'Z', 'S', 'O', 'T', 'I', 'J'],  // L before I and J → Setup B
+    ['I', 'Z', 'S', 'O', 'T', 'L', 'J'],  // I before L → default Setup A
+    ['L', 'I', 'Z', 'S', 'O', 'T', 'J'],  // L before I, L before J → Setup B (edge: L just barely first)
+  ],
+  honey_cup: [
+    ['I', 'Z', 'S', 'O', 'T', 'L', 'J'],  // I before J → I-left variant
+    ['J', 'Z', 'S', 'O', 'T', 'I', 'L'],  // J before I → default Standard
+    ['I', 'J', 'Z', 'S', 'O', 'T', 'L'],  // I(1) just before J(2) → I-left variant
+  ],
+  stray_cannon: [
+    ['S', 'Z', 'L', 'O', 'T', 'I', 'J'],  // S before J → Route 2
+    ['J', 'Z', 'S', 'O', 'T', 'I', 'L'],  // J before S → default Route 1
+    ['S', 'J', 'Z', 'L', 'O', 'T', 'I'],  // S(1) just before J(2) → Route 2
+  ],
+  gamushiro: [
+    ['Z', 'S', 'L', 'T', 'I', 'J', 'O'],  // O after J,S,L → Form 2
+    ['O', 'Z', 'S', 'T', 'I', 'J', 'L'],  // O before others → default Form 1
+    ['J', 'S', 'L', 'Z', 'T', 'I', 'O'],  // O(7) last, after J(1),S(2),L(3) → Form 2
+  ],
+};
+
+function generateBag2WorkedExample(openerId: OpenerID, bag2: PieceType[]): Bag2WorkedExample {
+  const routes = getBag2Routes(openerId, false);
+  const { route: correctRoute, routeIndex: correctIndex } = bestBag2Route(openerId, false, bag2);
+
+  // Find the decision pieces (pieces mentioned in the condition)
+  const altRoute = routes[1];
+  const conditionLabel = altRoute?.conditionLabel ?? '';
+
+  // Step 1: Show the bag
+  const step1: Bag2WorkedExampleStep = {
+    instruction: `Bag 2: ${bag2.join(' ')}`,
+    highlight: [...bag2] as PieceType[],
+  };
+
+  // Step 2: Check the condition
+  const step2: Bag2WorkedExampleStep = {
+    instruction: `Condition for ${altRoute?.routeLabel ?? 'alt route'}: "${conditionLabel}"`,
+  };
+
+  // Step 3: Determine which route
+  const conditionMet = correctIndex > 0;
+  const step3: Bag2WorkedExampleStep = {
+    instruction: conditionMet
+      ? `Condition MET → use ${correctRoute.routeLabel}`
+      : `Condition NOT met → use ${correctRoute.routeLabel} (default)`,
+  };
+
+  const explanation = `${conditionLabel}: ${conditionMet ? 'Yes' : 'No'} → ${correctRoute.routeLabel}`;
+
+  return {
+    bag2,
+    correctRouteIndex: correctIndex,
+    correctRouteLabel: correctRoute.routeLabel,
+    explanation,
+    steps: [step1, step2, step3],
+  };
+}
+
+export function getBag2WorkedExamples(openerId: OpenerID): Bag2WorkedExample[] {
+  const bags = EXAMPLE_BAG2_BAGS[openerId];
+  if (!bags) return [];
+  return bags.map(bag => generateBag2WorkedExample(openerId, bag));
+}
+
+// ── Bag 2 Drill Bag Generation ──
+
+export function generateBag2DrillBag(openerId: OpenerID): PieceType[] {
+  // Target: ~50/50 route distribution
+  const wantAlt = Math.random() < 0.5;
+
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const bag = generateBag();
+    const { routeIndex } = bestBag2Route(openerId, false, bag);
+    const isAlt = routeIndex > 0;
+
+    if (wantAlt && isAlt) return bag;
+    if (!wantAlt && !isAlt) return bag;
+  }
+
+  return generateBag();
+}
+
 // ── Drill Bag Generation ──
 
 export function generateDrillBag(openerId: OpenerID): PieceType[] {
@@ -287,12 +437,27 @@ export function saveOnboardingProgress(progress: OnboardingProgress): void {
   }
 }
 
+function migrateV2toV3(v2: any): OnboardingProgress {
+  const masteryBag2 = {} as Record<OpenerID, MasteryRecord>;
+  for (const id of STAGE_ORDER) {
+    masteryBag2[id] = createMasteryRecord();
+  }
+  return {
+    ...v2,
+    version: 3,
+    currentBag: 1 as const,
+    masteryBag2,
+  };
+}
+
 export function loadOnboardingProgress(): OnboardingProgress {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return createOnboardingProgress();
     const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== 2) return createOnboardingProgress();
+    if (!parsed) return createOnboardingProgress();
+    if (parsed.version === 2) return migrateV2toV3(parsed);
+    if (parsed.version !== 3) return createOnboardingProgress();
     return parsed as OnboardingProgress;
   } catch {
     return createOnboardingProgress();

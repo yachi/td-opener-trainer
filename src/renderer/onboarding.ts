@@ -1,13 +1,14 @@
 import type { PieceType } from '../core/types';
 import type { OpenerID } from '../openers/types';
-import type { OnboardingProgress, WorkedExample } from '../modes/onboarding';
+import type { OnboardingProgress, WorkedExample, Bag2WorkedExample } from '../modes/onboarding';
 import type { QuizQueueOptions } from './queue';
-import { getWorkedExamples, STAGE_ORDER } from '../modes/onboarding';
+import { getWorkedExamples, getBag2WorkedExamples, STAGE_ORDER } from '../modes/onboarding';
 import { OPENERS, DECISION_PIECES } from '../openers/decision';
+import { getBag2Routes } from '../openers/bag2-routes';
 import { CANVAS_W, CANVAS_H, COLORS, drawPieceInBox, roundRect, drawCell } from './board';
 import { drawQuizQueue } from './queue';
 import { drawTabs, drawStatusBar } from './hud';
-import { getOpenerSequence } from '../modes/visualizer';
+import { getOpenerSequence, createVisualizerState } from '../modes/visualizer';
 
 // ── Shared constants ──
 
@@ -30,6 +31,12 @@ export interface DrillRenderData {
   total: number;
   correct: number;
   threshold: { window: number; required: number };
+  // Bag 2 fields
+  isBag2?: boolean;
+  route0Label?: string;
+  route1Label?: string;
+  selectedRouteIndex?: number | null;
+  correctRouteIndex?: number | null;
 }
 
 export interface CelebrationData {
@@ -52,10 +59,15 @@ function openerDisplay(openerId: OpenerID): { en: string; cn: string } {
   return { en: def.nameEn, cn: def.nameCn };
 }
 
-function stageLabel(openerId: OpenerID): string {
+function stageLabel(openerId: OpenerID, currentBag: 1 | 2 = 1): string {
   const idx = STAGE_ORDER.indexOf(openerId);
   if (idx < 0) return `Learning ${openerDisplay(openerId).en}`;
-  return `Stage ${idx + 1} of ${STAGE_ORDER.length}`;
+  const bagLabel = currentBag === 2 ? ' (Bag 2)' : '';
+  const stageNum = currentBag === 2
+    ? STAGE_ORDER.length + idx + 1
+    : idx + 1;
+  const totalStages = STAGE_ORDER.length * 2;
+  return `Stage ${stageNum} of ${totalStages}${bagLabel}`;
 }
 
 function drawSeparator(ctx: CanvasRenderingContext2D, y: number, margin = 80): void {
@@ -202,6 +214,141 @@ export function drawShapePreview(
   }
 }
 
+// ── 0b. Bag 2 Shape Preview ──
+
+export function drawBag2ShapePreview(
+  ctx: CanvasRenderingContext2D,
+  openerId: OpenerID,
+  stepIndex: number,
+  routeIndex: number,
+): void {
+  const display = openerDisplay(openerId);
+  const routes = getBag2Routes(openerId, false);
+  const route = routes[routeIndex];
+  const cx = centerX();
+
+  // Title
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 24px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`BAG 2: ${display.en}`, cx, 80);
+
+  // Route label
+  ctx.fillStyle = '#FFD600';
+  ctx.font = `16px ${FONT}`;
+  ctx.fillText(route?.routeLabel ?? `Route ${routeIndex + 1}`, cx, 110);
+
+  // Mini board
+  const vizState = createVisualizerState(openerId, false, routeIndex);
+  const cellSz = 24;
+  const visibleRows = 7;
+  const boardW = 10 * cellSz;
+  const boardH = visibleRows * cellSz;
+  const boardX = (CANVAS_W - boardW) / 2;
+  const boardTopY = 135;
+
+  // Board background
+  ctx.fillStyle = COLORS.boardBg;
+  ctx.fillRect(boardX, boardTopY, boardW, boardH);
+
+  // Grid lines
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  for (let r = 0; r <= visibleRows; r++) {
+    const y = boardTopY + r * cellSz;
+    ctx.beginPath();
+    ctx.moveTo(boardX, y);
+    ctx.lineTo(boardX + boardW, y);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= 10; c++) {
+    const x = boardX + c * cellSz;
+    ctx.beginPath();
+    ctx.moveTo(x, boardTopY);
+    ctx.lineTo(x, boardTopY + boardH);
+    ctx.stroke();
+  }
+
+  // Board border
+  ctx.strokeStyle = COLORS.boardBorder;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boardX, boardTopY, boardW, boardH);
+
+  // Draw: Bag 1 dimmed + Bag 2 steps up to stepIndex
+  const bag2StepAbs = vizState.bag1End + stepIndex; // absolute step index in combined array
+  const board = bag2StepAbs > 0 ? vizState.steps[bag2StepAbs - 1]?.board : null;
+  const newCells = bag2StepAbs > 0 && bag2StepAbs > vizState.bag1End
+    ? vizState.steps[bag2StepAbs - 1]?.newCells ?? []
+    : [];
+
+  if (board) {
+    for (let r = 0; r < visibleRows; r++) {
+      const boardRow = 20 - visibleRows + r;
+      for (let c = 0; c < 10; c++) {
+        const cell = board[boardRow]?.[c];
+        if (cell) {
+          const px = boardX + c * cellSz;
+          const py = boardTopY + r * cellSz;
+          const color = COLORS.pieces[cell] ?? '#888888';
+          const isNew = newCells.some(nc => nc.row === boardRow && nc.col === c);
+
+          // Bag 1 pieces are dimmed, Bag 2 new piece is highlighted
+          if (isNew) {
+            drawCell(ctx, px, py, cellSz, color);
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 1, py + 1, cellSz - 2, cellSz - 2);
+          } else {
+            // Check if this cell is a Bag 1 cell (before bag1End)
+            const isBag1Cell = bag2StepAbs <= vizState.bag1End;
+            ctx.globalAlpha = isBag1Cell ? 0.3 : 0.6;
+            drawCell(ctx, px, py, cellSz, color);
+            ctx.globalAlpha = 1.0;
+          }
+        }
+      }
+    }
+  }
+
+  // Piece label + hint
+  const bag2Steps = vizState.steps.slice(vizState.bag1End);
+  const totalBag2Steps = bag2Steps.length;
+  const labelY = boardTopY + boardH + 25;
+
+  if (stepIndex > 0 && stepIndex <= totalBag2Steps) {
+    const step = bag2Steps[stepIndex - 1]!;
+    ctx.fillStyle = '#FFD600';
+    ctx.font = `bold 18px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`Piece ${stepIndex}: ${step.piece}`, cx, labelY);
+
+    ctx.fillStyle = MUTED;
+    ctx.font = `14px ${FONT}`;
+    ctx.fillText(step.hint, cx, labelY + 28);
+  } else {
+    ctx.fillStyle = MUTED;
+    ctx.font = `16px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Bag 1 complete \u2014 press \u2192 to place Bag 2 pieces', cx, labelY + 10);
+  }
+
+  // Navigation + route toggle hint
+  ctx.fillStyle = HINT_COLOR;
+  ctx.font = `14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const hintY = labelY + 70;
+  const routeHint = routes.length > 1 ? ' \u00b7 [1][2] switch route' : '';
+  if (stepIndex < totalBag2Steps) {
+    ctx.fillText(`Step ${stepIndex} / ${totalBag2Steps} \u00b7 \u2190\u2192 to step${routeHint} \u00b7 [Space] when done`, cx, hintY);
+  } else {
+    ctx.fillText(`All ${totalBag2Steps} pieces placed \u00b7 [Space] to continue${routeHint}`, cx, hintY);
+  }
+}
+
 // ── 1. Rule Card ──
 
 export function drawRuleCard(ctx: CanvasRenderingContext2D, openerId: OpenerID): void {
@@ -284,6 +431,86 @@ export function drawRuleCard(ctx: CanvasRenderingContext2D, openerId: OpenerID):
   ctx.fillText('[Space] to continue', cx, 440);
 }
 
+// ── 1b. Bag 2 Rule Card ──
+
+export function drawBag2RuleCard(ctx: CanvasRenderingContext2D, openerId: OpenerID): void {
+  const display = openerDisplay(openerId);
+  const routes = getBag2Routes(openerId, false);
+  const cx = centerX();
+
+  // Title
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 24px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`BAG 2 RULE: ${display.en}`, cx, 100);
+
+  // Card
+  const cardW = 440;
+  const cardH = 260;
+  const cardX = (CANVAS_W - cardW) / 2;
+  const cardY = 140;
+
+  ctx.fillStyle = CARD_BG;
+  roundRect(ctx, cardX, cardY, cardW, cardH, CARD_RADIUS);
+  ctx.fill();
+  ctx.strokeStyle = CARD_BORDER;
+  ctx.lineWidth = 1;
+  roundRect(ctx, cardX, cardY, cardW, cardH, CARD_RADIUS);
+  ctx.stroke();
+
+  // Route 0 (default)
+  const route0 = routes[0];
+  const route1 = routes[1];
+  let y = cardY + 30;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 16px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Default route:', cardX + 24, y);
+  ctx.fillStyle = '#FFD600';
+  ctx.font = `16px ${FONT}`;
+  ctx.fillText(route0?.routeLabel ?? 'Route 0', cardX + 160, y);
+
+  y += 40;
+
+  if (route1) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.fillText('Alternate route:', cardX + 24, y);
+    ctx.fillStyle = '#FFD600';
+    ctx.font = `16px ${FONT}`;
+    ctx.fillText(route1.routeLabel, cardX + 174, y);
+
+    y += 40;
+    drawSeparator(ctx, y, cardX + 20);
+
+    y += 20;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `18px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`If "${route1.conditionLabel}":`, cx, y);
+
+    y += 30;
+    ctx.fillStyle = '#4ADE80';
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.fillText(`\u2192 Use ${route1.routeLabel}`, cx, y);
+
+    y += 30;
+    ctx.fillStyle = MUTED;
+    ctx.font = `16px ${FONT}`;
+    ctx.fillText(`Otherwise: ${route0?.routeLabel ?? 'default'}`, cx, y);
+  }
+
+  // Continue hint
+  ctx.fillStyle = HINT_COLOR;
+  ctx.font = `14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('[Space] to continue', cx, cardY + cardH + 30);
+}
+
 // ── 2. Worked Example ──
 
 export function drawWorkedExample(
@@ -357,6 +584,79 @@ export function drawWorkedExample(
   ctx.fillText(hintText, cx, 535);
 }
 
+// ── 2b. Bag 2 Worked Example ──
+
+export function drawBag2WorkedExample(
+  ctx: CanvasRenderingContext2D,
+  openerId: OpenerID,
+  exampleIndex: number,
+  stepIndex: number,
+): void {
+  const examples = getBag2WorkedExamples(openerId);
+  const example = examples[exampleIndex];
+  if (!example) return;
+
+  const display = openerDisplay(openerId);
+  const cx = centerX();
+
+  // Title
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `bold 18px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(
+    `Bag 2 Example ${exampleIndex + 1} of ${examples.length} \u00b7 ${display.en}`,
+    cx,
+    65,
+  );
+
+  // Draw the Bag 2 queue
+  const queueOptions: QuizQueueOptions = {
+    decisionPieces: [],
+    showHighlights: false,
+    holdPiece: null,
+    mirror: false,
+  };
+  drawQuizQueue(ctx, example.bag2, queueOptions);
+
+  // Separator
+  drawSeparator(ctx, 430);
+
+  // Step instruction
+  const step = example.steps[stepIndex];
+  if (step) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `16px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(step.instruction, cx, 465);
+  }
+
+  // On final step, show route result
+  if (stepIndex === example.steps.length - 1) {
+    ctx.fillStyle = '#4ADE80';
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`\u2192 ${example.correctRouteLabel}`, cx, 495);
+
+    ctx.fillStyle = MUTED;
+    ctx.font = `13px ${FONT}`;
+    ctx.fillText(example.explanation, cx, 520);
+  }
+
+  // Step progress + hint
+  const totalSteps = example.steps.length;
+  ctx.fillStyle = HINT_COLOR;
+  ctx.font = `14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const hintText = stepIndex < totalSteps - 1
+    ? `Step ${stepIndex + 1} of ${totalSteps} \u00b7 [Space]`
+    : `[Space] to continue`;
+  ctx.fillText(hintText, cx, 555);
+}
+
 // ── 3. Binary Drill ──
 
 export function drawDrill(ctx: CanvasRenderingContext2D, data: DrillRenderData): void {
@@ -385,45 +685,89 @@ export function drawDrill(ctx: CanvasRenderingContext2D, data: DrillRenderData):
   };
   drawQuizQueue(ctx, data.bag, queueOptions);
 
-  // Question text
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = `18px ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(`Can you build ${display.en} from this bag?`, cx, 440);
+  if (data.isBag2) {
+    // Bag 2 drill: route selection
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `18px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`Which route for ${display.en}?`, cx, 440);
 
-  // Yes/No buttons
-  const btnW = 140;
-  const btnH = 44;
-  const btnY = 470;
-  const gap = 30;
-  const yesX = cx - gap / 2 - btnW;
-  const noX = cx + gap / 2;
+    // Route buttons
+    const btnW = 200;
+    const btnH = 44;
+    const btnY = 470;
+    const gap = 20;
+    const btn0X = cx - gap / 2 - btnW;
+    const btn1X = cx + gap / 2;
 
-  drawDrillButton(ctx, '[1] Yes', yesX, btnY, btnW, btnH, data, true);
-  drawDrillButton(ctx, '[2] No', noX, btnY, btnW, btnH, data, false);
+    drawBag2DrillButton(ctx, `[1] ${data.route0Label ?? 'Route 0'}`, btn0X, btnY, btnW, btnH, data, 0);
+    drawBag2DrillButton(ctx, `[2] ${data.route1Label ?? 'Route 1'}`, btn1X, btnY, btnW, btnH, data, 1);
 
-  // Feedback
-  if (data.phase === 'answered') {
-    const feedbackY = 540;
-    if (data.isCorrect) {
-      ctx.fillStyle = COLORS.correct;
-      ctx.font = `bold 20px ${FONT}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('CORRECT!', cx, feedbackY);
-    } else {
-      ctx.fillStyle = COLORS.incorrect;
-      ctx.font = `bold 20px ${FONT}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const answerText = data.correctAnswer ? 'Yes, it was buildable' : 'No, it was NOT buildable';
-      ctx.fillText(`WRONG → ${answerText}`, cx, feedbackY);
+    // Feedback
+    if (data.phase === 'answered') {
+      const feedbackY = 540;
+      if (data.isCorrect) {
+        ctx.fillStyle = COLORS.correct;
+        ctx.font = `bold 20px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CORRECT!', cx, feedbackY);
+      } else {
+        ctx.fillStyle = COLORS.incorrect;
+        ctx.font = `bold 20px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const correctLabel = data.correctRouteIndex === 0
+          ? (data.route0Label ?? 'Route 0')
+          : (data.route1Label ?? 'Route 1');
+        ctx.fillText(`WRONG \u2192 ${correctLabel}`, cx, feedbackY);
 
-      // Hint to continue
-      ctx.fillStyle = HINT_COLOR;
-      ctx.font = `14px ${FONT}`;
-      ctx.fillText('[Space] to continue', cx, feedbackY + 30);
+        ctx.fillStyle = HINT_COLOR;
+        ctx.font = `14px ${FONT}`;
+        ctx.fillText('[Space] to continue', cx, feedbackY + 30);
+      }
+    }
+  } else {
+    // Bag 1 drill: Yes/No
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `18px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`Can you build ${display.en} from this bag?`, cx, 440);
+
+    // Yes/No buttons
+    const btnW = 140;
+    const btnH = 44;
+    const btnY = 470;
+    const gap = 30;
+    const yesX = cx - gap / 2 - btnW;
+    const noX = cx + gap / 2;
+
+    drawDrillButton(ctx, '[1] Yes', yesX, btnY, btnW, btnH, data, true);
+    drawDrillButton(ctx, '[2] No', noX, btnY, btnW, btnH, data, false);
+
+    // Feedback
+    if (data.phase === 'answered') {
+      const feedbackY = 540;
+      if (data.isCorrect) {
+        ctx.fillStyle = COLORS.correct;
+        ctx.font = `bold 20px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CORRECT!', cx, feedbackY);
+      } else {
+        ctx.fillStyle = COLORS.incorrect;
+        ctx.font = `bold 20px ${FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const answerText = data.correctAnswer ? 'Yes, it was buildable' : 'No, it was NOT buildable';
+        ctx.fillText(`WRONG \u2192 ${answerText}`, cx, feedbackY);
+
+        ctx.fillStyle = HINT_COLOR;
+        ctx.font = `14px ${FONT}`;
+        ctx.fillText('[Space] to continue', cx, feedbackY + 30);
+      }
     }
   }
 }
@@ -494,6 +838,70 @@ function drawDrillButton(
   ctx.fillText(textLabel, x + w / 2 + 10, y + h / 2);
 }
 
+function drawBag2DrillButton(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  data: DrillRenderData,
+  routeIndex: number,
+): void {
+  const isAnswered = data.phase === 'answered';
+  const isThisAnswer = data.selectedRouteIndex === routeIndex;
+  const isCorrectChoice = data.correctRouteIndex === routeIndex;
+
+  let bgColor = COLORS.buttonBg;
+  let borderColor = COLORS.buttonBorder;
+  let textColor = COLORS.buttonText;
+
+  if (isAnswered) {
+    if (isCorrectChoice) {
+      bgColor = '#0A2E1A';
+      borderColor = COLORS.correct;
+      textColor = COLORS.correct;
+    } else if (isThisAnswer && !data.isCorrect) {
+      bgColor = '#2E0A0A';
+      borderColor = COLORS.incorrect;
+      textColor = COLORS.incorrect;
+    }
+  }
+
+  ctx.fillStyle = bgColor;
+  roundRect(ctx, x, y, w, h, 8);
+  ctx.fill();
+
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, w, h, 8);
+  ctx.stroke();
+
+  // Badge
+  const badge = String(routeIndex + 1);
+  const badgeSize = 20;
+  const badgeX = x + 10;
+  const badgeY = y + (h - badgeSize) / 2;
+
+  ctx.fillStyle = COLORS.badgeBg;
+  roundRect(ctx, badgeX, badgeY, badgeSize, badgeSize, 4);
+  ctx.fill();
+
+  ctx.fillStyle = '#9999BB';
+  ctx.font = `bold 11px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(badge, badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+
+  // Label (truncate if needed)
+  const routeLabel = routeIndex === 0 ? (data.route0Label ?? 'Default') : (data.route1Label ?? 'Alt');
+  ctx.fillStyle = textColor;
+  ctx.font = `bold 14px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(routeLabel, x + w / 2 + 10, y + h / 2);
+}
+
 // ── 4. Celebration ──
 
 export function drawCelebration(ctx: CanvasRenderingContext2D, data: CelebrationData): void {
@@ -555,6 +963,7 @@ export interface OnboardingRenderState {
   drill?: DrillRenderData;
   celebration?: CelebrationData;
   shapeStep?: number;
+  bag2Route?: number;
 }
 
 export function renderOnboardingMode(
@@ -568,20 +977,33 @@ export function renderOnboardingMode(
   if (stage === 'complete') return;
 
   const openerId = stage as OpenerID;
+  const isBag2 = progress.currentBag === 2;
 
   switch (progress.stagePhase) {
     case 'shape_preview': {
-      const seq = getOpenerSequence(openerId, false);
-      drawShapePreview(ctx, openerId, state.shapeStep ?? 0, seq.steps.length);
+      if (isBag2) {
+        drawBag2ShapePreview(ctx, openerId, state.shapeStep ?? 0, state.bag2Route ?? 0);
+      } else {
+        const seq = getOpenerSequence(openerId, false);
+        drawShapePreview(ctx, openerId, state.shapeStep ?? 0, seq.steps.length);
+      }
       break;
     }
 
     case 'rule_card':
-      drawRuleCard(ctx, openerId);
+      if (isBag2) {
+        drawBag2RuleCard(ctx, openerId);
+      } else {
+        drawRuleCard(ctx, openerId);
+      }
       break;
 
     case 'examples':
-      drawWorkedExample(ctx, openerId, progress.exampleIndex, progress.exampleStep);
+      if (isBag2) {
+        drawBag2WorkedExample(ctx, openerId, progress.exampleIndex, progress.exampleStep);
+      } else {
+        drawWorkedExample(ctx, openerId, progress.exampleIndex, progress.exampleStep);
+      }
       break;
 
     case 'drill':
@@ -599,16 +1021,17 @@ export function renderOnboardingMode(
 
   // Status bar text
   const display = openerDisplay(openerId);
+  const bagPrefix = isBag2 ? 'Bag 2: ' : '';
   const phaseLabels: Record<string, string> = {
-    shape_preview: `Learning ${display.en} · Shape Preview`,
-    rule_card: `Learning ${display.en} · ${stageLabel(openerId)}`,
-    examples: `Learning ${display.en} · Examples`,
+    shape_preview: `${bagPrefix}Learning ${display.en} \u00b7 Shape Preview`,
+    rule_card: `${bagPrefix}Learning ${display.en} \u00b7 ${stageLabel(openerId, progress.currentBag)}`,
+    examples: `${bagPrefix}Learning ${display.en} \u00b7 Examples`,
     drill: state.drill
-      ? `Learning ${display.en} · Drill (${state.drill.threshold.required}/${state.drill.threshold.window} to advance)`
-      : `Learning ${display.en} · Drill`,
-    celebration: `${stageLabel(openerId)} complete`,
+      ? `${bagPrefix}Learning ${display.en} \u00b7 Drill (${state.drill.threshold.required}/${state.drill.threshold.window} to advance)`
+      : `${bagPrefix}Learning ${display.en} \u00b7 Drill`,
+    celebration: `${stageLabel(openerId, progress.currentBag)} complete`,
   };
 
-  const statusText = (phaseLabels[progress.stagePhase] ?? '') + ' · N: skip';
+  const statusText = (phaseLabels[progress.stagePhase] ?? '') + ' \u00b7 N: skip';
   drawStatusBar(ctx, statusText);
 }

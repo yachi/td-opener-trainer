@@ -12,11 +12,16 @@ import {
   advancePhase,
   checkMastery,
   recordDrillAnswer,
+  recordBag2DrillAnswer,
   generateDrillBag,
+  generateBag2DrillBag,
   getWorkedExamples,
+  getBag2WorkedExamples,
+  getMasteryRecord,
   STAGE_ORDER,
 } from './modes/onboarding.ts';
 import type { OnboardingProgress } from './modes/onboarding.ts';
+import { bestBag2Route } from './openers/decision.ts';
 import { OPENERS } from './openers/decision.ts';
 import {
   createVisualizerState,
@@ -46,6 +51,9 @@ interface OnboardingDrill {
   lastAnswer: boolean | null;
   isCorrect: boolean | null;
   autoAdvanceAt: number | null;
+  // Bag 2 drill fields
+  selectedRouteIndex: number | null;
+  correctRouteIndex: number | null;
 }
 
 interface FullAppState extends AppState {
@@ -53,6 +61,7 @@ interface FullAppState extends AppState {
   onboarding: OnboardingProgress;
   onboardingDrill: OnboardingDrill;
   onboardingShapeStep: number;
+  onboardingBag2Route: number;
   drill: DrillState | null;
   drillSelector: { selectedIndex: number };
 }
@@ -63,6 +72,8 @@ function createOnboardingDrill(): OnboardingDrill {
     lastAnswer: null,
     isCorrect: null,
     autoAdvanceAt: null,
+    selectedRouteIndex: null,
+    correctRouteIndex: null,
   };
 }
 
@@ -79,6 +90,7 @@ const state: FullAppState = {
   onboarding: onboardingProgress,
   onboardingDrill: createOnboardingDrill(),
   onboardingShapeStep: 0,
+  onboardingBag2Route: 0,
   visualizer: createVisualizerState('ms2', false),
   drill: null,
   drillSelector: { selectedIndex: 0 },
@@ -115,23 +127,31 @@ function leaveDrillMode(): void {
 function enterDrillPhase(): void {
   const stage = state.onboarding.currentStage;
   if (stage === 'complete') return;
-  const bag = generateDrillBag(stage as OpenerID);
+  const openerId = stage as OpenerID;
+  const isBag2 = state.onboarding.currentBag === 2;
+  const bag = isBag2 ? generateBag2DrillBag(openerId) : generateDrillBag(openerId);
   state.onboardingDrill = {
     currentBag: bag,
     lastAnswer: null,
     isCorrect: null,
     autoAdvanceAt: null,
+    selectedRouteIndex: null,
+    correctRouteIndex: null,
   };
 }
 
 function advanceDrill(): void {
   const stage = state.onboarding.currentStage;
   if (stage === 'complete') return;
-  const bag = generateDrillBag(stage as OpenerID);
+  const openerId = stage as OpenerID;
+  const isBag2 = state.onboarding.currentBag === 2;
+  const bag = isBag2 ? generateBag2DrillBag(openerId) : generateDrillBag(openerId);
   state.onboardingDrill.currentBag = bag;
   state.onboardingDrill.lastAnswer = null;
   state.onboardingDrill.isCorrect = null;
   state.onboardingDrill.autoAdvanceAt = null;
+  state.onboardingDrill.selectedRouteIndex = null;
+  state.onboardingDrill.correctRouteIndex = null;
 }
 
 function transitionToQuiz(): void {
@@ -225,14 +245,29 @@ function dispatchOnboarding(action: string): void {
     case 'shape_preview': {
       const stage = onboarding.currentStage;
       if (stage === 'complete') break;
+      const openerId = stage as OpenerID;
       if (action === 'advance') {
-        const seq = getOpenerSequence(stage as OpenerID, false);
-        if (state.onboardingShapeStep < seq.steps.length) {
-          state.onboardingShapeStep++;
+        if (onboarding.currentBag === 2) {
+          // Bag 2: use visualizer state for step count
+          const vizState = createVisualizerState(openerId, false, state.onboardingBag2Route ?? 0);
+          const totalSteps = vizState.steps.length - vizState.bag1End;
+          if (state.onboardingShapeStep < totalSteps) {
+            state.onboardingShapeStep++;
+          } else {
+            advancePhase(onboarding);
+            state.onboardingShapeStep = 0;
+            state.onboardingBag2Route = 0;
+            saveOnboardingProgress(onboarding);
+          }
         } else {
-          advancePhase(onboarding);
-          state.onboardingShapeStep = 0;
-          saveOnboardingProgress(onboarding);
+          const seq = getOpenerSequence(openerId, false);
+          if (state.onboardingShapeStep < seq.steps.length) {
+            state.onboardingShapeStep++;
+          } else {
+            advancePhase(onboarding);
+            state.onboardingShapeStep = 0;
+            saveOnboardingProgress(onboarding);
+          }
         }
         dirty = true;
       } else if (action === 'step_back') {
@@ -240,6 +275,16 @@ function dispatchOnboarding(action: string): void {
           state.onboardingShapeStep--;
           dirty = true;
         }
+      } else if (action === 'option_1' && onboarding.currentBag === 2) {
+        // Toggle to route 0
+        state.onboardingBag2Route = 0;
+        state.onboardingShapeStep = 0;
+        dirty = true;
+      } else if (action === 'option_2' && onboarding.currentBag === 2) {
+        // Toggle to route 1
+        state.onboardingBag2Route = 1;
+        state.onboardingShapeStep = 0;
+        dirty = true;
       }
       break;
     }
@@ -257,7 +302,11 @@ function dispatchOnboarding(action: string): void {
       if (action === 'advance') {
         const stage = onboarding.currentStage;
         if (stage === 'complete') break;
-        const examples = getWorkedExamples(stage as OpenerID);
+        const openerId = stage as OpenerID;
+
+        const examples = onboarding.currentBag === 2
+          ? getBag2WorkedExamples(openerId)
+          : getWorkedExamples(openerId);
         const totalExamples = examples.length;
         const currentExample = examples[onboarding.exampleIndex];
         if (!currentExample) break;
@@ -265,14 +314,11 @@ function dispatchOnboarding(action: string): void {
         const totalSteps = currentExample.steps.length;
 
         if (onboarding.exampleStep < totalSteps - 1) {
-          // Advance within current example
           onboarding.exampleStep++;
         } else if (onboarding.exampleIndex < totalExamples - 1) {
-          // Move to next example
           onboarding.exampleIndex++;
           onboarding.exampleStep = 0;
         } else {
-          // All examples done → advance to drill phase
           advancePhase(onboarding);
           enterDrillPhase();
         }
@@ -290,22 +336,42 @@ function dispatchOnboarding(action: string): void {
 
       const stage = onboarding.currentStage;
       if (stage === 'complete') break;
+      const openerId = stage as OpenerID;
 
-      const userAnswer = action === 'option_1'; // option_1 = Yes, option_2 = No
-      const isCorrect = recordDrillAnswer(
-        onboarding,
-        stage as OpenerID,
-        userAnswer,
-        state.onboardingDrill.currentBag,
-      );
+      let isCorrect: boolean;
 
-      state.onboardingDrill.lastAnswer = userAnswer;
+      if (onboarding.currentBag === 2) {
+        // Bag 2 drill: option_1 = route 0, option_2 = route 1
+        const selectedRouteIndex = action === 'option_1' ? 0 : 1;
+        isCorrect = recordBag2DrillAnswer(
+          onboarding,
+          openerId,
+          selectedRouteIndex,
+          state.onboardingDrill.currentBag,
+        );
+        const { routeIndex: correctIdx } = bestBag2Route(openerId, false, state.onboardingDrill.currentBag);
+        state.onboardingDrill.selectedRouteIndex = selectedRouteIndex;
+        state.onboardingDrill.correctRouteIndex = correctIdx;
+        state.onboardingDrill.lastAnswer = null; // not used for Bag 2
+      } else {
+        // Bag 1 drill: option_1 = Yes, option_2 = No
+        const userAnswer = action === 'option_1';
+        isCorrect = recordDrillAnswer(
+          onboarding,
+          openerId,
+          userAnswer,
+          state.onboardingDrill.currentBag,
+        );
+        state.onboardingDrill.lastAnswer = userAnswer;
+      }
+
       state.onboardingDrill.isCorrect = isCorrect;
 
       // Check mastery after recording
-      const mastered = checkMastery(onboarding, stage as OpenerID);
+      const mastered = checkMastery(onboarding, openerId);
       if (mastered) {
-        onboarding.mastery[stage as OpenerID]!.completed = true;
+        const record = getMasteryRecord(onboarding, openerId);
+        if (record) record.completed = true;
         advancePhase(onboarding); // → celebration
         saveOnboardingProgress(onboarding);
         dirty = true;
@@ -325,6 +391,7 @@ function dispatchOnboarding(action: string): void {
       if (action === 'advance') {
         advancePhase(onboarding);
         state.onboardingShapeStep = 0;
+        state.onboardingBag2Route = 0;
 
         if (onboarding.currentStage === 'complete') {
           transitionToQuiz();

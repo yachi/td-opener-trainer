@@ -7,23 +7,29 @@ import {
   createOnboardingProgress,
   advancePhase,
   recordDrillAnswer,
+  recordBag2DrillAnswer,
   checkMastery,
   getWorkedExamples,
+  getBag2WorkedExamples,
   generateDrillBag,
+  generateBag2DrillBag,
   isBuildableForDrill,
   saveOnboardingProgress,
   loadOnboardingProgress,
   STAGE_ORDER,
 } from '../src/modes/onboarding.ts';
 import type { OnboardingProgress } from '../src/modes/onboarding.ts';
+import { bestBag2Route } from '../src/openers/decision.ts';
+import { getBag2Routes } from '../src/openers/bag2-routes.ts';
 
 // ── O1: Onboarding State Management ──
 
 describe('O1: Onboarding State Management', () => {
   test('createOnboardingProgress returns correct initial state', () => {
     const progress = createOnboardingProgress();
-    expect(progress.version).toBe(2);
+    expect(progress.version).toBe(3);
     expect(progress.currentStage).toBe('ms2');
+    expect(progress.currentBag).toBe(1);
     expect(progress.stagePhase).toBe('shape_preview');
     expect(progress.exampleIndex).toBe(0);
     expect(progress.exampleStep).toBe(0);
@@ -34,6 +40,8 @@ describe('O1: Onboarding State Management', () => {
       expect(progress.mastery[id].total).toBe(0);
       expect(progress.mastery[id].correct).toBe(0);
       expect(progress.mastery[id].completed).toBe(false);
+      expect(progress.masteryBag2[id]).toBeDefined();
+      expect(progress.masteryBag2[id].total).toBe(0);
     }
   });
 
@@ -63,16 +71,38 @@ describe('O1: Onboarding State Management', () => {
     expect(progress.stagePhase).toBe('rule_card');
   });
 
-  test('stage advances through all STAGE_ORDER openers then complete', () => {
+  test('stage advances through all STAGE_ORDER openers (Bag 1) then Bag 2 then complete', () => {
     const progress = createOnboardingProgress();
     expect(progress.currentStage).toBe(STAGE_ORDER[0]);
+    expect(progress.currentBag).toBe(1);
 
+    // Bag 1 pass
     for (let i = 0; i < STAGE_ORDER.length; i++) {
       const currentId = STAGE_ORDER[i]!;
       expect(progress.currentStage).toBe(currentId);
 
       progress.stagePhase = 'celebration';
       progress.mastery[currentId]!.completed = true;
+      advancePhase(progress);
+
+      if (i < STAGE_ORDER.length - 1) {
+        expect(progress.currentStage).toBe(STAGE_ORDER[i + 1]);
+        expect(progress.stagePhase).toBe('shape_preview');
+      }
+    }
+
+    // After last Bag 1 opener → Bag 2 starts
+    expect(progress.currentBag).toBe(2);
+    expect(progress.currentStage).toBe(STAGE_ORDER[0]);
+    expect(progress.stagePhase).toBe('shape_preview');
+
+    // Bag 2 pass
+    for (let i = 0; i < STAGE_ORDER.length; i++) {
+      const currentId = STAGE_ORDER[i]!;
+      expect(progress.currentStage).toBe(currentId);
+
+      progress.stagePhase = 'celebration';
+      progress.masteryBag2[currentId]!.completed = true;
       advancePhase(progress);
 
       if (i < STAGE_ORDER.length - 1) {
@@ -492,19 +522,20 @@ describe('O7: State Persistence', () => {
     const loaded = loadOnboardingProgress();
 
     expect(loaded.currentStage).toBe('honey_cup');
+    expect(loaded.currentBag).toBe(1);
     expect(loaded.stagePhase).toBe('drill');
     expect(loaded.exampleIndex).toBe(2);
     expect(loaded.mastery.ms2.total).toBe(8);
     expect(loaded.mastery.ms2.correct).toBe(7);
     expect(loaded.mastery.ms2.completed).toBe(true);
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
   });
 
   test('missing localStorage key → returns fresh initial state', () => {
     const loaded = loadOnboardingProgress();
     expect(loaded.currentStage).toBe('ms2');
     expect(loaded.stagePhase).toBe('shape_preview');
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
   });
 
   test('corrupt data → returns fresh initial state (graceful degradation)', () => {
@@ -512,15 +543,39 @@ describe('O7: State Persistence', () => {
     const loaded = loadOnboardingProgress();
     expect(loaded.currentStage).toBe('ms2');
     expect(loaded.stagePhase).toBe('shape_preview');
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
   });
 
-  test('old version data → returns fresh initial state', () => {
+  test('old version 1 data → returns fresh initial state', () => {
     store['onboarding_progress'] = JSON.stringify({ version: 1, currentStage: 'ms2' });
     const loaded = loadOnboardingProgress();
-    // Should reset since version doesn't match
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
     expect(loaded.stagePhase).toBe('shape_preview');
+  });
+
+  test('version 2 data → migrates to version 3 with currentBag=1 and masteryBag2', () => {
+    const v2Data = {
+      version: 2,
+      currentStage: 'honey_cup',
+      stagePhase: 'drill',
+      exampleIndex: 0,
+      exampleStep: 0,
+      mastery: {
+        ms2: { total: 8, correct: 7, completed: true, history: [] },
+        honey_cup: { total: 3, correct: 2, completed: false, history: [] },
+        stray_cannon: { total: 0, correct: 0, completed: false, history: [] },
+        gamushiro: { total: 0, correct: 0, completed: false, history: [] },
+      },
+      lastActiveAt: Date.now(),
+    };
+    store['onboarding_progress'] = JSON.stringify(v2Data);
+    const loaded = loadOnboardingProgress();
+    expect(loaded.version).toBe(3);
+    expect(loaded.currentBag).toBe(1);
+    expect(loaded.currentStage).toBe('honey_cup');
+    expect(loaded.mastery.ms2.total).toBe(8);
+    expect(loaded.masteryBag2).toBeDefined();
+    expect(loaded.masteryBag2.ms2.total).toBe(0);
   });
 
   test('stage and phase persist across simulated page reloads', () => {
@@ -679,97 +734,65 @@ describe('O9: "Why Learn More?" Motivation', () => {
 // ── O10: Full Flow Integration ──
 
 describe('O10: Full Flow Integration', () => {
-  test('simulated complete playthrough from ms2 to full quiz', () => {
+  test('simulated complete playthrough from ms2 Bag 1 through Bag 2 to complete', () => {
     const progress = createOnboardingProgress();
 
-    // === Stage 1: MS2 ===
-    expect(progress.currentStage).toBe('ms2');
-    expect(progress.stagePhase).toBe('shape_preview');
+    // Helper to fast-forward one opener through all phases
+    function completeOpener(openerId: OpenerID): void {
+      expect(progress.currentStage).toBe(openerId);
+      expect(progress.stagePhase).toBe('shape_preview');
 
-    // Shape preview → rule card
-    advancePhase(progress);
-    expect(progress.stagePhase).toBe('rule_card');
+      advancePhase(progress); // → rule_card
+      expect(progress.stagePhase).toBe('rule_card');
+      advancePhase(progress); // → examples
+      expect(progress.stagePhase).toBe('examples');
+      advancePhase(progress); // → drill
+      expect(progress.stagePhase).toBe('drill');
 
-    // Rule card → examples
-    advancePhase(progress);
-    expect(progress.stagePhase).toBe('examples');
+      // Master the drill: 6 correct answers
+      for (let i = 0; i < 6; i++) {
+        recordDrillAnswer(progress, openerId, true);
+      }
+      expect(checkMastery(progress, openerId)).toBe(true);
+      const isBag2 = progress.currentBag === 2;
+      if (isBag2) {
+        progress.masteryBag2[openerId]!.completed = true;
+      } else {
+        progress.mastery[openerId]!.completed = true;
+      }
 
-    // Click through 3 examples (each has multiple steps)
-    const ms2Examples = getWorkedExamples('ms2');
-    expect(ms2Examples).toHaveLength(3);
-
-    // Examples → drill
-    advancePhase(progress);
-    expect(progress.stagePhase).toBe('drill');
-
-    // Master the drill: 6 correct answers
-    for (let i = 0; i < 6; i++) {
-      recordDrillAnswer(progress, 'ms2', true);
+      advancePhase(progress); // → celebration
+      expect(progress.stagePhase).toBe('celebration');
+      advancePhase(progress); // → next opener or complete
     }
-    expect(checkMastery(progress, 'ms2')).toBe(true);
-    progress.mastery.ms2.completed = true;
 
-    // Drill → celebration
-    advancePhase(progress);
-    expect(progress.stagePhase).toBe('celebration');
-
-    // Celebration → next stage (honey_cup)
-    advancePhase(progress);
+    // === Bag 1 ===
+    expect(progress.currentBag).toBe(1);
+    completeOpener('ms2');
     expect(progress.currentStage).toBe('honey_cup');
-    expect(progress.stagePhase).toBe('shape_preview');
-
-    // === Stage 2: Honey Cup ===
-    advancePhase(progress); // → rule_card
-    advancePhase(progress); // → examples
-    expect(progress.stagePhase).toBe('examples');
-    advancePhase(progress); // → drill
-    expect(progress.stagePhase).toBe('drill');
-
-    for (let i = 0; i < 6; i++) {
-      recordDrillAnswer(progress, 'honey_cup', true);
-    }
-    expect(checkMastery(progress, 'honey_cup')).toBe(true);
-    progress.mastery.honey_cup.completed = true;
-
-    advancePhase(progress); // → celebration
-    expect(progress.stagePhase).toBe('celebration');
-    advancePhase(progress); // → stray_cannon
+    completeOpener('honey_cup');
     expect(progress.currentStage).toBe('stray_cannon');
-
-    // === Stage 3: Stray Cannon ===
-    advancePhase(progress); // → rule_card
-    advancePhase(progress); // → examples
-    advancePhase(progress); // → drill
-
-    for (let i = 0; i < 6; i++) {
-      recordDrillAnswer(progress, 'stray_cannon', true);
-    }
-    expect(checkMastery(progress, 'stray_cannon')).toBe(true);
-    progress.mastery.stray_cannon.completed = true;
-
-    advancePhase(progress); // → celebration
-    expect(progress.stagePhase).toBe('celebration');
-    advancePhase(progress); // → gamushiro
+    completeOpener('stray_cannon');
     expect(progress.currentStage).toBe('gamushiro');
+    completeOpener('gamushiro');
 
-    // === Stage 4: Gamushiro ===
-    advancePhase(progress); // → rule_card
-    advancePhase(progress); // → examples
-    advancePhase(progress); // → drill
+    // After last Bag 1 → Bag 2 starts
+    expect(progress.currentBag).toBe(2);
+    expect(progress.currentStage).toBe('ms2');
 
-    for (let i = 0; i < 6; i++) {
-      recordDrillAnswer(progress, 'gamushiro', true);
-    }
-    expect(checkMastery(progress, 'gamushiro')).toBe(true);
-    progress.mastery.gamushiro.completed = true;
+    // === Bag 2 ===
+    completeOpener('ms2');
+    expect(progress.currentStage).toBe('honey_cup');
+    completeOpener('honey_cup');
+    expect(progress.currentStage).toBe('stray_cannon');
+    completeOpener('stray_cannon');
+    expect(progress.currentStage).toBe('gamushiro');
+    completeOpener('gamushiro');
 
-    advancePhase(progress); // → celebration
-    expect(progress.stagePhase).toBe('celebration');
-    advancePhase(progress); // → complete
     expect(progress.currentStage).toBe('complete');
   });
 
-  test('exactly STAGE_ORDER.length stages before reaching complete', () => {
+  test('exactly STAGE_ORDER.length * 2 stages before reaching complete (Bag 1 + Bag 2)', () => {
     const progress = createOnboardingProgress();
     let stageCount = 0;
 
@@ -778,18 +801,22 @@ describe('O10: Full Flow Integration', () => {
       const currentStage = progress.currentStage as OpenerID;
 
       progress.stagePhase = 'celebration';
-      progress.mastery[currentStage]!.completed = true;
+      if (progress.currentBag === 2) {
+        progress.masteryBag2[currentStage]!.completed = true;
+      } else {
+        progress.mastery[currentStage]!.completed = true;
+      }
       advancePhase(progress);
     }
 
-    expect(stageCount).toBe(STAGE_ORDER.length);
+    expect(stageCount).toBe(STAGE_ORDER.length * 2);
     expect(progress.currentStage).toBe('complete');
   });
 
-  test('total minimum questions: 6 per opener × STAGE_ORDER.length', () => {
+  test('total minimum questions: 6 per opener × STAGE_ORDER.length × 2 bags', () => {
     const minPerOpener = 6;
-    const minTotal = minPerOpener * STAGE_ORDER.length;
-    expect(minTotal).toBe(6 * STAGE_ORDER.length);
+    const minTotal = minPerOpener * STAGE_ORDER.length * 2;
+    expect(minTotal).toBe(6 * STAGE_ORDER.length * 2);
   });
 
   test('custom mastery threshold 8/10 works for quiz mode', () => {
@@ -805,10 +832,10 @@ describe('O10: Full Flow Integration', () => {
     expect(checkMastery(progress, 'ms2', { windowSize: 10, threshold: 8 })).toBe(true);
   });
 
-  test('complete flow ends at "complete" stage', () => {
+  test('complete flow ends at "complete" stage after both bags', () => {
     const progress = createOnboardingProgress();
 
-    // Fast-forward through all stages
+    // Fast-forward through Bag 1
     for (const stage of STAGE_ORDER) {
       progress.currentStage = stage;
       progress.stagePhase = 'celebration';
@@ -816,6 +843,141 @@ describe('O10: Full Flow Integration', () => {
       advancePhase(progress);
     }
 
+    // After Bag 1 → Bag 2
+    expect(progress.currentBag).toBe(2);
+    expect(progress.currentStage).toBe(STAGE_ORDER[0]);
+
+    // Fast-forward through Bag 2
+    for (const stage of STAGE_ORDER) {
+      progress.currentStage = stage;
+      progress.stagePhase = 'celebration';
+      progress.masteryBag2[stage]!.completed = true;
+      advancePhase(progress);
+    }
+
     expect(progress.currentStage).toBe('complete');
+  });
+});
+
+// ── O11: Bag 2 Worked Examples ──
+
+describe('O11: Bag 2 Worked Examples', () => {
+  test('each opener has exactly 3 Bag 2 worked examples', () => {
+    for (const openerId of STAGE_ORDER) {
+      const examples = getBag2WorkedExamples(openerId);
+      expect(examples).toHaveLength(3);
+    }
+  });
+
+  test('Bag 2 example bags are valid 7-piece bags', () => {
+    for (const openerId of STAGE_ORDER) {
+      const examples = getBag2WorkedExamples(openerId);
+      for (const ex of examples) {
+        expect(ex.bag2).toHaveLength(7);
+        const sorted = [...ex.bag2].sort();
+        expect(sorted).toEqual(['I', 'J', 'L', 'O', 'S', 'T', 'Z']);
+      }
+    }
+  });
+
+  test('Bag 2 examples have correct route determined by bestBag2Route', () => {
+    for (const openerId of STAGE_ORDER) {
+      const examples = getBag2WorkedExamples(openerId);
+      for (const ex of examples) {
+        const { routeIndex } = bestBag2Route(openerId, false, ex.bag2);
+        expect(ex.correctRouteIndex).toBe(routeIndex);
+      }
+    }
+  });
+
+  test('Bag 2 example 1 uses the alternate route (routeIndex > 0)', () => {
+    for (const openerId of STAGE_ORDER) {
+      const examples = getBag2WorkedExamples(openerId);
+      expect(examples[0]!.correctRouteIndex).toBeGreaterThan(0);
+    }
+  });
+
+  test('Bag 2 example 2 uses the default route (routeIndex === 0)', () => {
+    for (const openerId of STAGE_ORDER) {
+      const examples = getBag2WorkedExamples(openerId);
+      expect(examples[1]!.correctRouteIndex).toBe(0);
+    }
+  });
+
+  test('each Bag 2 example has step-by-step walkthrough', () => {
+    for (const openerId of STAGE_ORDER) {
+      const examples = getBag2WorkedExamples(openerId);
+      for (const ex of examples) {
+        expect(ex.steps.length).toBeGreaterThanOrEqual(3);
+        expect(ex.explanation).toBeTruthy();
+        expect(ex.correctRouteLabel).toBeTruthy();
+      }
+    }
+  });
+});
+
+// ── O12: Bag 2 Drill ──
+
+describe('O12: Bag 2 Drill', () => {
+  test('recordBag2DrillAnswer checks against bestBag2Route', () => {
+    const progress = createOnboardingProgress();
+    progress.currentBag = 2;
+
+    // Use a known bag for MS2
+    const bag: PieceType[] = ['L', 'Z', 'S', 'O', 'T', 'I', 'J']; // L before I and J → Setup B (route 1)
+    const { routeIndex } = bestBag2Route('ms2', false, bag);
+    expect(routeIndex).toBe(1);
+
+    // Correct answer
+    const isCorrect = recordBag2DrillAnswer(progress, 'ms2', 1, bag);
+    expect(isCorrect).toBe(true);
+
+    // Wrong answer
+    const isWrong = recordBag2DrillAnswer(progress, 'ms2', 0, bag);
+    expect(isWrong).toBe(false);
+  });
+
+  test('Bag 2 mastery uses masteryBag2 record', () => {
+    const progress = createOnboardingProgress();
+    progress.currentBag = 2;
+
+    // Record answers — should go to masteryBag2
+    for (let i = 0; i < 6; i++) {
+      recordDrillAnswer(progress, 'ms2', true);
+    }
+
+    expect(progress.masteryBag2.ms2.total).toBe(6);
+    expect(progress.masteryBag2.ms2.correct).toBe(6);
+    expect(progress.mastery.ms2.total).toBe(0); // Bag 1 mastery untouched
+    expect(checkMastery(progress, 'ms2')).toBe(true);
+  });
+
+  test('generateBag2DrillBag produces valid 7-piece bags', () => {
+    for (const openerId of STAGE_ORDER) {
+      for (let i = 0; i < 20; i++) {
+        const bag = generateBag2DrillBag(openerId);
+        expect(bag).toHaveLength(7);
+        const sorted = [...bag].sort();
+        expect(sorted).toEqual(['I', 'J', 'L', 'O', 'S', 'T', 'Z']);
+      }
+    }
+  });
+
+  test('generateBag2DrillBag produces both routes for variety', () => {
+    for (const openerId of STAGE_ORDER) {
+      let route0Count = 0;
+      let route1Count = 0;
+      const N = 100;
+
+      for (let i = 0; i < N; i++) {
+        const bag = generateBag2DrillBag(openerId);
+        const { routeIndex } = bestBag2Route(openerId, false, bag);
+        if (routeIndex === 0) route0Count++;
+        else route1Count++;
+      }
+
+      expect(route0Count).toBeGreaterThan(0);
+      expect(route1Count).toBeGreaterThan(0);
+    }
   });
 });

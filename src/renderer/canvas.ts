@@ -32,6 +32,8 @@ export interface AppState {
     lastAnswer: boolean | null;
     isCorrect: boolean | null;
     autoAdvanceAt: number | null;
+    selectedRouteIndex?: number | null;
+    correctRouteIndex?: number | null;
   };
   quiz: {
     phase: 'showing' | 'answered' | 'transitioning';
@@ -141,50 +143,91 @@ function renderQuizMode(ctx: CanvasRenderingContext2D, state: AppState): void {
 
 function buildOnboardingRenderState(state: AppState): OnboardingRenderState {
   const progress = state.onboarding!;
+  const isBag2 = progress.currentBag === 2;
   const result: OnboardingRenderState = { progress };
 
   if (progress.stagePhase === 'shape_preview') {
     result.shapeStep = (state as any).onboardingShapeStep ?? 0;
+    result.bag2Route = (state as any).onboardingBag2Route ?? 0;
   }
 
   if (progress.stagePhase === 'drill' && state.onboardingDrill) {
     const drill = state.onboardingDrill;
     const stage = progress.currentStage as OpenerID;
-    const mastery = progress.mastery[stage];
+    const mastery = isBag2 ? progress.masteryBag2?.[stage] : progress.mastery[stage];
     const def = OPENERS[stage];
     const bag = drill.currentBag;
-    const actuallyBuildable = bag.length > 0
-      ? (def.canBuild(bag) || def.canBuildMirror(bag))
-      : false;
 
-    result.drill = {
-      openerId: stage,
-      bag: drill.currentBag,
-      phase: drill.lastAnswer !== null ? 'answered' : 'asking',
-      answer: drill.lastAnswer,
-      isCorrect: drill.isCorrect,
-      correctAnswer: actuallyBuildable,
-      total: mastery?.total ?? 0,
-      correct: mastery?.correct ?? 0,
-      threshold: { window: 6, required: 5 },
-    };
+    if (isBag2) {
+      const routes = getBag2Routes(stage, false);
+      const hasAnswer = drill.selectedRouteIndex !== null;
+      result.drill = {
+        openerId: stage,
+        bag: drill.currentBag,
+        phase: hasAnswer ? 'answered' : 'asking',
+        answer: null,
+        isCorrect: drill.isCorrect,
+        correctAnswer: false, // not used for bag 2
+        total: mastery?.total ?? 0,
+        correct: mastery?.correct ?? 0,
+        threshold: { window: 6, required: 5 },
+        isBag2: true,
+        route0Label: routes[0]?.routeLabel ?? 'Route 0',
+        route1Label: routes[1]?.routeLabel ?? 'Route 1',
+        selectedRouteIndex: drill.selectedRouteIndex,
+        correctRouteIndex: drill.correctRouteIndex,
+      };
+    } else {
+      const actuallyBuildable = bag.length > 0
+        ? (def.canBuild(bag) || def.canBuildMirror(bag))
+        : false;
+
+      result.drill = {
+        openerId: stage,
+        bag: drill.currentBag,
+        phase: drill.lastAnswer !== null ? 'answered' : 'asking',
+        answer: drill.lastAnswer,
+        isCorrect: drill.isCorrect,
+        correctAnswer: actuallyBuildable,
+        total: mastery?.total ?? 0,
+        correct: mastery?.correct ?? 0,
+        threshold: { window: 6, required: 5 },
+      };
+    }
   }
 
   if (progress.stagePhase === 'celebration') {
     const stage = progress.currentStage as OpenerID;
-    const mastery = progress.mastery[stage];
+    const mastery = isBag2 ? progress.masteryBag2?.[stage] : progress.mastery[stage];
 
     // Determine next stage
-    const stageOrder: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon'];
-    const idx = stageOrder.indexOf(stage);
-    const nextId = idx >= 0 && idx < stageOrder.length - 1 ? stageOrder[idx + 1]! : null;
+    const idx = (['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'] as OpenerID[]).indexOf(stage);
+    let nextId: OpenerID | null = null;
+    let motivation = '';
+
+    if (idx >= 0 && idx < 3) {
+      // Not last opener in current bag pass
+      nextId = (['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'] as OpenerID[])[idx + 1]!;
+    } else if (!isBag2) {
+      // Last Bag 1 opener → next is first Bag 2 opener
+      nextId = 'ms2';
+      motivation = 'Now learn Bag 2 routes!';
+    }
+
     const nextDef = nextId ? OPENERS[nextId] : null;
 
-    const motivations: Record<OpenerID, string> = {
+    const bag1Motivations: Record<OpenerID, string> = {
       ms2: 'Honey Cup sends a stronger attack (TST vs TSD)',
       honey_cup: 'Stray Cannon is the final fallback opener',
-      stray_cannon: 'Ready for the full quiz!',
-      gamushiro: '',
+      stray_cannon: 'Gamushiro completes your opener repertoire',
+      gamushiro: isBag2 ? '' : 'Now learn Bag 2 routes!',
+    };
+
+    const bag2Motivations: Record<OpenerID, string> = {
+      ms2: 'Next: Honey Cup Bag 2 routes',
+      honey_cup: 'Next: Stray Cannon Bag 2 routes',
+      stray_cannon: 'Next: Gamushiro Bag 2 routes',
+      gamushiro: 'All done! Ready for the full quiz.',
     };
 
     result.celebration = {
@@ -192,8 +235,10 @@ function buildOnboardingRenderState(state: AppState): OnboardingRenderState {
       total: mastery?.total ?? 0,
       correct: mastery?.correct ?? 0,
       nextStage: nextId,
-      nextOpenerName: nextDef ? `${nextDef.nameEn} (${nextDef.nameCn})` : null,
-      motivation: motivations[stage] ?? '',
+      nextOpenerName: nextDef
+        ? `${isBag2 ? 'Bag 2: ' : ''}${nextDef.nameEn} (${nextDef.nameCn})`
+        : null,
+      motivation: motivation || ((isBag2 ? bag2Motivations : bag1Motivations)[stage] ?? ''),
     };
   }
 
