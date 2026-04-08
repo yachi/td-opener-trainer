@@ -187,8 +187,10 @@ export function createDrillState(openerId: OpenerID): DrillState {
   const { bag, mirror } = generateBuildableBag(openerId);
   const queue = [...bag];
   const spawn = spawnNextFromQueue(queue);
-  // From a 7-bag with 1 hold, max 6 pieces end up on the board
-  const targetPieceCount = bag.length - 1;
+  // Derive from placement data: 7 for Honey Cup/Gamushiro, 6 for MS2/Stray Cannon
+  const rawData = OPENER_PLACEMENT_DATA[openerId];
+  const data = mirror ? mirrorPlacementData(rawData) : rawData;
+  const targetPieceCount = data.placements.length;
 
   return {
     phase: 'playing',
@@ -213,8 +215,10 @@ export function createDrillState(openerId: OpenerID): DrillState {
 export function createDrillStateWithBag(openerId: OpenerID, bag: PieceType[], mirror: boolean): DrillState {
   const queue = [...bag];
   const spawn = spawnNextFromQueue(queue);
-  // From a 7-bag with 1 hold, max 6 pieces end up on the board
-  const targetPieceCount = bag.length - 1;
+  // Derive from placement data: 7 for Honey Cup/Gamushiro, 6 for MS2/Stray Cannon
+  const rawData = OPENER_PLACEMENT_DATA[openerId];
+  const data = mirror ? mirrorPlacementData(rawData) : rawData;
+  const targetPieceCount = data.placements.length;
 
   return {
     phase: 'playing',

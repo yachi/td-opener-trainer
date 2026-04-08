@@ -19,6 +19,7 @@ import {
 } from '../src/modes/drill.ts';
 import type { DrillState } from '../src/modes/drill.ts';
 import { OPENERS } from '../src/openers/decision.ts';
+import { OPENER_PLACEMENT_DATA } from '../src/openers/placements.ts';
 import { createBoard, spawnPiece } from '../src/core/srs.ts';
 import { getOpenerSequence } from '../src/modes/visualizer.ts';
 
@@ -48,9 +49,10 @@ function makeDrillState(overrides: Partial<DrillState> & Pick<DrillState, 'opene
   };
 }
 
-/** Get expected board for an opener (convenience for tests). */
-function expectedBoardFor(openerId: OpenerID, mirror: boolean = false, pieceCount: number = 6): ReturnType<typeof getExpectedBoard> {
-  return getExpectedBoard(makeDrillState({ openerId, mirror, targetPieceCount: pieceCount }));
+/** Get expected board for an opener (convenience for tests). Uses actual placement count by default. */
+function expectedBoardFor(openerId: OpenerID, mirror: boolean = false, pieceCount?: number): ReturnType<typeof getExpectedBoard> {
+  const actualCount = pieceCount ?? OPENER_PLACEMENT_DATA[openerId].placements.length;
+  return getExpectedBoard(makeDrillState({ openerId, mirror, targetPieceCount: actualCount }));
 }
 
 // A known buildable bag for MS2 (J before L): J appears at index 0, L at index 6
@@ -577,15 +579,60 @@ describe('D9: checkOpenerMatch', () => {
 
 // ── D9b: Honey Cup / Gamushiro 7-step openers with hold piece in steps ──
 
-describe('D9b: openers with hold piece in placement steps (7 steps, 6 placeable)', () => {
-  test('RED TEST: Honey Cup — place 6 pieces correctly, should be success not mismatch', () => {
-    // Honey Cup has 7 steps: O, I, Z, T, L, S, J. Hold piece = L.
-    // With 7-bag + hold, only 6 pieces end up on board. J stays in hold (or whatever was swapped).
-    // Build the board with the first 6 steps (O, I, Z, T, L, S) — this is what a correct 6-piece play looks like.
+describe('D9b: openers with hold piece in placement steps', () => {
+  test('Honey Cup — place all 7 pieces correctly, should match', () => {
+    // Honey Cup places all 7 pieces (hold L is a buffer, not permanent).
+    // targetPieceCount = 7, expected board has all 7 pieces.
     const sequence = getOpenerSequence('honey_cup', false);
     const board: (PieceType | null)[][] = Array.from({ length: 20 }, () => Array(10).fill(null));
 
-    // Place first 6 steps (all except the last one, J)
+    // Place all 7 steps
+    for (const step of sequence.steps) {
+      for (const { col, row } of step.newCells) {
+        board[row]![col] = step.piece;
+      }
+    }
+
+    const state = makeDrillState({
+      openerId: 'honey_cup',
+      board,
+      holdPiece: null, // all 7 placed, hold is empty
+      piecesPlaced: 7,
+      targetPieceCount: 7,
+      bagPieces: ['O', 'I', 'Z', 'T', 'L', 'S', 'J'],
+    });
+
+    expect(checkOpenerMatch(state)).toBe(true);
+  });
+
+  test('Gamushiro — place all 7 pieces correctly, should match', () => {
+    // Gamushiro places all 7 pieces (hold L is a buffer, not permanent).
+    const sequence = getOpenerSequence('gamushiro', false);
+    const board: (PieceType | null)[][] = Array.from({ length: 20 }, () => Array(10).fill(null));
+
+    for (const step of sequence.steps) {
+      for (const { col, row } of step.newCells) {
+        board[row]![col] = step.piece;
+      }
+    }
+
+    const state = makeDrillState({
+      openerId: 'gamushiro',
+      board,
+      holdPiece: null, // all 7 placed, hold is empty
+      piecesPlaced: 7,
+      targetPieceCount: 7,
+      bagPieces: ['J', 'S', 'I', 'T', 'Z', 'O', 'L'],
+    });
+
+    expect(checkOpenerMatch(state)).toBe(true);
+  });
+
+  test('Honey Cup — 6 of 7 pieces placed, should NOT match', () => {
+    // With targetPieceCount=7, placing only 6 gives a partial board that won't match.
+    const sequence = getOpenerSequence('honey_cup', false);
+    const board: (PieceType | null)[][] = Array.from({ length: 20 }, () => Array(10).fill(null));
+
     for (let i = 0; i < 6; i++) {
       const step = sequence.steps[i]!;
       for (const { col, row } of step.newCells) {
@@ -598,38 +645,15 @@ describe('D9b: openers with hold piece in placement steps (7 steps, 6 placeable)
       board,
       holdPiece: 'J',
       piecesPlaced: 6,
+      targetPieceCount: 7,
       bagPieces: ['O', 'I', 'Z', 'T', 'L', 'S', 'J'],
     });
 
-    // This SHOULD match — the user placed 6 pieces correctly
-    expect(checkOpenerMatch(state)).toBe(true);
+    // 6 of 7 placed — doesn't match the 7-piece expected board
+    expect(checkOpenerMatch(state)).toBe(false);
   });
 
-  test('RED TEST: Gamushiro — place 6 pieces correctly, should be success not mismatch', () => {
-    // Gamushiro has 7 steps: J, S, I, T, Z, O, L. Hold piece = L.
-    // Place first 6 (J, S, I, T, Z, O), L stays in hold.
-    const sequence = getOpenerSequence('gamushiro', false);
-    const board: (PieceType | null)[][] = Array.from({ length: 20 }, () => Array(10).fill(null));
-
-    for (let i = 0; i < 6; i++) {
-      const step = sequence.steps[i]!;
-      for (const { col, row } of step.newCells) {
-        board[row]![col] = step.piece;
-      }
-    }
-
-    const state = makeDrillState({
-      openerId: 'gamushiro',
-      board,
-      holdPiece: 'L',
-      piecesPlaced: 6,
-      bagPieces: ['J', 'S', 'I', 'T', 'Z', 'O', 'L'],
-    });
-
-    expect(checkOpenerMatch(state)).toBe(true);
-  });
-
-  test('RED TEST: MS2 — 6 steps, no hold in steps, should still work', () => {
+  test('MS2 — 6 steps, no hold in steps, should still work', () => {
     // MS2 has 6 steps, hold L not in steps. Sanity check — this should pass as before.
     const expected = expectedBoardFor('ms2', false);
     const state = makeDrillState({
@@ -850,25 +874,26 @@ describe('D12: guided mode', () => {
     expect(reset.guided).toBe(true);
   });
 
-  test('RED TEST: getAllTargets should NOT include 7th piece for Honey Cup', () => {
-    // Honey Cup has 7 vis steps but only 6 can be placed. J is step 7.
-    // getAllTargets should show at most 6 targets, NOT including J.
+  test('getAllTargets SHOULD include 7th piece (J) for Honey Cup', () => {
+    // Honey Cup places ALL 7 pieces (hold L is a buffer, not permanent).
+    // targetPieceCount = 7, so J target must appear.
     const bag: PieceType[] = ['O', 'I', 'Z', 'T', 'S', 'J', 'L'];
     const state = createDrillStateWithBag('honey_cup', bag, false);
     const targets = getAllTargets(state);
     const pieceTypes = targets.map(t => t.piece);
-    expect(pieceTypes).not.toContain('J'); // J is the 7th step — should be excluded
-    expect(targets.length).toBeLessThanOrEqual(6);
+    expect(pieceTypes).toContain('J'); // J is the 7th piece — included for 7-piece openers
+    expect(targets.length).toBe(7);
   });
 
-  test('RED TEST: getTargetPlacement should NOT return target for 7th piece', () => {
-    // If J is active in Honey Cup, it's the 7th piece — no target should show
+  test('getTargetPlacement SHOULD return target for J in Honey Cup', () => {
+    // J is a valid placement in Honey Cup (7 pieces total).
+    // When J is active, it should get a target.
     const bag: PieceType[] = ['J', 'O', 'I', 'Z', 'T', 'S', 'L'];
     const state = createDrillStateWithBag('honey_cup', bag, false);
     expect(state.activePiece!.type).toBe('J');
     const target = getTargetPlacement(state);
-    // J is the 7th step — should have no target (can't be placed in 6-piece drill)
-    expect(target).toBeNull();
+    expect(target).not.toBeNull();
+    expect(target!.piece).toBe('J');
   });
 
   test('RED TEST: getAllTargets for MS2 (6 steps) shows all 6', () => {
@@ -929,14 +954,15 @@ describe('D12b: pieces arriving out of visualizer order get unsupported hints', 
     expect(target!.supported).toBe(false);
   });
 
-  test('Honey Cup: J arrives first — no target (7th piece, not placeable)', () => {
-    // J in Honey Cup is the 7th step — can't be placed with 7-bag + hold
+  test('Honey Cup: J arrives first — has target (7-piece opener)', () => {
+    // Honey Cup places all 7 pieces. J is placed on the board.
     const bag: PieceType[] = ['J', 'T', 'S', 'Z', 'O', 'I', 'L'];
     const state = createDrillStateWithBag('honey_cup', bag, false);
     expect(state.activePiece!.type).toBe('J');
 
     const target = getTargetPlacement(state);
-    expect(target).toBeNull(); // J is the 7th step — excluded from targets
+    expect(target).not.toBeNull(); // J has a placement in 7-piece Honey Cup
+    expect(target!.piece).toBe('J');
   });
 
   test('all openers: first piece in visualizer order is always supported', () => {
@@ -945,9 +971,17 @@ describe('D12b: pieces arriving out of visualizer order get unsupported hints', 
       for (const mirror of [false, true]) {
         const sequence = getOpenerSequence(id, mirror);
         const firstPiece = sequence.steps[0]!.piece;
-        // Build bag with first visualizer piece at position 0
-        const otherPieces = sequence.steps.slice(1).map((s) => s.piece);
-        const bag: PieceType[] = [firstPiece, ...otherPieces, sequence.holdPiece];
+        const allPlacedPieces = sequence.steps.map((s) => s.piece);
+        // Build a valid 7-piece bag: all placed pieces + holdPiece (if not already in placements)
+        let bag: PieceType[];
+        if (allPlacedPieces.includes(sequence.holdPiece)) {
+          // 7-piece opener: all pieces are in placements, holdPiece is among them
+          // Put firstPiece first, then the rest
+          bag = [firstPiece, ...allPlacedPieces.filter((p) => p !== firstPiece)];
+        } else {
+          // 6-piece opener: holdPiece is separate
+          bag = [firstPiece, ...allPlacedPieces.filter((p) => p !== firstPiece), sequence.holdPiece];
+        }
 
         const state = createDrillStateWithBag(id, bag, mirror);
         const target = getTargetPlacement(state);
@@ -969,12 +1003,23 @@ describe('D13: target matches visualizer data through full placement sequence', 
 
       test(`${label}: targets match visualizer at each step`, () => {
         const sequence = getOpenerSequence(id, mirror);
-        // Build a bag in the visualizer's placement order, with hold piece at position 0
-        // so it gets held first, then placed pieces follow.
-        // Cap at 6 placeable steps (max with 7-bag + hold).
-        const maxSteps = Math.min(sequence.steps.length, 6);
-        const placedPieces = sequence.steps.slice(0, maxSteps).map((s) => s.piece);
-        const bag: PieceType[] = [sequence.holdPiece, ...placedPieces];
+        const totalSteps = sequence.steps.length; // 6 or 7 depending on opener
+
+        // Build a bag: holdPiece first (gets held), then placed pieces.
+        // For 6-piece openers (MS2/Stray Cannon): hold stays permanently, bag = [holdPiece, ...6 pieces]
+        // For 7-piece openers (Honey Cup/Gamushiro): hold is buffer, holdPiece is in placements.
+        //   Bag = [holdPiece, ...other 6 pieces]. After holding, 6 placed from queue,
+        //   then holdPiece swapped back for 7th placement.
+        const placedPieces = sequence.steps.map((s) => s.piece);
+        let bag: PieceType[];
+        if (placedPieces.includes(sequence.holdPiece)) {
+          // 7-piece opener: holdPiece is among placements. Put it first (gets held).
+          const others = placedPieces.filter((p) => p !== sequence.holdPiece);
+          bag = [sequence.holdPiece, ...others];
+        } else {
+          // 6-piece opener: holdPiece stays in hold permanently.
+          bag = [sequence.holdPiece, ...placedPieces];
+        }
 
         let state = createDrillStateWithBag(id, bag, mirror);
         expect(state.guided).toBe(true);
@@ -984,10 +1029,17 @@ describe('D13: target matches visualizer data through full placement sequence', 
         expect(getHoldSuggestion(state)).toBe(sequence.holdPiece);
         state = holdCurrentPiece(state);
 
-        // Now walk through each placeable step
-        for (let i = 0; i < maxSteps; i++) {
+        // Walk through placement steps. For 7-piece openers, the holdPiece
+        // comes back via hold-swap when its turn arrives.
+        for (let i = 0; i < totalSteps; i++) {
           if (state.phase !== 'playing' || !state.activePiece) break;
           const step = sequence.steps[i]!;
+
+          // For 7-piece openers, the holdPiece needs to be swapped back from hold
+          if (state.activePiece.type !== step.piece && state.holdPiece === step.piece) {
+            state = holdCurrentPiece(state);
+          }
+
           expect(state.activePiece.type).toBe(step.piece);
 
           const target = getTargetPlacement(state);
@@ -999,8 +1051,6 @@ describe('D13: target matches visualizer data through full placement sequence', 
           expect(target!.hint).toBe(step.hint);
 
           // Place the piece at the correct position by setting board directly
-          // (we can't easily move+rotate+drop to exact position in a unit test,
-          //  so we simulate by locking the cells onto the board manually)
           const newBoard = state.board.map((row) => [...row]);
           for (const { col, row } of step.newCells) {
             newBoard[row]![col] = step.piece;
@@ -1016,6 +1066,7 @@ describe('D13: target matches visualizer data through full placement sequence', 
             activePiece: nextType ? spawnPiece(nextType) : null,
             queue: nextQueue,
             holdUsed: false,
+            cachedSteps: null,
           };
         }
       });

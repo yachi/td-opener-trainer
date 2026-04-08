@@ -35,7 +35,7 @@ test('simulate actual Bag 2 drill for honey cup ideal - hold L comes out', () =>
     guided: true,
     bagNumber: 1,
     routeIndex: -1,
-    targetPieceCount: 6,
+    targetPieceCount: 7,
     bag1Board: cloneBoard(bag1Board),
   };
 
@@ -58,7 +58,7 @@ test('simulate actual Bag 2 drill for honey cup ideal - hold L comes out', () =>
     guided: true,
     bagNumber: 2,
     routeIndex: 0,
-    targetPieceCount: 6,
+    targetPieceCount: 6, // Bag 2 route 0 has 6 placements
     bag1Board: cloneBoard(bag1Board),
   };
 
