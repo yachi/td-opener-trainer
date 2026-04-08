@@ -105,12 +105,49 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - Use `tetris-fumen` npm package to decode: `decoder.decode('v115@...')`
 
 ### Key Files
-- `src/core/sequence.ts` — `buildSteps()` fold using Cold Clear BFS (`findAllPlacements`) for SRS-verified placement
-- `src/core/cold-clear.ts` — BFS move finder, `findAllPlacements`, `lockAndClear`, `isPlacementReachable`
-- `src/core/srs.ts` — SRS rotation, kick tables, `hardDrop`, `spawnPiece`, `findReachablePositions`
-- `src/core/field-engine.ts` — fumen bridge, `clearLines`, `findFloatingCells/Pieces`, `placePieceFromCells`
+- `src/core/srs.ts` — SRS rotation, kick tables, `hardDrop`, `spawnPiece`, collision detection
+- `src/core/engine.ts` — unified engine: BFS `findAllPlacements`, `buildSteps`, fumen bridge, `findFloatingPieces`, `lockAndClear`
 - `src/modes/visualizer.ts` — unified `VisualizerState` (6 flat fields), placement data for all 4 openers × 8 routes
-- `src/modes/onboarding.ts` — teach→try→test learning flow
+- `src/modes/onboarding.ts` — shape_preview→rule_card→examples→drill→celebration learning flow
 - `src/modes/quiz.ts` — speed quiz (only useful after learning)
 - `tests/acceptance.test.ts` — 28 acceptance tests: gravity, no disappearing, cell count, wiki oracle
-- `tests/` — 480 tests across 11 files
+- `tests/` — 460 tests across 11 files
+
+## Workflow: L8 Redesign Protocol
+
+When the user says "work on X as a google l8 engineer" or invokes this pattern:
+
+```
+loop until no new findings → (draft 99% of code in mind, don't write code yet, reference industrial standard)
+```
+
+Execute this protocol automatically:
+
+### Phase 1: Deep Research (no code)
+1. Read EVERY file in scope — all source, all tests, all consumers
+2. Map every public function, every caller, every import chain
+3. Grep to verify dead code claims — never assume, always count callers
+4. Reference industrial standards (Cold Clear libtetris for engine patterns, Fitts & Posner for learning, SRS spec for tetris mechanics)
+5. Quantify: line counts, function counts, API surface, duplication
+
+### Phase 2: Convergence Loop (no code)
+1. Draft the design: what moves, what dies, what's new
+2. Adversarial review: find counterarguments, type conflicts, edge cases
+3. Trace every code path mentally — line numbers, exact signatures, exact imports
+4. Run gap scan: any unverified assumption? Any untested edge case?
+5. Repeat until a round surfaces zero new findings (typically 7-17 rounds)
+6. Output: exact file-by-file change list with line numbers
+
+### Phase 3: Parallel Agent Execution
+1. Spawn 3 opus research agents in parallel — each independently verifies one slice
+2. Converge: cross-agent disagreement table, resolve to 0 disagreements
+3. Spawn 3 opus implementation agents in parallel (bypassPermissions mode)
+4. Each agent gets precise instructions: exact functions to copy, exact lines to delete, exact imports to rewrite
+5. Agent prompt MUST include "DO NOT commit"
+6. After all agents complete: run full test suite, visual verification via Playwright
+
+### Phase 4: Verify & Commit
+1. `bun test` — all tests pass
+2. Playwright screenshot — visual verification of every affected screen
+3. `git diff --stat` — review total impact
+4. Commit with conventional commit message summarizing what changed and test results
