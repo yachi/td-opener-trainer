@@ -153,6 +153,134 @@ export const OPENER_BY_PICK: OpenerID[] = [
   'ms2',
 ];
 
+// ── Runtime invariants ────────────────────────────────────────────────────
+
+/**
+ * Thrown when a Session violates a runtime invariant. Catching this in
+ * production is a bug — the reducer should never produce an invalid state.
+ */
+export class InvariantViolation extends Error {
+  constructor(public readonly rule: string, public readonly session: Session) {
+    super(`Session invariant violated: ${rule}`);
+    this.name = 'InvariantViolation';
+  }
+}
+
+/**
+ * Assert that a Session satisfies every invariant the design promises.
+ * Called by the reducer wrapper after every transition, so any bug that
+ * produces an invalid state throws at the reducer boundary instead of
+ * silently corrupting subsequent reductions or the render output.
+ *
+ * Spec: tests/diag-l9-invariants.test.ts (Phase 2.5 empirical proof).
+ */
+export function assertSessionInvariants(s: Session): void {
+  // ── 1. step is in [0, cachedSteps.length] ──
+  if (s.step < 0) {
+    throw new InvariantViolation(`step (${s.step}) must be >= 0`, s);
+  }
+  if (s.step > s.cachedSteps.length) {
+    throw new InvariantViolation(
+      `step (${s.step}) must be <= cachedSteps.length (${s.cachedSteps.length})`,
+      s,
+    );
+  }
+
+  // ── 2. reveal phases require non-empty cachedSteps ──
+  // Catches Bug #2's root effect: selectRoute with an out-of-range routeIndex
+  // produced empty cachedSteps but still transitioned to reveal2.
+  if (
+    (s.phase === 'reveal1' || s.phase === 'reveal2') &&
+    s.cachedSteps.length === 0
+  ) {
+    throw new InvariantViolation(
+      `phase=${s.phase} but cachedSteps is empty — invalid transition`,
+      s,
+    );
+  }
+
+  // ── 3. reveal2 routeGuess within the opener's route list ──
+  if (s.phase === 'reveal2') {
+    if (s.guess === null) {
+      throw new InvariantViolation('reveal2 requires a non-null guess', s);
+    }
+    const routes = getBag2Routes(s.guess.opener, s.guess.mirror);
+    if (s.routeGuess < 0 || s.routeGuess >= routes.length) {
+      throw new InvariantViolation(
+        `reveal2 routeGuess (${s.routeGuess}) out of range [0, ${routes.length})`,
+        s,
+      );
+    }
+  }
+
+  // ── 4. sessionStats non-negative and consistent ──
+  const { total, correct, streak } = s.sessionStats;
+  if (total < 0 || correct < 0 || streak < 0) {
+    throw new InvariantViolation('sessionStats has a negative value', s);
+  }
+  if (correct > total) {
+    throw new InvariantViolation(
+      `sessionStats.correct (${correct}) > total (${total})`,
+      s,
+    );
+  }
+  if (streak > correct) {
+    throw new InvariantViolation(
+      `sessionStats.streak (${streak}) > correct (${correct})`,
+      s,
+    );
+  }
+
+  // ── 5. null guess implies guess1 phase ──
+  if (s.guess === null && s.phase !== 'guess1') {
+    throw new InvariantViolation(
+      `phase=${s.phase} requires a guess, but guess is null`,
+      s,
+    );
+  }
+
+  // ── 6. Manual reveal with a pending step must have activePiece (unless
+  //      the user just used hold-with-peek at the final step). ──
+  const isManualReveal =
+    (s.phase === 'reveal1' || s.phase === 'reveal2') &&
+    s.playMode === 'manual';
+  if (
+    isManualReveal &&
+    s.step < s.cachedSteps.length &&
+    s.activePiece === null &&
+    !s.holdUsed
+  ) {
+    throw new InvariantViolation(
+      'manual reveal with a pending step has null activePiece (and hold not used)',
+      s,
+    );
+  }
+
+  // ── 7. Auto mode must have null activePiece + null holdPiece + !holdUsed ──
+  if (s.playMode === 'auto' && s.activePiece !== null) {
+    throw new InvariantViolation('auto mode must not have an activePiece', s);
+  }
+  if (s.playMode === 'auto' && s.holdPiece !== null) {
+    throw new InvariantViolation('auto mode must not have a holdPiece', s);
+  }
+  if (s.playMode === 'auto' && s.holdUsed) {
+    throw new InvariantViolation('auto mode must have holdUsed === false', s);
+  }
+
+  // ── 8. Non-reveal phases have no in-flight play state ──
+  if (s.phase === 'guess1' || s.phase === 'guess2') {
+    if (s.activePiece !== null) {
+      throw new InvariantViolation(`${s.phase} must not have an activePiece`, s);
+    }
+    if (s.holdPiece !== null) {
+      throw new InvariantViolation(`${s.phase} must not have a holdPiece`, s);
+    }
+    if (s.holdUsed) {
+      throw new InvariantViolation(`${s.phase} must have holdUsed === false`, s);
+    }
+  }
+}
+
 export interface CreateSessionOptions {
   bag1?: PieceType[];
   bag2?: PieceType[];
@@ -275,8 +403,15 @@ function spawnForCurrentStep(
  * Pure reducer. NO side effects, NO localStorage, NO persistence. The
  * design contract is the diag-l9-session test file — any change here
  * must keep those 44 tests green.
+ *
+ * This is the RAW reducer — it doesn't run invariant assertions. The
+ * exported `sessionReducer` wraps this with a post-reduction
+ * `assertSessionInvariants` call. Internal recursive dispatches (e.g.,
+ * `primary` → `advancePhase`, `pick` → `selectRoute`) use `_rawSessionReducer`
+ * directly to avoid double-checking invariants that are already asserted
+ * when the top-level action returns.
  */
-export function sessionReducer(state: Session, action: SessionAction): Session {
+function _rawSessionReducer(state: Session, action: SessionAction): Session {
   switch (action.type) {
     case 'newSession': {
       return {
@@ -420,6 +555,12 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
 
     case 'selectRoute': {
       if (state.phase !== 'guess2' || state.guess === null) return state;
+      // Bounds check (Bug #2 fix): selectRoute used to accept any routeIndex
+      // and silently produce empty cachedSteps. Now: reject invalid indices.
+      const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
+      if (action.routeIndex < 0 || action.routeIndex >= routes.length) {
+        return state;
+      }
       // L10 finding #7: capture the bag1 final board from cachedSteps
       // BEFORE computing bag2 steps, matching the existing drill
       // transitionToBag2 pattern.
@@ -486,7 +627,7 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
 
     case 'softDrop': {
       // Alias for movePiece({dx:0, dy:1}).
-      return sessionReducer(state, { type: 'movePiece', dx: 0, dy: 1 });
+      return _rawSessionReducer(state, { type: 'movePiece', dx: 0, dy: 1 });
     }
 
     case 'rotatePiece': {
@@ -576,42 +717,50 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
       switch (state.phase) {
         case 'guess1':
           return state.guess !== null
-            ? sessionReducer(state, { type: 'submitGuess' })
-            : sessionReducer(state, { type: 'newSession' });
+            ? _rawSessionReducer(state, { type: 'submitGuess' })
+            : _rawSessionReducer(state, { type: 'newSession' });
         case 'reveal1':
         case 'reveal2':
           // Manual with an active piece: drop it.
           // Manual at end (activePiece === null) OR auto mode: advance phase.
-          // This branch is THE BUG FIX for "stuck after placing last piece
-          // in manual reveal" — hardDrop would have been a no-op, so we
-          // fall through to advancePhase instead.
           if (state.playMode === 'manual' && state.activePiece !== null) {
-            return sessionReducer(state, { type: 'hardDrop' });
+            return _rawSessionReducer(state, { type: 'hardDrop' });
           }
-          return sessionReducer(state, { type: 'advancePhase' });
+          return _rawSessionReducer(state, { type: 'advancePhase' });
         case 'guess2':
-          return sessionReducer(state, { type: 'newSession' });
+          return _rawSessionReducer(state, { type: 'newSession' });
       }
     }
 
     case 'pick': {
-      // Digit keys 1-4 — context-dependent.
+      // Digit keys 1-4 — context-dependent. Phase-indexed with explicit
+      // bounds checks so no out-of-range index reaches the downstream
+      // actions (defense-in-depth alongside selectRoute's own guard).
       switch (state.phase) {
         case 'guess1': {
+          if (action.index < 0 || action.index >= OPENER_BY_PICK.length) {
+            return state;
+          }
           const opener = OPENER_BY_PICK[action.index];
           if (!opener) return state;
           const mirror = state.guess?.mirror ?? false;
-          return sessionReducer(state, {
+          return _rawSessionReducer(state, {
             type: 'setGuess',
             opener,
             mirror,
           });
         }
-        case 'guess2':
-          return sessionReducer(state, {
+        case 'guess2': {
+          if (state.guess === null) return state;
+          const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
+          if (action.index < 0 || action.index >= routes.length) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
             type: 'selectRoute',
             routeIndex: action.index,
           });
+        }
         // pick is a no-op in reveal phases.
         case 'reveal1':
         case 'reveal2':
@@ -622,4 +771,21 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
     default:
       return state;
   }
+}
+
+/**
+ * Public reducer — wraps `_rawSessionReducer` with a post-reduction
+ * invariant assertion. Any reducer case that produces an invalid Session
+ * throws `InvariantViolation` at this boundary, making state corruption
+ * impossible to silently propagate.
+ *
+ * Design contract: tests/diag-l9-session.test.ts + tests/diag-l9-manual.test.ts
+ *                  + tests/diag-l9-intent.test.ts + tests/diag-l9-invariants.test.ts
+ *
+ * Spec for the invariants is in tests/diag-l9-invariants.test.ts (Phase 2.5).
+ */
+export function sessionReducer(state: Session, action: SessionAction): Session {
+  const next = _rawSessionReducer(state, action);
+  assertSessionInvariants(next);
+  return next;
 }

@@ -465,11 +465,27 @@ function drawReveal1Panel(
   drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
   y += PANEL_LINE_H + 4;
 
-  // Hold piece (the doctrinal hold for the opener, if any).
+  // Hold piece panel:
+  //   - Auto mode: show the doctrinal hold (strategy hint — what you
+  //     SHOULD hold for this opener).
+  //   - Manual mode: show session.holdPiece (what the user actually has
+  //     in hold), falling back to the doctrinal hint before the first hold.
+  //
+  // Bug #1 fix: previously this always showed def.holdPiece, so the
+  // render never reflected the user's hold action. session.holdPiece is
+  // the single source of truth once the user has held.
   if (session.guess) {
     const def = OPENERS[session.guess.opener];
-    const holdPiece = session.guess.mirror ? def.holdPieceMirror : def.holdPiece;
-    drawPanelLine(ctx, 'Hold:', y);
+    const doctrinalHold = session.guess.mirror ? def.holdPieceMirror : def.holdPiece;
+    const displayHold =
+      session.playMode === 'manual' && session.holdPiece !== null
+        ? session.holdPiece
+        : doctrinalHold;
+    const label =
+      session.playMode === 'manual' && session.holdPiece !== null
+        ? 'Hold (held):'
+        : 'Hold:';
+    drawPanelLine(ctx, label, y);
     y += PANEL_LINE_H;
     const slotX = PANEL_X;
     const slotY = y;
@@ -480,7 +496,7 @@ function drawReveal1Panel(
     ctx.strokeStyle = COLORS.boardBorder;
     ctx.lineWidth = 1;
     ctx.strokeRect(slotX + 0.5, slotY + 0.5, slotW - 1, slotH - 1);
-    drawPieceInBox(ctx, holdPiece, slotX, slotY, slotW, slotH, 10);
+    drawPieceInBox(ctx, displayHold, slotX, slotY, slotW, slotH, 10);
     y += slotH + 8;
   }
 

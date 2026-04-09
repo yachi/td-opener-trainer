@@ -453,3 +453,67 @@ describe('#8 non-trivial call count (smoke)', () => {
     expect(manual).toBeGreaterThan(auto);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Contract: #9 — state→render diff tests (would have caught Bug #1)
+//
+// Dispatch an action that changes Session state, render before and after,
+// assert the render output reflects the state change. This catches
+// render↔state mismatches where the renderer reads from static data
+// (OPENERS) instead of dynamic state (session.holdPiece).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('#9 state→render diff contract', () => {
+  test('after hold in manual mode, the render reflects session.holdPiece label', () => {
+    const before = sessionInReveal1Manual();
+    expect(before.holdPiece).toBeNull();
+    const after = sessionReducer(before, { type: 'hold' });
+    expect(after.holdPiece).not.toBeNull();
+
+    const beforeTexts = textsDrawn(render(before));
+    const afterTexts = textsDrawn(render(after));
+
+    // The label SHOULD change to reflect the user's actual held piece.
+    // Before hold: "Hold:" (doctrinal hint).
+    // After hold: "Hold (held):" (user's held piece).
+    //
+    // If the renderer ignores session.holdPiece (Bug #1), both text
+    // lists are identical — the test catches this exactly.
+    const beforeHasLabel = beforeTexts.some((t) => t === 'Hold:');
+    const afterHasLabel = afterTexts.some((t) => t === 'Hold (held):');
+    expect(beforeHasLabel).toBe(true);
+    expect(afterHasLabel).toBe(true);
+  });
+
+  test('state change from auto → manual via togglePlayMode changes render', () => {
+    const auto = sessionInReveal1Auto();
+    const manual = sessionReducer(auto, { type: 'togglePlayMode' });
+    // Renders must differ because manual mode adds the active piece,
+    // the hard-drop ghost, and different keybind hints.
+    const autoTexts = new Set(textsDrawn(render(auto)));
+    const manualTexts = new Set(textsDrawn(render(manual)));
+    const differs =
+      [...autoTexts].some((t) => !manualTexts.has(t)) ||
+      [...manualTexts].some((t) => !autoTexts.has(t));
+    expect(differs).toBe(true);
+  });
+
+  test('the correct/wrong badge reflects session.correct', () => {
+    // Use explicit bags so the correctness is deterministic without
+    // depending on bestOpener priorities.
+    const baseBag = bagFor('ms2');
+    const s0 = createSession(baseBag, baseBag);
+
+    // Case 1: guess ms2 on an ms2-buildable bag → correct.
+    const guessedCorrect = sessionReducer(
+      sessionReducer(s0, { type: 'setGuess', opener: 'ms2', mirror: false }),
+      { type: 'submitGuess' },
+    );
+    // Whatever the reducer says about correctness, the render must match.
+    const texts = textsDrawn(render(guessedCorrect));
+    if (guessedCorrect.correct === true) {
+      expect(texts.some((t) => t.includes('CORRECT'))).toBe(true);
+    } else {
+      expect(texts.some((t) => t.includes('WRONG'))).toBe(true);
+    }
+  });
+});

@@ -563,14 +563,16 @@ describe('#5 movePiece', () => {
     expect(next).toBe(s);
   });
 
-  test('movePiece in auto mode is a no-op', () => {
+  test('movePiece in auto mode is a no-op (reference-equal return)', () => {
+    // With runtime invariants (assertSessionInvariants rule #7), auto mode
+    // can NEVER have an activePiece. The reducer correctly refuses movePiece
+    // because both playMode !== 'manual' AND activePiece === null.
     const bag = bagForTargetOpener('ms2', false);
     let s = createSession2(bag);
     s = dispatch(s, { type: 'setGuess', opener: 'ms2', mirror: false });
     s = dispatch(s, { type: 'submitGuess' });
-    // Manually inject an active piece to simulate a stale state. The reducer
-    // must still refuse because playMode !== 'manual'.
-    s = { ...s, activePiece: spawnPiece('T') };
+    expect(s.playMode).toBe('auto');
+    expect(s.activePiece).toBeNull();
     const next = dispatch(s, { type: 'movePiece', dx: -1, dy: 0 });
     expect(next).toBe(s);
   });
@@ -640,12 +642,15 @@ describe('#6 rotatePiece', () => {
     }
   });
 
-  test('rotatePiece in auto mode is a no-op', () => {
+  test('rotatePiece in auto mode is a no-op (reference-equal return)', () => {
+    // Same as the movePiece analog: invariant #7 forbids activePiece in
+    // auto mode, so rotatePiece has nothing to rotate and returns state.
     const bag = bagForTargetOpener('ms2', false);
     let s = createSession2(bag);
     s = dispatch(s, { type: 'setGuess', opener: 'ms2', mirror: false });
     s = dispatch(s, { type: 'submitGuess' });
-    s = { ...s, activePiece: spawnPiece('T') };
+    expect(s.playMode).toBe('auto');
+    expect(s.activePiece).toBeNull();
     const next = dispatch(s, { type: 'rotatePiece', direction: 1 });
     expect(next).toBe(s);
   });
