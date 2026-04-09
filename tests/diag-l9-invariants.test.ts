@@ -30,6 +30,7 @@ import { describe, test, expect } from 'bun:test';
 import {
   createSession,
   sessionReducer as rawReducer,
+  InvariantViolation,
   type Session,
   type SessionAction,
 } from '../src/session.ts';
@@ -182,26 +183,12 @@ function assertSessionInvariants(s: Session): void {
 // into src/session.ts so the raw reducer gains the same behavior.
 // ═══════════════════════════════════════════════════════════════════════════
 
-function sessionReducer(state: Session, action: SessionAction): Session {
-  // Payload validation — reject invalid actions BEFORE they touch the
-  // reducer. Same fixes Phase 3 adds to the production reducer.
-  if (action.type === 'selectRoute') {
-    if (state.phase !== 'guess2' || state.guess === null) return state;
-    const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
-    if (action.routeIndex < 0 || action.routeIndex >= routes.length) {
-      return state;
-    }
-  }
-  if (action.type === 'pick' && state.phase === 'guess2') {
-    if (state.guess === null) return state;
-    const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
-    if (action.index < 0 || action.index >= routes.length) return state;
-  }
-
-  const next = rawReducer(state, action);
-  assertSessionInvariants(next);
-  return next;
-}
+// Post-Phase 3: delegate directly to the production reducer (which now
+// contains the bounds checks AND calls assertSessionInvariants internally).
+// Removing the local wrapper ensures mutation tests against the production
+// wrapper are detectable — previously, the local wrapper's redundant
+// assertSessionInvariants call masked any mutation to the production wrapper.
+const sessionReducer = rawReducer;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -230,6 +217,59 @@ function bagFor(target: OpenerID): PieceType[] {
 function apply(state: Session, ...actions: SessionAction[]): Session {
   return actions.reduce((s, a) => sessionReducer(s, a), state);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// #0 — the production sessionReducer wrapper is LOAD-BEARING
+//
+// These tests exist specifically to detect mutations to the
+// `assertSessionInvariants(next)` call in src/session.ts sessionReducer.
+// They pass a corrupt input to the production reducer and expect it to
+// throw InvariantViolation. If the wrapper is removed, these tests fail.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('#0 production sessionReducer wrapper is load-bearing', () => {
+  // NOTE: We use regex matchers (/Session invariant violated/) instead of
+  // `.toThrow(InvariantViolation)` because bun:test's class matcher fails
+  // under module re-export identity comparison. Regex on the message is
+  // sufficient to prove the wrapper fired.
+
+  test('corrupt sessionStats passed through reducer throws via wrapper', () => {
+    const s = createSession(bagFor('ms2'), bagFor('ms2'));
+    const corrupt: Session = {
+      ...s,
+      sessionStats: { total: -1, correct: 0, streak: 0 },
+    };
+    // toggleMirror is a no-op in guess1 without a guess set, so the output
+    // is the unchanged corrupt state. The wrapper's assertSessionInvariants
+    // fires on that output — proving the wrapper is load-bearing.
+    expect(() =>
+      sessionReducer(corrupt, { type: 'toggleMirror' }),
+    ).toThrow(/sessionStats has a negative/);
+  });
+
+  test('corrupt step passed through reducer throws via wrapper', () => {
+    const s = apply(
+      createSession(bagFor('ms2'), bagFor('ms2')),
+      { type: 'setGuess', opener: 'ms2', mirror: false },
+      { type: 'submitGuess' },
+    );
+    const corrupt: Session = { ...s, step: -5 };
+    expect(() =>
+      sessionReducer(corrupt, { type: 'stepBackward' }),
+    ).toThrow(/step .* must be >= 0/);
+  });
+
+  test('corrupt guess=null in reveal phase throws via wrapper', () => {
+    const s = apply(
+      createSession(bagFor('ms2'), bagFor('ms2')),
+      { type: 'setGuess', opener: 'ms2', mirror: false },
+      { type: 'submitGuess' },
+    );
+    const corrupt: Session = { ...s, guess: null };
+    expect(() =>
+      sessionReducer(corrupt, { type: 'stepForward' }),
+    ).toThrow(/phase=reveal1 requires a guess/);
+  });
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #1 — the invariant helper is itself correct (unit-test the checker)

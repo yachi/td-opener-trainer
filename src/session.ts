@@ -213,8 +213,20 @@ export function assertSessionInvariants(s: Session): void {
     }
   }
 
-  // ── 4. sessionStats non-negative and consistent ──
+  // ── 4. sessionStats non-negative, finite, and consistent ──
   const { total, correct, streak } = s.sessionStats;
+  // Finite check first — NaN/Infinity bypass < > comparisons because
+  // IEEE754 comparisons with NaN always return false.
+  if (
+    !Number.isFinite(total) ||
+    !Number.isFinite(correct) ||
+    !Number.isFinite(streak)
+  ) {
+    throw new InvariantViolation(
+      'sessionStats must be finite numbers (no NaN/Infinity)',
+      s,
+    );
+  }
   if (total < 0 || correct < 0 || streak < 0) {
     throw new InvariantViolation('sessionStats has a negative value', s);
   }
@@ -277,6 +289,35 @@ export function assertSessionInvariants(s: Session): void {
     }
     if (s.holdUsed) {
       throw new InvariantViolation(`${s.phase} must have holdUsed === false`, s);
+    }
+  }
+
+  // ── 9. bag1 and bag2 are valid 7-piece permutations ──
+  // TypeScript guarantees the piece TYPE but nothing prevents wrong length,
+  // duplicates, or externally mutated values. Validate shape explicitly.
+  for (const name of ['bag1', 'bag2'] as const) {
+    const bag = s[name];
+    if (bag.length !== 7) {
+      throw new InvariantViolation(
+        `${name} must have exactly 7 pieces, got ${bag.length}`,
+        s,
+      );
+    }
+    const seen = new Set<PieceType>();
+    for (const p of bag) {
+      if (!ALL_PIECE_TYPES.includes(p)) {
+        throw new InvariantViolation(
+          `${name} contains invalid piece type: ${String(p)}`,
+          s,
+        );
+      }
+      if (seen.has(p)) {
+        throw new InvariantViolation(
+          `${name} has duplicate piece: ${p}`,
+          s,
+        );
+      }
+      seen.add(p);
     }
   }
 }
@@ -557,8 +598,14 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       if (state.phase !== 'guess2' || state.guess === null) return state;
       // Bounds check (Bug #2 fix): selectRoute used to accept any routeIndex
       // and silently produce empty cachedSteps. Now: reject invalid indices.
+      // Number.isInteger catches NaN, Infinity, and float values like 0.5
+      // that would otherwise pass the < 0 and >= length checks.
       const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
-      if (action.routeIndex < 0 || action.routeIndex >= routes.length) {
+      if (
+        !Number.isInteger(action.routeIndex) ||
+        action.routeIndex < 0 ||
+        action.routeIndex >= routes.length
+      ) {
         return state;
       }
       // L10 finding #7: capture the bag1 final board from cachedSteps
@@ -620,6 +667,13 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
+      // Defense-in-depth: ensure dx/dy are integers before passing to
+      // tryMove, which would otherwise silently reject via floating-point
+      // board indexing failures. Explicit guard is clearer + consistent
+      // with selectRoute / pick bounds checks.
+      if (!Number.isInteger(action.dx) || !Number.isInteger(action.dy)) {
+        return state;
+      }
       const moved = tryMove(state.board, state.activePiece, action.dx, action.dy);
       if (!moved) return state;
       return { ...state, activePiece: moved };
@@ -738,7 +792,11 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       // actions (defense-in-depth alongside selectRoute's own guard).
       switch (state.phase) {
         case 'guess1': {
-          if (action.index < 0 || action.index >= OPENER_BY_PICK.length) {
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= OPENER_BY_PICK.length
+          ) {
             return state;
           }
           const opener = OPENER_BY_PICK[action.index];
@@ -753,7 +811,11 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         case 'guess2': {
           if (state.guess === null) return state;
           const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
-          if (action.index < 0 || action.index >= routes.length) {
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= routes.length
+          ) {
             return state;
           }
           return _rawSessionReducer(state, {

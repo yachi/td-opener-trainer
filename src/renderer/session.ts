@@ -616,7 +616,41 @@ function drawReveal2Panel(
   // Step counter.
   const total = session.cachedSteps.length;
   drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
-  y += PANEL_LINE_H + 8;
+  y += PANEL_LINE_H + 4;
+
+  // Hold piece (Bug #1 fix — partial symmetry with drawReveal1Panel).
+  //
+  // INTENTIONAL ASYMMETRY vs reveal1: in reveal2 auto mode we do NOT show
+  // the opener's doctrinal hold. The doctrinal hold is a hint for BAG 1
+  // ("hold this before you start"), and by the time we're in reveal2 the
+  // user has already placed bag 1. Showing "Hold: J" during reveal2 auto
+  // would suggest the user should be holding J NOW, which is wrong —
+  // J was already used during bag 1 setup.
+  //
+  // We DO show `session.holdPiece` when the user is manually playing AND
+  // has actively held a piece mid-route. That reflects their real-time
+  // play state and is always accurate.
+  //
+  // If a route ever needs a different doctrinal hold (some bag2 routes
+  // have `holdPlacement` in their data), that would require a separate
+  // display path — out of scope for the current Bug #1 fix.
+  if (session.guess && session.playMode === 'manual' && session.holdPiece !== null) {
+    drawPanelLine(ctx, 'Hold (held):', y);
+    y += PANEL_LINE_H;
+    const slotX = PANEL_X;
+    const slotY = y;
+    const slotW = 50;
+    const slotH = 50;
+    ctx.fillStyle = COLORS.statCardBg;
+    ctx.fillRect(slotX, slotY, slotW, slotH);
+    ctx.strokeStyle = COLORS.boardBorder;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(slotX + 0.5, slotY + 0.5, slotW - 1, slotH - 1);
+    drawPieceInBox(ctx, session.holdPiece, slotX, slotY, slotW, slotH, 10);
+    y += slotH + 8;
+  } else {
+    y += 4;
+  }
 
   // Navigation hint — differs by playMode.
   if (session.playMode === 'manual') {
