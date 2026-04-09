@@ -1,11 +1,10 @@
 /**
- * src/app.ts — L9 Session redesign entry point.
+ * src/app.ts — L9 Session redesign entry point (Reframing A+).
  *
  * One state machine (Session), one renderer (renderSession), one keyboard
- * handler (setupKeyboard), plus an optional manual-play input handler for
- * reveal phases. No modes, no localStorage, no prevAppMode shadow state.
- *
- * Replaces the 866-LOC mode-routing entry from the pre-L9 architecture.
+ * handler (setupKeyboard). No manual-play closure, no dirty-flag hack for
+ * manual mode, no activePiece passed as a third renderer arg — activePiece
+ * lives in Session and the renderer reads it directly.
  */
 
 import {
@@ -16,7 +15,6 @@ import {
 } from './session.ts';
 import { renderSession } from './renderer/session.ts';
 import { setupKeyboard } from './input/keyboard.ts';
-import { createManualPlayHandler } from './play/manual.ts';
 import { CANVAS_W, CANVAS_H } from './renderer/board.ts';
 
 // ── Canvas bootstrap ──
@@ -46,28 +44,19 @@ function dispatch(action: SessionAction): void {
 // Expose for debug inspection from the browser console.
 (window as unknown as { __session: () => Session }).__session = () => session;
 
-// ── Input handlers ──
+// ── Input ──
 
-setupKeyboard(dispatch, () => session);
-
-const manual = createManualPlayHandler(dispatch, () => session);
-manual.attach();
+const keyboard = setupKeyboard(dispatch, () => session);
+keyboard.attach();
 
 // ── Render loop ──
 
 function frame(now: number): void {
-  // Drive manual-play DAS/ARR every frame. The handler internally checks
-  // phase/playMode and no-ops when not in a manual reveal.
-  manual.tick(now);
+  // Drive DAS/ARR auto-repeat for held keys (no-op outside manual reveal).
+  keyboard.tick(now);
 
-  // In manual reveal, the active piece moves without the Session dispatching,
-  // so we must redraw every frame to show movement/rotation/ghost updates.
-  const isManualReveal =
-    (session.phase === 'reveal1' || session.phase === 'reveal2') &&
-    session.playMode === 'manual';
-
-  if (dirty || isManualReveal) {
-    renderSession(ctx!, session, manual.getActivePiece());
+  if (dirty) {
+    renderSession(ctx!, session);
     dirty = false;
   }
   requestAnimationFrame(frame);

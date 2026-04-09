@@ -53,8 +53,11 @@ import {
   emptyBoard,
   buildSteps,
   findFloatingPieces,
+  findAllPlacements,
   type Board,
+  type Step,
 } from '../src/core/engine.ts';
+import type { ActivePiece } from '../src/core/srs.ts';
 import type { PieceType } from '../src/core/types.ts';
 import type { OpenerID } from '../src/openers/types.ts';
 import {
@@ -80,8 +83,10 @@ import {
 // production module without modification of the assertion logic.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// All action types the reducer MUST handle. Kept explicit so test #14 can
-// check every one is exercised at least once.
+// Action types exercised by THIS file. The 5 manual-play actions
+// (movePiece, rotatePiece, hardDrop, hold, softDrop) live in
+// tests/diag-l9-manual.test.ts — the action coverage sentinel here
+// only checks the session-level actions.
 const ACTION_TYPES: Action['type'][] = [
   'newSession',
   'setGuess',
@@ -91,9 +96,31 @@ const ACTION_TYPES: Action['type'][] = [
   'stepBackward',
   'advancePhase',
   'togglePlayMode',
-  'pieceDrop',
+  'hardDrop',
   'selectRoute',
 ];
+
+/**
+ * Find an ActivePiece that hard-drops to EXACTLY the target cells of the
+ * given step. Uses the engine's BFS (`findAllPlacements`) so the test
+ * mirrors what the real user reaches via left/right/rotate.
+ */
+function findActivePieceForStep(board: Board, step: Step): ActivePiece {
+  const placements = findAllPlacements(board, step.piece);
+  const targetSet = new Set(step.newCells.map(c => `${c.col},${c.row}`));
+  for (const p of placements) {
+    if (p.cells.length !== targetSet.size) continue;
+    const cellSet = new Set(p.cells.map(c => `${c.col},${c.row}`));
+    let ok = true;
+    for (const k of targetSet) {
+      if (!cellSet.has(k)) { ok = false; break; }
+    }
+    if (ok) return p.piece;
+  }
+  throw new Error(
+    `No placement of ${step.piece} reaches target cells ${JSON.stringify(step.newCells)}`,
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test helpers
@@ -363,12 +390,18 @@ describe('#4 manual mode exposes target cells (drill oracle)', () => {
     s = dispatch(s, { type: 'submitGuess' });
     s = dispatch(s, { type: 'togglePlayMode' });
     expect(s.playMode).toBe('manual');
+    expect(s.activePiece).not.toBeNull();
 
     // Drop every piece in order per cachedSteps — the same targets drill shows.
+    // Reframing A+: hardDrop reads activePiece from state. We set activePiece
+    // to a pre-positioned piece that will drop exactly onto the target cells
+    // (emulates what a real user reaches via left/right/rotate input).
     const total = s.cachedSteps.length;
     for (let i = 0; i < total; i++) {
       const step = s.cachedSteps[i]!;
-      s = dispatch(s, { type: 'pieceDrop', piece: step.piece, cells: step.newCells });
+      const ap = findActivePieceForStep(s.board, step);
+      s = { ...s, activePiece: ap };
+      s = dispatch(s, { type: 'hardDrop' });
       expect(s.step).toBe(i + 1);
     }
     expect(boardHash(s.board)).toBe(boardHash(goldenBag1Board(id, mirror)));
@@ -381,20 +414,32 @@ describe('#4 manual mode exposes target cells (drill oracle)', () => {
     s = dispatch(s, { type: 'submitGuess' });
     s = dispatch(s, { type: 'togglePlayMode' });
 
-    // Wrong piece type at correct cells.
+    // Wrong piece type (by replacing activePiece with a bogus type at spawn).
     const step0 = s.cachedSteps[0]!;
-    const bogusPiece: PieceType = step0.piece === 'I' ? 'T' : 'I';
+    const bogusType: PieceType = step0.piece === 'I' ? 'T' : 'I';
     const before = s.step;
-    s = dispatch(s, { type: 'pieceDrop', piece: bogusPiece, cells: step0.newCells });
-    expect(s.step).toBe(before); // no advance
+    // Manually construct an ActivePiece of the wrong type at spawn position.
+    const bogusPiece: ActivePiece = {
+      type: bogusType,
+      col: 4,
+      row: 0,
+      rotation: 0,
+    };
+    s = { ...s, activePiece: bogusPiece };
+    s = dispatch(s, { type: 'hardDrop' });
+    expect(s.step).toBe(before); // no advance — type mismatch
 
-    // Right piece, wrong cells.
-    s = dispatch(s, {
-      type: 'pieceDrop',
-      piece: step0.piece,
-      cells: [{ col: 0, row: 0 }, { col: 1, row: 0 }, { col: 2, row: 0 }, { col: 3, row: 0 }],
-    });
-    expect(s.step).toBe(before); // still no advance
+    // Right piece type, wrong cells (piece at spawn, will drop to wrong row).
+    // Set a spawn-position piece of the correct type but at the wrong column.
+    const rightTypeWrongPos: ActivePiece = {
+      type: step0.piece,
+      col: 0,
+      row: 0,
+      rotation: 0,
+    };
+    s = { ...s, activePiece: rightTypeWrongPos };
+    s = dispatch(s, { type: 'hardDrop' });
+    expect(s.step).toBe(before); // still no advance — wrong cells
   });
 });
 

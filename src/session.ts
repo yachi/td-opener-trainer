@@ -31,6 +31,14 @@ import {
   type Board,
   type Step,
 } from './core/engine.ts';
+import {
+  spawnPiece,
+  tryMove,
+  tryRotate,
+  hardDrop as coreHardDrop,
+  getPieceCells,
+  type ActivePiece,
+} from './core/srs.ts';
 import type { PieceType } from './core/types.ts';
 import { ALL_PIECE_TYPES } from './core/types.ts';
 import type { OpenerID } from './openers/types.ts';
@@ -77,11 +85,33 @@ export interface Session {
   cachedSteps: Step[];
   /** Route index selected during guess2 (-1 if not yet selected). */
   routeGuess: number;
+
+  // ── Reframing A+ fields (manual-play in-flight state) ──
+  /**
+   * In-flight piece in manual mode. null in auto mode or outside a reveal
+   * phase. The reducer is the single source of truth — there is no closure
+   * holding a copy. Spawned on:
+   *   - submitGuess → reveal1 (if playMode === 'manual')
+   *   - togglePlayMode auto → manual (if currently in a reveal)
+   *   - selectRoute → reveal2 (if playMode === 'manual')
+   *   - hardDrop accept (spawns next cachedSteps[step].piece)
+   * Cleared on: togglePlayMode → auto, advancePhase, newSession.
+   */
+  activePiece: ActivePiece | null;
+  /**
+   * User-held piece type (one-shot per step). Survives across steps until
+   * swapped. Independent of the doctrinal hold displayed in the right panel.
+   */
+  holdPiece: PieceType | null;
+  /** True after the user held on the current step; resets on step advance. */
+  holdUsed: boolean;
 }
 
 /**
- * Discriminated union of every reducer action. Ten actions total — every
- * one is exercised by the diag test file (see test #14).
+ * Discriminated union of every reducer action. Fourteen actions — nine
+ * session-level (setGuess, submitGuess, etc.) and five manual-play
+ * (movePiece, rotatePiece, hardDrop, hold, softDrop). The old pieceDrop
+ * action is DELETED — hardDrop absorbed it (reads activePiece from state).
  */
 export type SessionAction =
   | { type: 'newSession'; bag1?: PieceType[]; bag2?: PieceType[] }
@@ -92,8 +122,13 @@ export type SessionAction =
   | { type: 'stepBackward' }
   | { type: 'advancePhase' }
   | { type: 'togglePlayMode' }
-  | { type: 'pieceDrop'; piece: PieceType; cells: { col: number; row: number }[] }
-  | { type: 'selectRoute'; routeIndex: number };
+  | { type: 'selectRoute'; routeIndex: number }
+  // ── Reframing A+ manual-play actions ──
+  | { type: 'movePiece'; dx: number; dy: number }
+  | { type: 'rotatePiece'; direction: 1 | -1 }
+  | { type: 'hardDrop' }
+  | { type: 'hold' }
+  | { type: 'softDrop' };
 
 export interface CreateSessionOptions {
   bag1?: PieceType[];
@@ -195,7 +230,20 @@ export function createSession(
     sessionStats: { total: 0, correct: 0, streak: 0 },
     cachedSteps: [],
     routeGuess: -1,
+    activePiece: null,
+    holdPiece: null,
+    holdUsed: false,
   };
+}
+
+/** Spawn the active piece for the current cachedStep, or null. */
+function spawnForCurrentStep(
+  cachedSteps: Step[],
+  step: number,
+): ActivePiece | null {
+  const next = cachedSteps[step];
+  if (!next) return null;
+  return spawnPiece(next.piece);
 }
 
 // ── Reducer ───────────────────────────────────────────────────────────────
@@ -274,6 +322,13 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
         streak: isCorrect ? state.sessionStats.streak + 1 : 0,
       };
 
+      // SPAWN HOOK (Reframing A+): entering reveal1 in manual mode
+      // spawns the first active piece so the user can start placing.
+      const activePiece =
+        state.playMode === 'manual'
+          ? spawnForCurrentStep(cachedSteps, 0)
+          : null;
+
       return {
         ...state,
         phase: 'reveal1',
@@ -283,6 +338,9 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
         step: 0,
         board: emptyBoard(),
         sessionStats: newStats,
+        activePiece,
+        holdPiece: null,
+        holdUsed: false,
       };
     }
 
@@ -313,11 +371,16 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
           state.cachedSteps.length > 0
             ? cloneBoard(state.cachedSteps[state.cachedSteps.length - 1]!.board)
             : emptyBoard();
+        // CLEAR HOOK (Reframing A+): leaving a reveal phase drops the
+        // in-flight piece and hold state. guess2 is not a manual-play phase.
         return {
           ...state,
           phase: 'guess2',
           board: finalBoard,
           step: state.cachedSteps.length,
+          activePiece: null,
+          holdPiece: null,
+          holdUsed: false,
         };
       }
       // reveal2 → new guess1 with fresh bags (stats carry forward).
@@ -348,6 +411,12 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
         action.routeIndex,
         finalBag1,
       );
+      // SPAWN HOOK (Reframing A+): entering reveal2 in manual mode
+      // spawns the first active piece for the bag2 sequence.
+      const activePiece =
+        state.playMode === 'manual'
+          ? spawnForCurrentStep(routeSteps, 0)
+          : null;
       return {
         ...state,
         phase: 'reveal2',
@@ -355,37 +424,118 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
         cachedSteps: routeSteps,
         step: 0,
         board: cloneBoard(finalBag1),
+        activePiece,
+        holdPiece: null,
+        holdUsed: false,
       };
     }
 
     case 'togglePlayMode': {
+      const nextMode = state.playMode === 'auto' ? 'manual' : 'auto';
+      // SPAWN/CLEAR HOOK (Reframing A+):
+      //   - auto→manual in a reveal phase spawns the current step's piece
+      //   - manual→auto clears activePiece + hold state
+      //   - toggle outside reveal (e.g., during guess1) does NOT spawn
+      const isReveal = state.phase === 'reveal1' || state.phase === 'reveal2';
+      const activePiece =
+        nextMode === 'manual' && isReveal
+          ? spawnForCurrentStep(state.cachedSteps, state.step)
+          : null;
       return {
         ...state,
-        playMode: state.playMode === 'auto' ? 'manual' : 'auto',
+        playMode: nextMode,
+        activePiece,
+        holdPiece: nextMode === 'manual' ? state.holdPiece : null,
+        holdUsed: false,
       };
     }
 
-    case 'pieceDrop': {
-      // Manual-mode placement — only valid during reveal phases.
+    // ── Reframing A+ manual-play actions ──
+
+    case 'movePiece': {
       if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
       if (state.playMode !== 'manual') return state;
+      if (state.activePiece === null) return state;
+      const moved = tryMove(state.board, state.activePiece, action.dx, action.dy);
+      if (!moved) return state;
+      return { ...state, activePiece: moved };
+    }
+
+    case 'softDrop': {
+      // Alias for movePiece({dx:0, dy:1}).
+      return sessionReducer(state, { type: 'movePiece', dx: 0, dy: 1 });
+    }
+
+    case 'rotatePiece': {
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.playMode !== 'manual') return state;
+      if (state.activePiece === null) return state;
+      const rotated = tryRotate(state.board, state.activePiece, action.direction);
+      if (!rotated) return state;
+      return { ...state, activePiece: rotated };
+    }
+
+    case 'hardDrop': {
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.playMode !== 'manual') return state;
+      if (state.activePiece === null) return state;
       const expectedStep = state.cachedSteps[state.step];
       if (!expectedStep) return state;
-      if (expectedStep.piece !== action.piece) return state;
-      // L10 finding #6: BFS cell order isn't stable, so compare via
-      // stringified {col,row} key sets rather than positional arrays.
+      const dropped = coreHardDrop(state.board, state.activePiece);
+      // Piece type mismatch — reject (piece stays, user retries).
+      if (dropped.type !== expectedStep.piece) return state;
+      const cells = getPieceCells(dropped);
+      // L10 finding #6: BFS cell order isn't stable, compare via
+      // stringified {col,row} key sets.
       const expectedSet = new Set(
         expectedStep.newCells.map((c) => `${c.col},${c.row}`),
       );
-      const givenSet = new Set(action.cells.map((c) => `${c.col},${c.row}`));
+      const givenSet = new Set(cells.map((c) => `${c.col},${c.row}`));
       if (
         expectedSet.size !== givenSet.size ||
         ![...expectedSet].every((k) => givenSet.has(k))
       ) {
         return state;
       }
-      const newBoard = stampCells(state.board, action.piece, action.cells);
-      return { ...state, board: newBoard, step: state.step + 1 };
+      // Accepted — lock piece, advance step, spawn next, reset holdUsed.
+      const newBoard = stampCells(state.board, dropped.type, cells);
+      const nextStepIdx = state.step + 1;
+      const nextActivePiece = spawnForCurrentStep(state.cachedSteps, nextStepIdx);
+      return {
+        ...state,
+        board: newBoard,
+        step: nextStepIdx,
+        activePiece: nextActivePiece,
+        holdUsed: false,
+      };
+    }
+
+    case 'hold': {
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.playMode !== 'manual') return state;
+      if (state.activePiece === null) return state;
+      if (state.holdUsed) return state;
+      const currentType = state.activePiece.type;
+      if (state.holdPiece === null) {
+        // First hold: store active, refill from next step (with-peek variant).
+        // TODO(simple-hold): swap to pure-swap if the UX proves confusing.
+        const nextStep = state.cachedSteps[state.step + 1];
+        const nextActive = nextStep ? spawnPiece(nextStep.piece) : null;
+        return {
+          ...state,
+          holdPiece: currentType,
+          activePiece: nextActive,
+          holdUsed: true,
+        };
+      }
+      // Subsequent hold: swap active type with held type.
+      const swappedType = state.holdPiece;
+      return {
+        ...state,
+        holdPiece: currentType,
+        activePiece: spawnPiece(swappedType),
+        holdUsed: true,
+      };
     }
 
     default:

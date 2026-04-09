@@ -91,7 +91,6 @@ const OPENER_SHORT: Record<OpenerID, string> = {
 export function renderSession(
   ctx: CanvasRenderingContext2D,
   session: Session,
-  activePiece: ActivePiece | null = null,
 ): void {
   // 1. Clear canvas.
   ctx.fillStyle = COLORS.canvasBg;
@@ -100,8 +99,8 @@ export function renderSession(
   // 2. Title bar (top): in-session stats + app name.
   drawTitleBar(ctx, session);
 
-  // 3. Live board (left).
-  drawLiveBoard(ctx, session, activePiece);
+  // 3. Live board (left) — reads session.activePiece directly.
+  drawLiveBoard(ctx, session);
 
   // 4. Phase-specific right panel.
   switch (session.phase) {
@@ -162,8 +161,8 @@ function drawTitleBar(ctx: CanvasRenderingContext2D, session: Session): void {
 function drawLiveBoard(
   ctx: CanvasRenderingContext2D,
   session: Session,
-  activePiece: ActivePiece | null = null,
 ): void {
+  const activePiece = session.activePiece;
   // Background.
   ctx.fillStyle = COLORS.boardBg;
   ctx.fillRect(BOARD_X, BOARD_Y, BOARD_W, BOARD_H);

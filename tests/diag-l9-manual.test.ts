@@ -99,7 +99,9 @@ import { getBag2Routes } from '../src/openers/bag2-routes.ts';
 import { OPENERS, bestOpener } from '../src/openers/decision.ts';
 import {
   createSession,
+  sessionReducer,
   type Session,
+  type SessionAction,
   type SessionStats,
 } from '../src/session.ts';
 
@@ -112,32 +114,12 @@ import {
 // reference reducer below.
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface Session2 extends Session {
-  /** In-flight piece in manual mode. null in auto mode or outside reveal. */
-  activePiece: ActivePiece | null;
-  /** User-held piece type. Survives across steps until swapped or cleared. */
-  holdPiece: PieceType | null;
-  /** True after the user held on the current step; resets on step advance. */
-  holdUsed: boolean;
-}
-
-type Action2 =
-  // Existing 9 (pieceDrop is DELETED in the new design)
-  | { type: 'newSession'; bag1?: PieceType[]; bag2?: PieceType[] }
-  | { type: 'setGuess'; opener: OpenerID; mirror: boolean }
-  | { type: 'toggleMirror' }
-  | { type: 'submitGuess' }
-  | { type: 'stepForward' }
-  | { type: 'stepBackward' }
-  | { type: 'advancePhase' }
-  | { type: 'togglePlayMode' }
-  | { type: 'selectRoute'; routeIndex: number }
-  // NEW 5
-  | { type: 'movePiece'; dx: number; dy: number }
-  | { type: 'rotatePiece'; direction: 1 | -1 }
-  | { type: 'hardDrop' }
-  | { type: 'hold' }
-  | { type: 'softDrop' };
+// Session2/Action2 are now identical to the production Session / SessionAction.
+// Kept as type aliases so the existing 45 tests continue to read cleanly.
+// Phase 3 landed the Reframing A+ design in src/session.ts, so these aliases
+// are lossless — the spec and the implementation are the same module now.
+type Session2 = Session;
+type Action2 = SessionAction;
 
 const ACTION_TYPES2: Action2['type'][] = [
   'newSession',
@@ -247,14 +229,10 @@ function findActivePieceForStep(board: Board, step: Step): ActivePiece {
 // inline makes the delta visible to the reader.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Test-facing constructor — passes through to the production createSession.
+// The activePiece/holdPiece/holdUsed fields are initialized there now.
 function createSession2(bag1?: PieceType[], bag2?: PieceType[]): Session2 {
-  const base = createSession(bag1, bag2);
-  return {
-    ...base,
-    activePiece: null,
-    holdPiece: null,
-    holdUsed: false,
-  };
+  return createSession(bag1, bag2);
 }
 
 function computeStepsForPhase(
@@ -286,272 +264,15 @@ function spawnForCurrentStep(
   return spawnPiece(next.piece);
 }
 
+// Post-Phase 3: delegate to the production reducer. During Phase 2.5 this
+// file held an inline reference reducer that was the design spec — see
+// commit 2d598ea for the original inline version. Phase 3 copied that spec
+// into src/session.ts, so sessionReducer2 is now a thin pass-through and
+// every assertion in this file proves production behavior.
 function sessionReducer2(state: Session2, action: Action2): Session2 {
-  switch (action.type) {
-    // ── Existing 9 actions (with spawn/clear hooks layered on top) ──
-
-    case 'newSession': {
-      const fresh = createSession2(action.bag1, action.bag2);
-      return {
-        ...fresh,
-        playMode: state.playMode,
-        sessionStats: state.sessionStats,
-      };
-    }
-
-    case 'setGuess': {
-      if (state.phase !== 'guess1') return state;
-      return {
-        ...state,
-        guess: { opener: action.opener, mirror: action.mirror },
-      };
-    }
-
-    case 'toggleMirror': {
-      if (state.phase !== 'guess1' || state.guess === null) return state;
-      return {
-        ...state,
-        guess: { ...state.guess, mirror: !state.guess.mirror },
-      };
-    }
-
-    case 'submitGuess': {
-      if (state.phase !== 'guess1' || state.guess === null) return state;
-      const guessedDef = OPENERS[state.guess.opener];
-      const isCorrect = state.guess.mirror
-        ? guessedDef.canBuildMirror(state.bag1)
-        : guessedDef.canBuild(state.bag1);
-      const showOpener = isCorrect
-        ? state.guess.opener
-        : bestOpener(state.bag1).opener.id;
-      const showMirror = isCorrect
-        ? state.guess.mirror
-        : bestOpener(state.bag1).mirror;
-      const cachedSteps = computeStepsForPhase(
-        showOpener,
-        showMirror,
-        'reveal1',
-        -1,
-        emptyBoard(),
-      );
-      const newStats: SessionStats = {
-        total: state.sessionStats.total + 1,
-        correct: state.sessionStats.correct + (isCorrect ? 1 : 0),
-        streak: isCorrect ? state.sessionStats.streak + 1 : 0,
-      };
-      // SPAWN HOOK: entering reveal1 in manual mode spawns the first active piece.
-      const activePiece =
-        state.playMode === 'manual'
-          ? spawnForCurrentStep(cachedSteps, 0)
-          : null;
-      return {
-        ...state,
-        phase: 'reveal1',
-        correct: isCorrect,
-        guess: { opener: showOpener, mirror: showMirror },
-        cachedSteps,
-        step: 0,
-        board: emptyBoard(),
-        sessionStats: newStats,
-        activePiece,
-        holdPiece: null,
-        holdUsed: false,
-      };
-    }
-
-    case 'stepForward': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
-      if (state.step >= state.cachedSteps.length) return state;
-      const nextStep = state.step + 1;
-      const board = cloneBoard(state.cachedSteps[nextStep - 1]!.board);
-      return { ...state, step: nextStep, board };
-    }
-
-    case 'stepBackward': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
-      if (state.step <= 0) return state;
-      const prevStep = state.step - 1;
-      const board =
-        prevStep === 0
-          ? emptyBoard()
-          : cloneBoard(state.cachedSteps[prevStep - 1]!.board);
-      return { ...state, step: prevStep, board };
-    }
-
-    case 'advancePhase': {
-      if (state.phase === 'reveal1') {
-        const finalBoard =
-          state.cachedSteps.length > 0
-            ? cloneBoard(state.cachedSteps[state.cachedSteps.length - 1]!.board)
-            : emptyBoard();
-        // CLEAR HOOK: leaving reveal1 drops activePiece/hold state.
-        return {
-          ...state,
-          phase: 'guess2',
-          board: finalBoard,
-          step: state.cachedSteps.length,
-          activePiece: null,
-          holdPiece: null,
-          holdUsed: false,
-        };
-      }
-      if (state.phase === 'reveal2') {
-        const fresh = createSession2();
-        return {
-          ...fresh,
-          playMode: state.playMode,
-          sessionStats: state.sessionStats,
-        };
-      }
-      return state;
-    }
-
-    case 'selectRoute': {
-      if (state.phase !== 'guess2' || state.guess === null) return state;
-      const finalBag1 =
-        state.cachedSteps.length > 0
-          ? state.cachedSteps[state.cachedSteps.length - 1]!.board
-          : emptyBoard();
-      const routeSteps = computeStepsForPhase(
-        state.guess.opener,
-        state.guess.mirror,
-        'reveal2',
-        action.routeIndex,
-        finalBag1,
-      );
-      // SPAWN HOOK: entering reveal2 in manual mode spawns the first piece.
-      const activePiece =
-        state.playMode === 'manual'
-          ? spawnForCurrentStep(routeSteps, 0)
-          : null;
-      return {
-        ...state,
-        phase: 'reveal2',
-        routeGuess: action.routeIndex,
-        cachedSteps: routeSteps,
-        step: 0,
-        board: cloneBoard(finalBag1),
-        activePiece,
-        holdPiece: null,
-        holdUsed: false,
-      };
-    }
-
-    case 'togglePlayMode': {
-      const nextMode = state.playMode === 'auto' ? 'manual' : 'auto';
-      // SPAWN/CLEAR HOOK: auto→manual in a reveal spawns the current step's
-      // piece. manual→auto (or toggle outside reveal) clears hold state.
-      const isReveal = state.phase === 'reveal1' || state.phase === 'reveal2';
-      const activePiece =
-        nextMode === 'manual' && isReveal
-          ? spawnForCurrentStep(state.cachedSteps, state.step)
-          : null;
-      return {
-        ...state,
-        playMode: nextMode,
-        activePiece,
-        // Clear hold state whenever the mode changes — holdUsed/holdPiece
-        // don't have meaning in auto, and a user who just entered manual
-        // should get a fresh hold budget.
-        holdPiece: nextMode === 'manual' ? state.holdPiece : null,
-        holdUsed: false,
-      };
-    }
-
-    // ── New 5 actions ──
-
-    case 'movePiece': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
-      if (state.playMode !== 'manual') return state;
-      if (state.activePiece === null) return state;
-      const moved = tryMove(state.board, state.activePiece, action.dx, action.dy);
-      if (!moved) return state;
-      return { ...state, activePiece: moved };
-    }
-
-    case 'softDrop': {
-      // Alias for movePiece({dx:0, dy:1}).
-      return sessionReducer2(state, { type: 'movePiece', dx: 0, dy: 1 });
-    }
-
-    case 'rotatePiece': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
-      if (state.playMode !== 'manual') return state;
-      if (state.activePiece === null) return state;
-      const rotated = tryRotate(state.board, state.activePiece, action.direction);
-      if (!rotated) return state;
-      return { ...state, activePiece: rotated };
-    }
-
-    case 'hardDrop': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
-      if (state.playMode !== 'manual') return state;
-      if (state.activePiece === null) return state;
-      const expected = state.cachedSteps[state.step];
-      if (!expected) return state;
-      const dropped = coreHardDrop(state.board, state.activePiece);
-      if (dropped.type !== expected.piece) return state; // piece type mismatch
-      const cells = getPieceCells(dropped);
-      // L10 finding #6 from the session proof: BFS cell order isn't stable,
-      // compare via stringified {col,row} key sets.
-      const expectedSet = new Set(
-        expected.newCells.map(c => `${c.col},${c.row}`),
-      );
-      const givenSet = new Set(cells.map(c => `${c.col},${c.row}`));
-      if (
-        expectedSet.size !== givenSet.size ||
-        ![...expectedSet].every(k => givenSet.has(k))
-      ) {
-        return state;
-      }
-      const newBoard = stampCells(state.board, dropped.type, cells);
-      const nextStepIdx = state.step + 1;
-      const nextActivePiece = spawnForCurrentStep(state.cachedSteps, nextStepIdx);
-      return {
-        ...state,
-        board: newBoard,
-        step: nextStepIdx,
-        activePiece: nextActivePiece,
-        holdUsed: false, // step advanced → fresh hold budget
-      };
-    }
-
-    case 'hold': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
-      if (state.playMode !== 'manual') return state;
-      if (state.activePiece === null) return state;
-      if (state.holdUsed) return state;
-      const currentType = state.activePiece.type;
-      if (state.holdPiece === null) {
-        // First hold: store active, refill from next step (design: with peek).
-        // TODO(simple-hold): if the team prefers a swap-only hold, replace
-        // this branch with `return { ...state, holdPiece: currentType,
-        // activePiece: null, holdUsed: true };` and drop the two peek tests.
-        const nextStep = state.cachedSteps[state.step + 1];
-        const nextActive = nextStep ? spawnPiece(nextStep.piece) : null;
-        return {
-          ...state,
-          holdPiece: currentType,
-          activePiece: nextActive,
-          holdUsed: true,
-        };
-      }
-      // Subsequent hold: swap active type with hold type.
-      const swappedType = state.holdPiece;
-      return {
-        ...state,
-        holdPiece: currentType,
-        activePiece: spawnPiece(swappedType),
-        holdUsed: true,
-      };
-    }
-
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
-  }
+  return sessionReducer(state, action);
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test harness — track exercised actions for the coverage sentinel.
