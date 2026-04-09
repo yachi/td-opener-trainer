@@ -29,7 +29,7 @@ import {
   boardToAscii,
   placePieceFromCells,
 } from '../src/core/engine.ts';
-import { getOpenerSequence } from '../src/modes/visualizer.ts';
+import { getOpenerSequence } from '../src/openers/sequences.ts';
 import { Field } from 'tetris-fumen/lib/field';
 
 // ── Helpers ──
@@ -262,7 +262,7 @@ describe('Bag 2 golden fumen strings', () => {
 
   for (const id of OPENER_IDS) {
     test(`${id} Bag 2 route 0 final board matches golden fumen`, async () => {
-      const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+      const { getBag2Sequence } = await import('../src/openers/sequences.ts');
       const seq = getBag2Sequence(id, false, 0);
       if (!seq || seq.steps.length < 2) return;
       const finalBoard = seq.steps[seq.steps.length - 1]!.board;
@@ -271,7 +271,7 @@ describe('Bag 2 golden fumen strings', () => {
     });
 
     test(`${id} Bag 2 route 1 final board matches golden fumen`, async () => {
-      const { getBag2Sequence } = await import('../src/modes/visualizer.ts');
+      const { getBag2Sequence } = await import('../src/openers/sequences.ts');
       const seq = getBag2Sequence(id, false, 1);
       if (!seq || seq.steps.length < 2) return;
       const finalBoard = seq.steps[seq.steps.length - 1]!.board;
@@ -462,7 +462,8 @@ describe('Physics engine: all openers build successfully', () => {
       });
 
       test(`${label}: Bag 2 builds through engine without errors`, async () => {
-        const { getBag2Sequence, getBag2Routes } = await import('../src/modes/visualizer.ts');
+        const { getBag2Sequence } = await import('../src/openers/sequences.ts');
+        const { getBag2Routes } = await import('../src/openers/bag2-routes.ts');
         const routes = getBag2Routes(id, mirror);
         for (let r = 0; r < routes.length; r++) {
           expect(() => getBag2Sequence(id, mirror, r)).not.toThrow();

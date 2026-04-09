@@ -13,10 +13,10 @@ import type { PieceType } from '../src/core/types.ts';
 import type { OpenerID } from '../src/openers/types.ts';
 import {
   getOpenerSequence,
-  getBag2Routes,
   getBag2Sequence,
-} from '../src/modes/visualizer.ts';
-import type { RawPlacement } from '../src/modes/visualizer.ts';
+} from '../src/openers/sequences.ts';
+import { getBag2Routes } from '../src/openers/bag2-routes.ts';
+import type { RawPlacement } from '../src/openers/placements.ts';
 
 // ── Helpers ──
 

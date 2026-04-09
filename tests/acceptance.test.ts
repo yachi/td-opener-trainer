@@ -14,12 +14,53 @@
 import { describe, test, expect } from 'bun:test';
 import type { OpenerID } from '../src/openers/types.ts';
 import type { PieceType } from '../src/core/types.ts';
-import { getOpenerSequence, getBag2Routes, createVisualizerState } from '../src/modes/visualizer.ts';
-import { findFloatingCells } from '../src/core/engine.ts';
+import { getOpenerSequence } from '../src/openers/sequences.ts';
+import { getBag2Routes } from '../src/openers/bag2-routes.ts';
+import { OPENER_PLACEMENT_DATA, mirrorPlacementData } from '../src/openers/placements.ts';
+import { findFloatingCells, buildSteps, type Step } from '../src/core/engine.ts';
 import { PIECE_DEFINITIONS } from '../src/core/pieces.ts';
 import goldenData from './fixtures/bag2-golden.json';
 
 const OPENER_IDS: OpenerID[] = ['ms2', 'honey_cup', 'stray_cannon', 'gamushiro'];
+
+/**
+ * Local helper replicating the flat step list that the deleted
+ * `createVisualizerState` produced: Bag 1 + hold (if any) + Bag 2 all in
+ * one flat sequence, plus a `bag1End` index. Uses the same "reduce Bag 1
+ * by one on conflict" fallback as the old visualizer for Gamushiro form_2.
+ */
+function buildFlatSequence(
+  openerId: OpenerID,
+  mirror: boolean,
+  routeIndex: number,
+): { steps: Step[]; bag1End: number } {
+  const rawData = OPENER_PLACEMENT_DATA[openerId];
+  const data = mirror ? mirrorPlacementData(rawData) : rawData;
+  const bag1Placements = data.placements;
+  const routes = getBag2Routes(openerId, mirror);
+  const route = routes[routeIndex] ?? null;
+  const bag2All = route
+    ? [
+        ...(route.holdPlacement ? [route.holdPlacement] : []),
+        ...route.placements,
+      ]
+    : [];
+
+  let bag1Used = bag1Placements;
+  if (route && bag2All.length > 0) {
+    const fullSteps = buildSteps([...bag1Placements, ...bag2All]);
+    if (fullSteps.length < bag1Placements.length + bag2All.length) {
+      const reduced = bag1Placements.slice(0, bag1Placements.length - 1);
+      const reducedSteps = buildSteps([...reduced, ...bag2All]);
+      if (reducedSteps.length >= reduced.length + bag2All.length) {
+        bag1Used = reduced;
+      }
+    }
+  }
+
+  const allPlacements = route ? [...bag1Used, ...bag2All] : [...bag1Placements];
+  return { steps: buildSteps(allPlacements), bag1End: bag1Used.length };
+}
 
 function isTstOverhang(
   col: number, row: number,
@@ -60,7 +101,7 @@ describe('Acceptance: no disappearing cells between steps', () => {
     const routes = getBag2Routes(id, false);
     for (let ri = 0; ri < routes.length; ri++) {
       test(`${id}/${routes[ri]!.routeId}: no cell disappears`, () => {
-        const state = createVisualizerState(id, false, ri);
+        const state = buildFlatSequence(id, false, ri);
         for (let i = 1; i < state.steps.length; i++) {
           const prev = state.steps[i - 1]!.board;
           const curr = state.steps[i]!.board;
@@ -84,7 +125,7 @@ describe('Acceptance: every placement adds exactly 4 cells', () => {
     const routes = getBag2Routes(id, false);
     for (let ri = 0; ri < routes.length; ri++) {
       test(`${id}/${routes[ri]!.routeId}: 4 cells per step`, () => {
-        const state = createVisualizerState(id, false, ri);
+        const state = buildFlatSequence(id, false, ri);
         for (let i = 0; i < state.steps.length; i++) {
           const n = state.steps[i]!.newCells.length;
           if (n !== 4 && n !== 0) {
@@ -107,7 +148,7 @@ describe('Acceptance: base board matches wiki residual', () => {
       if (!wikiResidual) continue;
 
       test(`${id}/${route.routeId}: engine base board = wiki residual (${wikiResidual.length} cells)`, () => {
-        const state = createVisualizerState(id, false, ri);
+        const state = buildFlatSequence(id, false, ri);
         // Base board = Bag 1 final + hold piece (computed directly, not from step sequence)
         const bag1Final = state.bag1End > 0 ? state.steps[state.bag1End - 1]!.board : Array.from({length:20}, () => Array(10).fill(null));
         const base = bag1Final.map((r: any) => [...r]);

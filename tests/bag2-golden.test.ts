@@ -30,7 +30,7 @@ describe('Bag 2 golden test: codebase matches Hard Drop wiki', () => {
 
     for (const [routeId, expectedPieces] of Object.entries(openerGolden)) {
       test(`${openerId} / ${routeId} — all 6 pieces match wiki coordinates`, async () => {
-        const { getBag2Routes } = await import('../src/modes/visualizer.ts');
+        const { getBag2Routes } = await import('../src/openers/bag2-routes.ts');
         const routes = getBag2Routes(openerId, false);
         const route = routes.find((r) => r.routeId === routeId);
         expect(route).toBeDefined();
