@@ -167,11 +167,19 @@ export function createManualPlayHandler(
     if (REPEAT_KEYS.has(code)) {
       e.preventDefault();
       const now = performance.now();
+      // Fire the initial move IMMEDIATELY on keydown so quick taps always
+      // register — without this, a fast keyup before the next rAF tick would
+      // flip pressed=false and the initial move would be lost.
+      const action = REPEAT_ACTION_MAP[code];
+      if (action) {
+        syncActivePiece();
+        processRepeat(action, getSession().board);
+      }
       keyStates.set(code, {
         pressed: true,
         downAt: now,
         lastRepeatAt: now,
-        firedInitial: false,
+        firedInitial: true,
       });
     }
   }

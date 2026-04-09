@@ -60,8 +60,14 @@ function frame(now: number): void {
   // phase/playMode and no-ops when not in a manual reveal.
   manual.tick(now);
 
-  if (dirty) {
-    renderSession(ctx!, session);
+  // In manual reveal, the active piece moves without the Session dispatching,
+  // so we must redraw every frame to show movement/rotation/ghost updates.
+  const isManualReveal =
+    (session.phase === 'reveal1' || session.phase === 'reveal2') &&
+    session.playMode === 'manual';
+
+  if (dirty || isManualReveal) {
+    renderSession(ctx!, session, manual.getActivePiece());
     dirty = false;
   }
   requestAnimationFrame(frame);

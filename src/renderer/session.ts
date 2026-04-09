@@ -31,6 +31,8 @@
 
 import type { PieceType } from '../core/types';
 import type { OpenerID } from '../openers/types';
+import type { ActivePiece } from '../core/srs';
+import { getPieceCells, getGhostPosition } from '../core/srs';
 import {
   CANVAS_W,
   CANVAS_H,
@@ -43,11 +45,6 @@ import { OPENERS, DECISION_PIECES, DECISION_PIECES_MIRROR } from '../openers/dec
 import { getBag2Routes } from '../openers/bag2-routes';
 import type { Session } from '../session';
 
-// Locally derive the Phase type from Session — avoids assuming Agent A
-// exports Phase as a separate top-level type alias. If they do, this still
-// resolves to the same string-literal union.
-type Phase = Session['phase'];
-
 const FONT = '-apple-system, sans-serif';
 
 // ── Layout constants ──
@@ -56,12 +53,15 @@ const TITLE_BAR_H = 36;
 const KEYBIND_BAR_H = 36;
 
 // Board area (left half).
-const BOARD_CELL = 24;
-const BOARD_VISIBLE_ROWS = 14; // show bottom 14 rows
+// Show the full 20-row playfield so spawn-row pieces are visible in manual
+// mode. At 28px cells this is 280×560 — fits the 640×720 canvas with room
+// for title bar (36), top pad (16), and keybind bar (36).
+const BOARD_CELL = 28;
+const BOARD_VISIBLE_ROWS = 20;
 const BOARD_X = 24;
 const BOARD_Y = TITLE_BAR_H + 16;
-const BOARD_W = 10 * BOARD_CELL; // 240
-const BOARD_H = BOARD_VISIBLE_ROWS * BOARD_CELL;
+const BOARD_W = 10 * BOARD_CELL; // 280
+const BOARD_H = BOARD_VISIBLE_ROWS * BOARD_CELL; // 560
 
 // Right panel.
 const PANEL_X = BOARD_X + BOARD_W + 24;
@@ -91,6 +91,7 @@ const OPENER_SHORT: Record<OpenerID, string> = {
 export function renderSession(
   ctx: CanvasRenderingContext2D,
   session: Session,
+  activePiece: ActivePiece | null = null,
 ): void {
   // 1. Clear canvas.
   ctx.fillStyle = COLORS.canvasBg;
@@ -100,7 +101,7 @@ export function renderSession(
   drawTitleBar(ctx, session);
 
   // 3. Live board (left).
-  drawLiveBoard(ctx, session);
+  drawLiveBoard(ctx, session, activePiece);
 
   // 4. Phase-specific right panel.
   switch (session.phase) {
@@ -158,7 +159,11 @@ function drawTitleBar(ctx: CanvasRenderingContext2D, session: Session): void {
 // Live board (left)
 // ═══════════════════════════════════════════════════════════════════════════
 
-function drawLiveBoard(ctx: CanvasRenderingContext2D, session: Session): void {
+function drawLiveBoard(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+  activePiece: ActivePiece | null = null,
+): void {
   // Background.
   ctx.fillStyle = COLORS.boardBg;
   ctx.fillRect(BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
@@ -211,6 +216,42 @@ function drawLiveBoard(ctx: CanvasRenderingContext2D, session: Session): void {
     session.phase === 'reveal1' || session.phase === 'reveal2';
   if (isReveal && session.playMode === 'manual') {
     drawNextTargetGhost(ctx, session, startBoardRow);
+  }
+
+  // Active piece + hard-drop ghost — only in manual reveal mode.
+  if (isReveal && session.playMode === 'manual' && activePiece) {
+    drawActivePiece(ctx, session.board, activePiece, startBoardRow);
+  }
+}
+
+function drawActivePiece(
+  ctx: CanvasRenderingContext2D,
+  board: import('../core/srs').Board,
+  piece: ActivePiece,
+  startBoardRow: number,
+): void {
+  const color = COLORS.pieces[piece.type] ?? '#FFFFFF';
+
+  // Hard-drop ghost — translucent silhouette at the landing row.
+  const ghost = getGhostPosition(board, piece);
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  for (const { col, row } of getPieceCells(ghost)) {
+    if (row < startBoardRow || row >= 20) continue;
+    const visR = row - startBoardRow;
+    const px = BOARD_X + col * BOARD_CELL;
+    const py = BOARD_Y + visR * BOARD_CELL;
+    drawCell(ctx, px, py, BOARD_CELL, color);
+  }
+  ctx.restore();
+
+  // Active piece itself at full opacity.
+  for (const { col, row } of getPieceCells(piece)) {
+    if (row < startBoardRow || row >= 20) continue;
+    const visR = row - startBoardRow;
+    const px = BOARD_X + col * BOARD_CELL;
+    const py = BOARD_Y + visR * BOARD_CELL;
+    drawCell(ctx, px, py, BOARD_CELL, color);
   }
 }
 
@@ -444,15 +485,18 @@ function drawReveal1Panel(
     y += slotH + 8;
   }
 
-  // Navigation hint.
-  drawPanelLine(
-    ctx,
-    '\u2190 \u2192 step \u00b7 SPACE continue',
-    y,
-    '#9999BB',
-  );
-  y += PANEL_LINE_H;
-  drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
+  // Navigation hint — differs by playMode.
+  if (session.playMode === 'manual') {
+    drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
+  } else {
+    drawPanelLine(ctx, '\u2190 \u2192 step \u00b7 SPACE continue', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -559,15 +603,18 @@ function drawReveal2Panel(
   drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
   y += PANEL_LINE_H + 8;
 
-  // Navigation hint.
-  drawPanelLine(
-    ctx,
-    '\u2190 \u2192 step \u00b7 SPACE new bag',
-    y,
-    '#9999BB',
-  );
-  y += PANEL_LINE_H;
-  drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
+  // Navigation hint — differs by playMode.
+  if (session.playMode === 'manual') {
+    drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
+  } else {
+    drawPanelLine(ctx, '\u2190 \u2192 step \u00b7 SPACE new bag', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -590,7 +637,7 @@ function drawKeybindBar(
   ctx.lineTo(CANVAS_W, y + 0.5);
   ctx.stroke();
 
-  const hint = keybindHintForPhase(session.phase);
+  const hint = keybindHintForSession(session);
 
   ctx.fillStyle = COLORS.panelText;
   ctx.font = `12px ${FONT}`;
@@ -599,15 +646,19 @@ function drawKeybindBar(
   ctx.fillText(hint, CANVAS_W / 2, y + KEYBIND_BAR_H / 2);
 }
 
-function keybindHintForPhase(phase: Phase): string {
-  switch (phase) {
+function keybindHintForSession(session: Session): string {
+  switch (session.phase) {
     case 'guess1':
       return '1/2/3/4 opener  M mirror  ENTER submit  R new bag';
     case 'reveal1':
-      return '\u2190\u2192 step  SPACE next  P auto/manual  R new bag';
+      return session.playMode === 'manual'
+        ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
+        : '\u2190\u2192 step  SPACE next  P manual  R new bag';
     case 'guess2':
       return '1-4 select route  R new bag';
     case 'reveal2':
-      return '\u2190\u2192 step  SPACE new bag  P auto/manual  R new bag';
+      return session.playMode === 'manual'
+        ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
+        : '\u2190\u2192 step  SPACE new bag  P manual  R new bag';
   }
 }
