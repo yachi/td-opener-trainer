@@ -3,7 +3,7 @@ import type { DrillState } from '../modes/drill';
 import type { OpenerID } from '../openers/types';
 import { getPieceCells, getGhostPosition } from '../core/srs';
 import { OPENERS } from '../openers/decision';
-import { getExpectedBoard, getTargetPlacement, getHoldSuggestion, getAllTargets, getBag2RouteLabel } from '../modes/drill';
+import { getExpectedBoard, getTargetPlacement, getAllTargets, getBag2RouteLabel } from '../modes/drill';
 import {
   COLORS,
   CANVAS_W,
@@ -210,8 +210,7 @@ function drawPlayingPhase(ctx: CanvasRenderingContext2D, state: DrillState): voi
   }
 
   // Hold piece
-  const holdSuggestion = getHoldSuggestion(state);
-  drawDrillHold(ctx, state.holdPiece, state.holdUsed, holdSuggestion);
+  drawDrillHold(ctx, state.holdPiece, state.holdUsed);
 
   // Next queue
   drawDrillQueue(ctx, state.queue);
@@ -457,7 +456,6 @@ function drawDrillHold(
   ctx: CanvasRenderingContext2D,
   holdPiece: PieceType | null,
   holdUsed: boolean,
-  holdSuggestion?: PieceType | null,
 ): void {
   const holdX = 20;
   const holdY = BOARD_Y + 20;
@@ -484,19 +482,6 @@ function drawDrillHold(
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(holdX, holdY, boxW, boxH);
     ctx.setLineDash([]);
-  }
-
-  // Hold suggestion indicator (guided mode)
-  if (holdSuggestion != null) {
-    ctx.strokeStyle = '#00E676';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(holdX - 1, holdY - 1, boxW + 2, boxH + 2);
-
-    ctx.fillStyle = '#00E676';
-    ctx.font = `bold 12px ${FONT}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('\u2190 Hold', holdX + boxW / 2, holdY + boxH + 4);
   }
 }
 

@@ -9,10 +9,9 @@ import {
   hardDrop,
   lockPiece,
 } from '../core/srs.ts';
-import { stampCells, cloneBoard, buildSteps, isPlacementReachable } from '../core/engine.ts';
+import { cloneBoard, buildSteps } from '../core/engine.ts';
 import type { Step } from '../core/engine.ts';
-import { generateBag } from '../core/bag.ts';
-import { OPENERS, bestBag2Route } from '../openers/decision.ts';
+import { OPENERS } from '../openers/decision.ts';
 import { OPENER_PLACEMENT_DATA, mirrorPlacementData } from '../openers/placements.ts';
 import { getBag2Routes } from '../openers/bag2-routes.ts';
 
@@ -44,10 +43,6 @@ export interface TargetPlacement {
   piece?: PieceType;  // which piece this target is for (used by getAllTargets)
 }
 
-// ── Constants ──
-
-const MAX_BAG_ATTEMPTS = 1000;
-
 // ── Helpers ──
 
 /**
@@ -60,119 +55,17 @@ function buildBag1Steps(openerId: OpenerID, mirror: boolean): Step[] {
 }
 
 /**
- * Check if a bag can be played using the opener's targets with a single hold.
- * Simulates processing pieces in bag order: each piece is either placed
- * (if its target is supported), held, or swapped with the current hold.
+ * Compare two cell sets by content (order-independent).
+ * Used to identify the holdPlacement step inside a buildSteps result.
  */
-function isBagPlayable(openerId: OpenerID, bag: PieceType[], mirror: boolean): boolean {
-  const steps = buildBag1Steps(openerId, mirror);
-  const targetMap = new Map<PieceType, { col: number; row: number }[]>();
-  for (const step of steps) {
-    targetMap.set(step.piece, step.newCells);
-  }
-
-  let board: Board = createBoard();
-  let hold: PieceType | null = null;
-  let holdUsed = false;
-
-  for (const pieceType of bag) {
-    const target = targetMap.get(pieceType);
-    if (target && isPlacementReachable(board, pieceType, target)) {
-      board = stampCells(board, pieceType, target);
-      holdUsed = false;
-      continue;
-    }
-    if (!holdUsed) {
-      if (hold === null) {
-        hold = pieceType;
-        holdUsed = true;
-        continue;
-      }
-      const holdTarget = targetMap.get(hold);
-      if (holdTarget && isPlacementReachable(board, hold!, holdTarget)) {
-        board = stampCells(board, hold, holdTarget);
-        hold = pieceType;
-        holdUsed = true;
-        continue;
-      }
-    }
-    return false;
-  }
-  return true;
-}
-
-/**
- * Check if a Bag 2 can be played using the route's targets with a single hold.
- * The hold piece from Bag 1 (e.g., L for Honey Cup) is already in hold when Bag 2 starts.
- * Routes may have a holdPlacement for it, or it may be placed as a regular placement.
- */
-function isBag2Playable(
-  openerId: OpenerID,
-  mirror: boolean,
-  routeIndex: number,
-  bag: PieceType[],
-  holdPiece: PieceType | null,
-  bag1Board: Board,
+function cellsEqual(
+  a: { col: number; row: number }[],
+  b: { col: number; row: number }[],
 ): boolean {
-  const routes = getBag2Routes(openerId, mirror);
-  const route = routes[routeIndex];
-  if (!route) return false;
-
-  // Build target map from route placements
-  const targetMap = new Map<PieceType, { col: number; row: number }[]>();
-  for (const p of route.placements) {
-    targetMap.set(p.piece, p.cells);
-  }
-  // Add holdPlacement to target map if it exists (this is where the Bag 1 hold piece goes)
-  if (route.holdPlacement) {
-    targetMap.set(route.holdPlacement.piece, route.holdPlacement.cells);
-  }
-
-  let board: Board = cloneBoard(bag1Board);
-  let hold: PieceType | null = holdPiece;
-  let holdUsed = false;
-
-  for (const pieceType of bag) {
-    const target = targetMap.get(pieceType);
-    if (target && isPlacementReachable(board, pieceType, target)) {
-      board = stampCells(board, pieceType, target);
-      holdUsed = false;
-      continue;
-    }
-    if (!holdUsed) {
-      if (hold === null) {
-        hold = pieceType;
-        holdUsed = true;
-        continue;
-      }
-      const holdTarget = targetMap.get(hold);
-      if (holdTarget && isPlacementReachable(board, hold!, holdTarget)) {
-        board = stampCells(board, hold, holdTarget);
-        hold = pieceType;
-        holdUsed = true;
-        continue;
-      }
-    }
-    return false;
-  }
-  return true;
-}
-
-/**
- * Generate bags until one is buildable AND playable for the given opener.
- */
-function generateBuildableBag(openerId: OpenerID): { bag: PieceType[]; mirror: boolean } {
-  const def = OPENERS[openerId];
-  for (let i = 0; i < MAX_BAG_ATTEMPTS; i++) {
-    const bag = generateBag();
-    if (def.canBuild(bag) && isBagPlayable(openerId, bag, false)) {
-      return { bag, mirror: false };
-    }
-    if (def.canBuildMirror(bag) && isBagPlayable(openerId, bag, true)) {
-      return { bag, mirror: true };
-    }
-  }
-  throw new Error(`Could not generate playable bag for ${openerId} in ${MAX_BAG_ATTEMPTS} attempts`);
+  if (a.length !== b.length) return false;
+  const key = (c: { col: number; row: number }) => `${c.col},${c.row}`;
+  const aSet = new Set(a.map(key));
+  return b.every((c) => aSet.has(key(c)));
 }
 
 function spawnNextFromQueue(queue: PieceType[]): { piece: ActivePiece; remaining: PieceType[] } | null {
@@ -183,29 +76,45 @@ function spawnNextFromQueue(queue: PieceType[]): { piece: ActivePiece; remaining
 
 // ── Public API ──
 
-export function createDrillState(openerId: OpenerID): DrillState {
-  const { bag, mirror } = generateBuildableBag(openerId);
-  const queue = [...bag];
-  const spawn = spawnNextFromQueue(queue);
-  // Derive from placement data: 7 for Honey Cup/Gamushiro, 6 for MS2/Stray Cannon
+export function createDrillState(
+  openerId: OpenerID,
+  opts: { mirror?: boolean; routeIndex?: number } = {},
+): DrillState {
+  const mirror = opts.mirror ?? Math.random() < 0.5;
+  const routeIndex = opts.routeIndex ?? 0;
+
   const rawData = OPENER_PLACEMENT_DATA[openerId];
   const data = mirror ? mirrorPlacementData(rawData) : rawData;
-  const targetPieceCount = data.placements.length;
+
+  // Gamushiro form_2 needs bag1Reduced (drop last L placement) — see visualizer.ts:73-85.
+  const needsReduced = openerId === 'gamushiro' && routeIndex === 1;
+  const placements = needsReduced ? data.placements.slice(0, -1) : data.placements;
+
+  const steps = buildSteps(placements);
+  const queue = steps.map((s) => s.piece);
+  const targetPieceCount = queue.length;
+
+  if (queue.length === 0) {
+    throw new Error(`No placements for ${openerId} route ${routeIndex}`);
+  }
+
+  const first = queue.shift()!;
+  const activePiece = spawnPiece(first);
 
   return {
     phase: 'playing',
     openerId,
     mirror,
     board: createBoard(),
-    activePiece: spawn ? spawn.piece : null,
+    activePiece,
     holdPiece: null,
     holdUsed: false,
-    queue: spawn ? spawn.remaining : [],
+    queue,
     piecesPlaced: 0,
-    bagPieces: [...bag],
+    bagPieces: [first, ...queue],
     guided: true,
     bagNumber: 1,
-    routeIndex: -1,
+    routeIndex,
     targetPieceCount,
     bag1Board: null,
     cachedSteps: null,
@@ -290,26 +199,41 @@ export function hardDropPiece(state: DrillState): DrillState {
     };
   }
 
-  // Spawn next piece
+  // Spawn next piece from queue
   const spawn = spawnNextFromQueue(state.queue);
-  if (!spawn) {
+  if (spawn) {
     return {
       ...state,
       board: newBoard,
-      activePiece: null,
+      activePiece: spawn.piece,
+      queue: spawn.remaining,
       piecesPlaced: newPiecesPlaced,
-      phase: 'failed',
+      holdUsed: false,
       cachedSteps: null,
     };
   }
 
+  // Queue empty but hold has piece — auto-spawn the held piece (route relies on hold).
+  if (state.holdPiece !== null && newPiecesPlaced < state.targetPieceCount) {
+    return {
+      ...state,
+      board: newBoard,
+      activePiece: spawnPiece(state.holdPiece),
+      holdPiece: null,
+      queue: [],
+      piecesPlaced: newPiecesPlaced,
+      holdUsed: false,
+      cachedSteps: null,
+    };
+  }
+
+  // Queue empty, no hold — fail (shouldn't happen with the deterministic queue).
   return {
     ...state,
     board: newBoard,
-    activePiece: spawn.piece,
-    queue: spawn.remaining,
+    activePiece: null,
     piecesPlaced: newPiecesPlaced,
-    holdUsed: false,
+    phase: 'failed',
     cachedSteps: null,
   };
 }
@@ -515,20 +439,6 @@ export function getAllTargets(state: DrillState): TargetPlacement[] {
   return targets;
 }
 
-export function getHoldSuggestion(state: DrillState): PieceType | null {
-  if (!state.guided || state.phase !== 'playing' || !state.activePiece) return null;
-
-  // No hold suggestion during Bag 2 (hold carries from Bag 1, no suggestion needed)
-  if (state.bagNumber === 2) return null;
-
-  const def = OPENERS[state.openerId];
-  const holdPiece = state.mirror ? def.holdPieceMirror : def.holdPiece;
-  if (state.activePiece.type === holdPiece && state.holdPiece === null) {
-    return holdPiece;
-  }
-  return null;
-}
-
 /**
  * Get the expected board after completing the current bag.
  * Uses cached steps — no redundant BFS.
@@ -546,60 +456,64 @@ export function getExpectedBoard(state: DrillState): Board {
 
 /**
  * Transition from Bag 1 complete to Bag 2 playing.
- * Generates a new 7-bag, selects the best route, and sets up the Bag 2 drill.
+ * Builds the deterministic Bag 2 queue from buildSteps on top of bag1Board.
+ * The route was committed at createDrillState time.
  */
 export function transitionToBag2(state: DrillState): DrillState {
   if (state.phase !== 'bag1_complete') return state;
 
-  const bag1Board = state.bag1Board ?? state.board;
-
-  // Generate a playable Bag 2 with retry loop
-  let bag2: PieceType[] | null = null;
-  let chosenRouteIndex = 0;
-
-  for (let i = 0; i < MAX_BAG_ATTEMPTS; i++) {
-    const candidate = generateBag();
-    const { routeIndex: ri } = bestBag2Route(state.openerId, state.mirror, candidate);
-    if (isBag2Playable(state.openerId, state.mirror, ri, candidate, state.holdPiece, bag1Board)) {
-      bag2 = candidate;
-      chosenRouteIndex = ri;
-      break;
-    }
-  }
-
-  // Fallback: use last generated bag even if not verified playable
-  if (!bag2) {
-    bag2 = generateBag();
-    const { routeIndex: ri } = bestBag2Route(state.openerId, state.mirror, bag2);
-    chosenRouteIndex = ri;
-  }
-
-  // Count how many pieces to place: route placements + holdPlacement if exists
+  const bag1Board = state.bag1Board!;
+  const routeIndex = state.routeIndex >= 0 ? state.routeIndex : 0;
   const routes = getBag2Routes(state.openerId, state.mirror);
-  const route = routes[chosenRouteIndex];
-  const targetPieceCount = route
-    ? (route.holdPlacement ? 1 : 0) + route.placements.length
-    : 0;
+  const route = routes[routeIndex];
+  if (!route) return state;
 
-  const queue = [...bag2];
-  const spawn = spawnNextFromQueue(queue);
+  const allPlacements = [
+    ...(route.holdPlacement ? [route.holdPlacement] : []),
+    ...route.placements,
+  ];
+  const bag2Steps = buildSteps(allPlacements, bag1Board);
+
+  // Queue = BFS order. If route has holdPlacement and Bag 1 left a piece in hold,
+  // that piece is supplied from hold (auto-spawned) — drop the matching step from
+  // the queue so it isn't requested twice.
+  let queuePieces: PieceType[];
+  if (route.holdPlacement && state.holdPiece !== null) {
+    const holdCells = route.holdPlacement.cells;
+    queuePieces = [];
+    let foundHold = false;
+    for (const step of bag2Steps) {
+      if (!foundHold && cellsEqual(step.newCells, holdCells)) {
+        foundHold = true;
+        continue;
+      }
+      queuePieces.push(step.piece);
+    }
+  } else {
+    queuePieces = bag2Steps.map((s) => s.piece);
+  }
+
+  const targetPieceCount = bag2Steps.length;
+
+  if (queuePieces.length === 0) return state;
+
+  const first = queuePieces.shift()!;
+  const activePiece = spawnPiece(first);
 
   return {
+    ...state,
     phase: 'playing',
-    openerId: state.openerId,
-    mirror: state.mirror,
-    board: cloneBoard(state.board), // continue on same board
-    activePiece: spawn ? spawn.piece : null,
-    holdPiece: state.holdPiece, // carry hold piece from Bag 1
+    board: cloneBoard(bag1Board),
+    activePiece,
+    holdPiece: state.holdPiece,
     holdUsed: false,
-    queue: spawn ? spawn.remaining : [],
+    queue: queuePieces,
     piecesPlaced: 0,
-    bagPieces: [...bag2],
-    guided: state.guided,
+    bagPieces: [first, ...queuePieces],
     bagNumber: 2,
-    routeIndex: chosenRouteIndex,
+    routeIndex,
     targetPieceCount,
-    bag1Board: state.bag1Board,
+    bag1Board,
     cachedSteps: null,
   };
 }

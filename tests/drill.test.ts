@@ -14,11 +14,9 @@ import {
   getExpectedBoard,
   toggleGuided,
   getTargetPlacement,
-  getHoldSuggestion,
   getAllTargets,
 } from '../src/modes/drill.ts';
 import type { DrillState } from '../src/modes/drill.ts';
-import { OPENERS } from '../src/openers/decision.ts';
 import { OPENER_PLACEMENT_DATA } from '../src/openers/placements.ts';
 import { createBoard, spawnPiece } from '../src/core/srs.ts';
 import { getOpenerSequence } from '../src/modes/visualizer.ts';
@@ -78,9 +76,11 @@ describe('D1: createDrillState', () => {
     expect(state.activePiece!.type).toBe(state.bagPieces[0]);
   });
 
-  test('queue contains remaining 6 pieces', () => {
+  test('queue contains remaining pieces (targetPieceCount - 1)', () => {
+    // MS2 has 6 placements, so queue after spawn has 5 pieces.
     const state = createDrillState('ms2');
-    expect(state.queue.length).toBe(6);
+    expect(state.queue.length).toBe(state.targetPieceCount - 1);
+    expect(state.queue.length).toBe(5);
   });
 
   test('board is empty on creation', () => {
@@ -102,12 +102,15 @@ describe('D1: createDrillState', () => {
     expect(state.piecesPlaced).toBe(0);
   });
 
-  test('generated bag is buildable for the selected opener', () => {
+  test('generated bag length matches targetPieceCount for the selected opener', () => {
+    // Post-L9: createDrillState produces a deterministic BFS-ordered queue, not a
+    // random bag. canBuild/canBuildMirror are designed for random bag order (where
+    // the hold piece can appear anywhere) and fail on BFS placement order. Instead,
+    // we verify the deterministic invariant: queue length equals targetPieceCount.
     for (const id of OPENER_IDS) {
       const state = createDrillState(id);
-      const def = OPENERS[id];
-      const buildable = def.canBuild(state.bagPieces) || def.canBuildMirror(state.bagPieces);
-      expect(buildable).toBe(true);
+      expect(state.bagPieces.length).toBe(state.targetPieceCount);
+      expect(state.targetPieceCount).toBe(OPENER_PLACEMENT_DATA[id].placements.length);
     }
   });
 
@@ -219,10 +222,11 @@ describe('D1: createDrillState', () => {
     expect(state.mirror).toBe(false);
   });
 
-  test('bagPieces is a copy (not a reference to queue)', () => {
+  test('bagPieces contains all pieces including the active one', () => {
+    // Post-L9: bagPieces length equals placement count (6 for MS2), not 7.
     const state = createDrillState('ms2');
-    expect(state.bagPieces.length).toBe(7);
-    // bagPieces should contain all 7 pieces even though queue has 6
+    expect(state.bagPieces.length).toBe(state.targetPieceCount);
+    // bagPieces should contain all pieces including the active one first
     expect(state.bagPieces[0]).toBe(state.activePiece!.type);
   });
 });
@@ -801,42 +805,6 @@ describe('D12: guided mode', () => {
     expect(getTargetPlacement(nonPlaying)).toBeNull();
   });
 
-  test('getHoldSuggestion returns hold piece type when active piece matches', () => {
-    // L is MS2 hold piece; start with L first
-    const state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
-    expect(state.activePiece!.type).toBe('L');
-    expect(state.holdPiece).toBeNull();
-    const suggestion = getHoldSuggestion(state);
-    expect(suggestion).toBe('L');
-  });
-
-  test('getHoldSuggestion returns null when hold already used', () => {
-    // Hold L, then swap back — holdPiece is no longer null
-    let state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
-    state = holdCurrentPiece(state); // hold L, get J
-    state = hardDropPiece(state); // drop J, reset holdUsed
-    // Now swap: hold current (T) to get L back
-    state = holdCurrentPiece(state); // hold T, get L
-    // Now active is L, holdPiece is T (not null)
-    expect(state.activePiece!.type).toBe('L');
-    expect(state.holdPiece).not.toBeNull();
-    const suggestion = getHoldSuggestion(state);
-    expect(suggestion).toBeNull();
-  });
-
-  test('getHoldSuggestion returns null when not guided', () => {
-    let state = createDrillStateWithBag('ms2', MS2_BAG_L_FIRST, false);
-    state = toggleGuided(state);
-    expect(getHoldSuggestion(state)).toBeNull();
-  });
-
-  test('getHoldSuggestion returns null when active piece is not the hold piece', () => {
-    // MS2_BAG starts with J, which is not the hold piece (L)
-    const state = createDrillStateWithBag('ms2', MS2_BAG, false);
-    expect(state.activePiece!.type).toBe('J');
-    expect(getHoldSuggestion(state)).toBeNull();
-  });
-
   test('resetDrill preserves guided state', () => {
     let state = createDrillStateWithBag('ms2', MS2_BAG, false);
     state = toggleGuided(state); // guided = false
@@ -1026,7 +994,6 @@ describe('D13: target matches visualizer data through full placement sequence', 
 
         // First piece is the hold piece — hold it
         expect(state.activePiece!.type).toBe(sequence.holdPiece);
-        expect(getHoldSuggestion(state)).toBe(sequence.holdPiece);
         state = holdCurrentPiece(state);
 
         // Walk through placement steps. For 7-piece openers, the holdPiece
