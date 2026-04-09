@@ -108,10 +108,18 @@ export interface Session {
 }
 
 /**
- * Discriminated union of every reducer action. Fourteen actions — nine
- * session-level (setGuess, submitGuess, etc.) and five manual-play
- * (movePiece, rotatePiece, hardDrop, hold, softDrop). The old pieceDrop
- * action is DELETED — hardDrop absorbed it (reads activePiece from state).
+ * Discriminated union of every reducer action.
+ *
+ *   - 9 session-level: newSession, setGuess, toggleMirror, submitGuess,
+ *     stepForward, stepBackward, advancePhase, togglePlayMode, selectRoute
+ *   - 5 manual-play: movePiece, rotatePiece, hardDrop, hold, softDrop
+ *   - 2 intent actions: primary, pick
+ *
+ * Intent actions (`primary`, `pick`) let the keyboard handler stay dumb —
+ * it maps physical keys to intents and the reducer interprets them based
+ * on the full Session state. This prevents the bug class where
+ * src/input/keyboard.ts becomes a partial interpreter of Session state
+ * and grows with every new phase variant.
  */
 export type SessionAction =
   | { type: 'newSession'; bag1?: PieceType[]; bag2?: PieceType[] }
@@ -128,7 +136,22 @@ export type SessionAction =
   | { type: 'rotatePiece'; direction: 1 | -1 }
   | { type: 'hardDrop' }
   | { type: 'hold' }
-  | { type: 'softDrop' };
+  | { type: 'softDrop' }
+  // ── Intent actions (keyboard dispatches these; reducer interprets) ──
+  | { type: 'primary' }
+  | { type: 'pick'; index: number };
+
+/**
+ * The opener order that `pick` maps to in guess1. Position N corresponds
+ * to digit key (N+1). Kept in sync with src/input/keyboard.ts and with the
+ * rule-card display order in src/renderer/session.ts.
+ */
+export const OPENER_BY_PICK: OpenerID[] = [
+  'stray_cannon',
+  'honey_cup',
+  'gamushiro',
+  'ms2',
+];
 
 export interface CreateSessionOptions {
   bag1?: PieceType[];
@@ -536,6 +559,64 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
         activePiece: spawnPiece(swappedType),
         holdUsed: true,
       };
+    }
+
+    // ── Intent actions — interpreted by the reducer, not the keyboard ──
+    //
+    // Design rationale: keyboard.ts used to be a partial interpreter of
+    // Session state (deciding what SPACE means based on phase + playMode).
+    // That created a bug class where new phase variants kept breaking
+    // keyboard.ts. These intent cases move ALL the decision-making into
+    // the reducer where the full Session context is available.
+    //
+    // Spec: tests/diag-l9-intent.test.ts (Phase 2.5 empirical proof).
+
+    case 'primary': {
+      // SPACE / ENTER — "do the main thing for the current state."
+      switch (state.phase) {
+        case 'guess1':
+          return state.guess !== null
+            ? sessionReducer(state, { type: 'submitGuess' })
+            : sessionReducer(state, { type: 'newSession' });
+        case 'reveal1':
+        case 'reveal2':
+          // Manual with an active piece: drop it.
+          // Manual at end (activePiece === null) OR auto mode: advance phase.
+          // This branch is THE BUG FIX for "stuck after placing last piece
+          // in manual reveal" — hardDrop would have been a no-op, so we
+          // fall through to advancePhase instead.
+          if (state.playMode === 'manual' && state.activePiece !== null) {
+            return sessionReducer(state, { type: 'hardDrop' });
+          }
+          return sessionReducer(state, { type: 'advancePhase' });
+        case 'guess2':
+          return sessionReducer(state, { type: 'newSession' });
+      }
+    }
+
+    case 'pick': {
+      // Digit keys 1-4 — context-dependent.
+      switch (state.phase) {
+        case 'guess1': {
+          const opener = OPENER_BY_PICK[action.index];
+          if (!opener) return state;
+          const mirror = state.guess?.mirror ?? false;
+          return sessionReducer(state, {
+            type: 'setGuess',
+            opener,
+            mirror,
+          });
+        }
+        case 'guess2':
+          return sessionReducer(state, {
+            type: 'selectRoute',
+            routeIndex: action.index,
+          });
+        // pick is a no-op in reveal phases.
+        case 'reveal1':
+        case 'reveal2':
+          return state;
+      }
     }
 
     default:

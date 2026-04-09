@@ -174,91 +174,58 @@ describe('R key is global: dispatches newSession in every phase', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Group 2: P key — togglePlayMode only in reveal phases
+// Group 2: P key — stateless togglePlayMode dispatch
+//
+// Keyboard dispatches P unconditionally. The reducer's togglePlayMode
+// case is a pure state transition (auto <-> manual with spawn/clear
+// hooks) and has no phase guard — the toggle is meaningful in reveal
+// phases and benign in guess phases (no effect on gameplay).
 // ═══════════════════════════════════════════════════════════════════════════
-describe('P key: togglePlayMode only in reveal phases', () => {
-  test('KeyP in reveal1 dispatches togglePlayMode', () => {
-    const { dispatch } = rig(makeSession({ phase: 'reveal1' }));
-    fireKeyDown('KeyP');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'togglePlayMode' });
-  });
-
-  test('KeyP in reveal2 dispatches togglePlayMode', () => {
-    const { dispatch } = rig(makeSession({ phase: 'reveal2' }));
-    fireKeyDown('KeyP');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'togglePlayMode' });
-  });
-
-  test('KeyP in guess1 is ignored (no dispatch)', () => {
-    const { dispatch } = rig(makeSession({ phase: 'guess1' }));
-    fireKeyDown('KeyP');
-    expect(dispatch).not.toHaveBeenCalled();
-  });
-
-  test('KeyP in guess2 is ignored (no dispatch)', () => {
-    const { dispatch } = rig(makeSession({ phase: 'guess2' }));
-    fireKeyDown('KeyP');
-    expect(dispatch).not.toHaveBeenCalled();
-  });
+describe('P key: togglePlayMode in every phase', () => {
+  const phases: Session['phase'][] = ['guess1', 'reveal1', 'guess2', 'reveal2'];
+  for (const phase of phases) {
+    test(`KeyP in ${phase} dispatches togglePlayMode`, () => {
+      const { dispatch } = rig(makeSession({ phase }));
+      fireKeyDown('KeyP');
+      expect(dispatch).toHaveBeenCalledWith({ type: 'togglePlayMode' });
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Group 3: guess1 phase keys
+//
+// Keyboard is a dumb key→intent mapper post-intent-reframe. Digit keys
+// dispatch `pick(index)` regardless of phase; the reducer interprets
+// pick as setGuess in guess1. SPACE and ENTER dispatch `primary`; the
+// reducer interprets primary as submitGuess (with guess) or newSession
+// (without guess). The reducer-level behavior is covered by
+// tests/diag-l9-intent.test.ts — these tests prove ONLY the key→action
+// mapping.
 // ═══════════════════════════════════════════════════════════════════════════
 describe('guess1: opener picker, mirror, submit/skip', () => {
-  test('Digit1 dispatches setGuess { stray_cannon, mirror:false }', () => {
+  test('Digit1 dispatches pick(0)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1' }));
     fireKeyDown('Digit1');
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'setGuess',
-      opener: 'stray_cannon',
-      mirror: false,
-    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 0 });
   });
 
-  test('Digit2 dispatches setGuess { honey_cup, mirror:false }', () => {
+  test('Digit2 dispatches pick(1)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1' }));
     fireKeyDown('Digit2');
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'setGuess',
-      opener: 'honey_cup',
-      mirror: false,
-    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 1 });
   });
 
-  test('Digit3 dispatches setGuess { gamushiro, mirror:false }', () => {
+  test('Digit3 dispatches pick(2)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1' }));
     fireKeyDown('Digit3');
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'setGuess',
-      opener: 'gamushiro',
-      mirror: false,
-    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 2 });
   });
 
-  test('Digit4 dispatches setGuess { ms2, mirror:false }', () => {
+  test('Digit4 dispatches pick(3)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1' }));
     fireKeyDown('Digit4');
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'setGuess',
-      opener: 'ms2',
-      mirror: false,
-    });
-  });
-
-  test('Digit1 preserves existing mirror state', () => {
-    const { dispatch } = rig(
-      makeSession({
-        phase: 'guess1',
-        guess: { opener: 'honey_cup', mirror: true },
-      }),
-    );
-    fireKeyDown('Digit1');
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'setGuess',
-      opener: 'stray_cannon',
-      mirror: true,
-    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 3 });
   });
 
   test('KeyM dispatches toggleMirror', () => {
@@ -267,7 +234,7 @@ describe('guess1: opener picker, mirror, submit/skip', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'toggleMirror' });
   });
 
-  test('Enter with a guess set dispatches submitGuess', () => {
+  test('Enter dispatches primary', () => {
     const { dispatch } = rig(
       makeSession({
         phase: 'guess1',
@@ -275,16 +242,19 @@ describe('guess1: opener picker, mirror, submit/skip', () => {
       }),
     );
     fireKeyDown('Enter');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'submitGuess' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
-  test('Enter without a guess is ignored', () => {
+  test('Enter without a guess still dispatches primary (reducer decides no-op vs new session)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1', guess: null }));
     fireKeyDown('Enter');
-    expect(dispatch).not.toHaveBeenCalled();
+    // Keyboard is stateless — it always dispatches primary. The reducer's
+    // primary handler decides what to do based on guess being null (skip
+    // to a new session).
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
-  test('Space with a guess dispatches submitGuess', () => {
+  test('Space dispatches primary (reducer interprets to submitGuess)', () => {
     const { dispatch } = rig(
       makeSession({
         phase: 'guess1',
@@ -292,13 +262,13 @@ describe('guess1: opener picker, mirror, submit/skip', () => {
       }),
     );
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'submitGuess' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
-  test('Space without a guess dispatches newSession (skip)', () => {
+  test('Space without a guess dispatches primary (reducer interprets as skip)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1', guess: null }));
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'newSession' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
   test('ArrowLeft in guess1 is ignored', () => {
@@ -315,43 +285,47 @@ describe('guess1: opener picker, mirror, submit/skip', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Group 4: guess2 phase keys
+// Group 4: guess2 phase keys (digit → pick, space → primary)
 // ═══════════════════════════════════════════════════════════════════════════
 describe('guess2: route selector, skip', () => {
-  test('Digit1 dispatches selectRoute { routeIndex: 0 }', () => {
+  test('Digit1 dispatches pick(0)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess2' }));
     fireKeyDown('Digit1');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'selectRoute', routeIndex: 0 });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 0 });
   });
 
-  test('Digit2 dispatches selectRoute { routeIndex: 1 }', () => {
+  test('Digit2 dispatches pick(1)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess2' }));
     fireKeyDown('Digit2');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'selectRoute', routeIndex: 1 });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 1 });
   });
 
-  test('Digit3 dispatches selectRoute { routeIndex: 2 }', () => {
+  test('Digit3 dispatches pick(2)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess2' }));
     fireKeyDown('Digit3');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'selectRoute', routeIndex: 2 });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 2 });
   });
 
-  test('Digit4 dispatches selectRoute { routeIndex: 3 }', () => {
+  test('Digit4 dispatches pick(3)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess2' }));
     fireKeyDown('Digit4');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'selectRoute', routeIndex: 3 });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 3 });
   });
 
-  test('Space dispatches newSession', () => {
+  test('Space dispatches primary (reducer interprets as new session)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess2' }));
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'newSession' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
-  test('KeyM in guess2 is ignored (no mirror toggle in bag2)', () => {
+  test('KeyM in guess2 dispatches toggleMirror (reducer guards to guess1)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess2' }));
     fireKeyDown('KeyM');
-    expect(dispatch).not.toHaveBeenCalled();
+    // Keyboard is stateless — it always dispatches toggleMirror for M.
+    // The reducer's toggleMirror case guards to `phase === 'guess1'`, so
+    // this becomes a no-op at the reducer level. The split is intentional:
+    // keyboard doesn't need to know about phase-specific guards.
+    expect(dispatch).toHaveBeenCalledWith({ type: 'toggleMirror' });
   });
 
   test('ArrowLeft in guess2 is ignored', () => {
@@ -381,12 +355,12 @@ describe('reveal auto: step through, advance, toggle', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'stepForward' });
   });
 
-  test('Space in reveal1 auto → advancePhase', () => {
+  test('Space in reveal1 auto → primary (reducer interprets as advancePhase)', () => {
     const { dispatch } = rig(
       makeSession({ phase: 'reveal1', playMode: 'auto' }),
     );
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'advancePhase' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
   test('ArrowLeft in reveal2 auto → stepBackward', () => {
@@ -397,12 +371,12 @@ describe('reveal auto: step through, advance, toggle', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'stepBackward' });
   });
 
-  test('Space in reveal2 auto → advancePhase', () => {
+  test('Space in reveal2 auto → primary (reducer interprets as advancePhase)', () => {
     const { dispatch } = rig(
       makeSession({ phase: 'reveal2', playMode: 'auto' }),
     );
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'advancePhase' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
   test('KeyX in reveal auto is ignored (no rotate without manual)', () => {
@@ -482,10 +456,14 @@ describe('reveal manual: gameplay keys', () => {
     });
   });
 
-  test('Space → hardDrop', () => {
+  test('Space → primary (reducer interprets to hardDrop or advancePhase)', () => {
+    // The bug this redesign fixes: SPACE used to always dispatch hardDrop
+    // in manual reveal, which became a no-op after the last piece was
+    // placed, stranding the user. Now SPACE dispatches `primary` and the
+    // reducer decides based on state.activePiece.
     const { dispatch } = rig(manualSession());
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'hardDrop' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
   test('KeyC → hold', () => {
@@ -518,24 +496,27 @@ describe('reveal manual: gameplay keys', () => {
     });
   });
 
-  test('reveal2 manual — Space → hardDrop', () => {
+  test('reveal2 manual — Space → primary', () => {
     const { dispatch } = rig(
       makeSession({ phase: 'reveal2', playMode: 'manual' }),
     );
     fireKeyDown('Space');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'hardDrop' });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
-  test('Digit4 in reveal manual is ignored (not a gameplay key)', () => {
+  test('Digit4 in reveal manual dispatches pick(3) (reducer no-ops in reveal)', () => {
     const { dispatch } = rig(manualSession());
     fireKeyDown('Digit4');
-    expect(dispatch).not.toHaveBeenCalled();
+    // Keyboard is stateless — it always dispatches pick. The reducer's
+    // pick case returns state unchanged in reveal phases. Covered by
+    // tests/diag-l9-intent.test.ts #7.
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 3 });
   });
 
-  test('KeyM in reveal manual is ignored', () => {
+  test('KeyM in reveal manual dispatches toggleMirror (reducer guards)', () => {
     const { dispatch } = rig(manualSession());
     fireKeyDown('KeyM');
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'toggleMirror' });
   });
 });
 

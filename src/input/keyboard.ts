@@ -1,41 +1,44 @@
 /**
- * src/input/keyboard.ts — Unified keyboard handler for the L9 Session app.
+ * src/input/keyboard.ts — dumb key→intent mapper for the L9 Session app.
  *
- * Post-Reframing A+: this module is the ONLY place input state lives. Game
- * state (activePiece, holdPiece, holdUsed) is in Session; DAS/ARR timers
- * live HERE because they're fundamentally a stateful-input concern driven
- * by wall-clock time, not game logic.
+ * This module is INTENTIONALLY ignorant of phase/playMode decision-making.
+ * It maps physical keys to either direct gameplay actions (movePiece,
+ * rotatePiece, hold, softDrop — the Tetris gameplay inputs) or to
+ * INTENT actions (`primary`, `pick`) that the reducer interprets based
+ * on full Session state.
  *
- * setupKeyboard(dispatch, getSession) returns { attach, detach, tick(now) }.
+ * The reducer — not keyboard.ts — decides what SPACE means in each phase.
+ * This dissolves the bug class where keyboard.ts was a partial interpreter
+ * of Session state and kept growing with every new phase variant.
  *
- * Key routing by phase:
- *   guess1     → 1..4 pick opener, M mirror, ENTER/SPACE submit (or skip),
- *                R newSession
- *   guess2     → 1..4 selectRoute, SPACE newSession, R newSession
- *   reveal auto → ←→ stepBackward/Forward, SPACE advancePhase,
- *                 P togglePlayMode, R newSession
- *   reveal manual → ←→ movePiece(±1,0) with DAS/ARR, ↓ softDrop with DAS/ARR,
- *                   ↑/X rotatePiece(+1), Z rotatePiece(-1),
- *                   SPACE hardDrop, C/Shift hold, P togglePlayMode, R newSession
+ * Key mapping (stateful decisions live in session.ts):
+ *   SPACE, ENTER    → primary (reducer decides: submit? hardDrop? advance?)
+ *   Digit 1..4      → pick(index) (reducer decides: setGuess? selectRoute?)
+ *   M               → toggleMirror
+ *   P               → togglePlayMode (only meaningful in reveal phases, but
+ *                     the reducer no-ops elsewhere)
+ *   R               → newSession
+ *   ArrowLeft/Right → stepBackward/Forward in AUTO reveal,
+ *                     movePiece(±1,0) in MANUAL reveal (DAS/ARR)
+ *   ArrowDown       → softDrop (MANUAL only, DAS/ARR)
+ *   ArrowUp, X      → rotatePiece(+1) (MANUAL only)
+ *   Z               → rotatePiece(-1) (MANUAL only)
+ *   C, Shift        → hold (MANUAL only)
  *
- * CRITICAL: DAS/ARR must fire the initial dispatch SYNCHRONOUSLY on keydown.
- * Waiting for the next rAF tick creates a race with keyup (commit 0ddbe99
- * fixed this in the old manual.ts; preserved here).
+ * Directional and gameplay keys still need a phase/mode check because
+ * DAS/ARR has to know whether to auto-repeat (only in manual reveal)
+ * and because arrow keys have different semantics per mode. Those are
+ * the ONLY remaining state-aware branches in this file.
+ *
+ * CRITICAL: DAS/ARR fires the initial dispatch SYNCHRONOUSLY on keydown.
+ * Waiting for the next rAF tick creates a race with keyup (commit 0ddbe99).
  */
 
-import type { OpenerID } from '../openers/types.ts';
 import type { Session, SessionAction } from '../session.ts';
 
 // ── DAS/ARR timing (copied from deleted src/play/manual.ts) ──
 const DAS_DELAY = 167; // ms before auto-repeat starts
 const ARR_RATE = 33;   // ms between auto-repeat moves
-
-const OPENER_BY_DIGIT: Record<number, OpenerID> = {
-  1: 'stray_cannon',
-  2: 'honey_cup',
-  3: 'gamushiro',
-  4: 'ms2',
-};
 
 // Keys that auto-repeat in manual reveal (DAS/ARR).
 const REPEAT_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowDown']);
@@ -83,23 +86,46 @@ export function setupKeyboard(
     const session = getSession();
     const code = e.code;
 
-    // ── Global: R always starts a fresh session ──
+    // ── Stateless key → action map (no phase/mode branching) ──
+    //
+    // These dispatches work the same in every phase. The reducer handles
+    // any phase-specific interpretation.
+
     if (code === 'KeyR') {
       e.preventDefault();
       dispatch({ type: 'newSession' });
       return;
     }
-
-    // ── Global: P toggles playMode (except in guess phases where it's noise) ──
+    if (code === 'KeyM') {
+      e.preventDefault();
+      dispatch({ type: 'toggleMirror' });
+      return;
+    }
     if (code === 'KeyP') {
-      if (session.phase === 'reveal1' || session.phase === 'reveal2') {
-        e.preventDefault();
-        dispatch({ type: 'togglePlayMode' });
-      }
+      e.preventDefault();
+      dispatch({ type: 'togglePlayMode' });
+      return;
+    }
+    if (code === 'Space' || code === 'Enter') {
+      e.preventDefault();
+      dispatch({ type: 'primary' });
+      return;
+    }
+    if (
+      code === 'Digit1' ||
+      code === 'Digit2' ||
+      code === 'Digit3' ||
+      code === 'Digit4'
+    ) {
+      e.preventDefault();
+      const index = parseInt(code.slice(-1), 10) - 1;
+      dispatch({ type: 'pick', index });
       return;
     }
 
-    // ── Manual reveal: gameplay keys ──
+    // ── Directional + gameplay keys (state-aware because semantics differ
+    //    between auto and manual reveal modes) ──
+
     if (isManualReveal(session)) {
       const repeatAction = actionForRepeatKey(code);
       if (repeatAction) {
@@ -122,11 +148,6 @@ export function setupKeyboard(
         dispatch({ type: 'rotatePiece', direction: -1 });
         return;
       }
-      if (code === 'Space') {
-        e.preventDefault();
-        dispatch({ type: 'hardDrop' });
-        return;
-      }
       if (code === 'KeyC' || code === 'ShiftLeft' || code === 'ShiftRight') {
         e.preventDefault();
         dispatch({ type: 'hold' });
@@ -135,73 +156,16 @@ export function setupKeyboard(
       return;
     }
 
-    // ── Session-level keys by phase ──
-    switch (session.phase) {
-      case 'guess1': {
-        if (code === 'Digit1' || code === 'Digit2' || code === 'Digit3' || code === 'Digit4') {
-          e.preventDefault();
-          const digit = parseInt(code.slice(-1), 10);
-          const opener = OPENER_BY_DIGIT[digit];
-          if (!opener) return;
-          const mirror = session.guess?.mirror ?? false;
-          dispatch({ type: 'setGuess', opener, mirror });
-          return;
-        }
-        if (code === 'KeyM') {
-          e.preventDefault();
-          dispatch({ type: 'toggleMirror' });
-          return;
-        }
-        if (code === 'Enter') {
-          e.preventDefault();
-          if (session.guess !== null) dispatch({ type: 'submitGuess' });
-          return;
-        }
-        if (code === 'Space') {
-          e.preventDefault();
-          if (session.guess !== null) {
-            dispatch({ type: 'submitGuess' });
-          } else {
-            dispatch({ type: 'newSession' });
-          }
-          return;
-        }
+    // ── Auto reveal: arrow keys step through cachedSteps ──
+    if (session.phase === 'reveal1' || session.phase === 'reveal2') {
+      if (code === 'ArrowLeft') {
+        e.preventDefault();
+        dispatch({ type: 'stepBackward' });
         return;
       }
-
-      case 'reveal1':
-      case 'reveal2': {
-        // Auto mode (manual is handled above).
-        if (code === 'ArrowLeft') {
-          e.preventDefault();
-          dispatch({ type: 'stepBackward' });
-          return;
-        }
-        if (code === 'ArrowRight') {
-          e.preventDefault();
-          dispatch({ type: 'stepForward' });
-          return;
-        }
-        if (code === 'Space') {
-          e.preventDefault();
-          dispatch({ type: 'advancePhase' });
-          return;
-        }
-        return;
-      }
-
-      case 'guess2': {
-        if (code === 'Digit1' || code === 'Digit2' || code === 'Digit3' || code === 'Digit4') {
-          e.preventDefault();
-          const idx = parseInt(code.slice(-1), 10) - 1;
-          dispatch({ type: 'selectRoute', routeIndex: idx });
-          return;
-        }
-        if (code === 'Space') {
-          e.preventDefault();
-          dispatch({ type: 'newSession' });
-          return;
-        }
+      if (code === 'ArrowRight') {
+        e.preventDefault();
+        dispatch({ type: 'stepForward' });
         return;
       }
     }
