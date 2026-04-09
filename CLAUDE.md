@@ -82,6 +82,12 @@ Use `findFloatingPieces` (piece-level) not `findFloatingCells` (cell-level). Tet
 ### L8. Playwright sessions don't share state with the user's browser
 Playwright has its own localStorage. Changes in headless Playwright don't affect the user's browser. To change user state, add a UI feature or instruct them clearly.
 
+### L9. Delete the fight, not fix symptoms
+When 3+ symptom fixes hit the same module, the abstraction is wrong. The 2026-04-09 drill had 5 recurring bugs (opacity, board basis, BFS reachability, piece count, white outlines) — none fixed the root cause. The root cause was the FIGHT between random bag order and required placement order, reconciled by `isBagPlayable` simulation. Deleting the random bag generation dissolved all 5 bug classes at once. **Rule**: count symptom fixes per module. At 3+, stop fixing and redesign. The new design should DELETE lines, not add them.
+
+### L10. Empirical proof before code for L8/L9 redesigns
+Write diagnostic tests (`tests/diag-*.test.ts`) that validate the design with concrete data BEFORE touching production. The L9 drill mental draft was "95% confident" but empirical testing found 3 critical issues: `canBuild` fails on BFS queues, Honey Cup doctrinal hold stalls, gamushiro form_2 needs bag1Reduced. Without the tests, these would have been new bugs. **Rule**: for any L8/L9 redesign, write the proof test first. The test file IS the design doc. Only write production code after the empirical data validates the design.
+
 ## Technical Reference
 
 ### localStorage Keys
@@ -115,8 +121,9 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/decision.ts` — `bestOpener`, `bestBag2Route`, `DECISION_PIECES`, opener definitions
 - `src/modes/visualizer.ts` — pure state management (162 lines), `createVisualizerState`
 - `src/modes/onboarding.ts` — data-driven onboarding, Bag 1 + Bag 2, all 4 openers
-- `src/modes/drill.ts` — Bag 1 + Bag 2 drill with guided mode, hold simulation
+- `src/modes/drill.ts` — Bag 1 + Bag 2 drill with deterministic BFS queue (L9 redesign), guided targets
 - `src/modes/quiz.ts` — speed quiz: Bag 1 (which opener?) + Bag 2 (which route?), toggle with B
 - `tests/acceptance.test.ts` — 28 acceptance tests: gravity, no disappearing, cell count, wiki oracle
-- `tests/` — 473 tests across 11 files
+- `tests/diag-l9-proof.test.ts` — empirical proof of L9 drill redesign (14 tests, 65 assertions)
+- `tests/` — 542 tests across 14 files
 
