@@ -16,8 +16,8 @@
  *   4. newSession keeps sessionStats; createSession() zeros them.
  *   5. toggleMirror is guarded to phase==='guess1' && guess !== null.
  *   6. pieceDrop compares cells via stringified {col,row} key sets.
- *   7. selectRoute layers bag2 steps onto the bag1 final board from
- *      cachedSteps.at(-1).board.
+ *   7. selectRoute uses getBag2Sequence as single source of truth
+ *      (handles Bag 1 reduction + joint build internally).
  *
  * The reducer is a pure function: NO side effects, NO localStorage, NO
  * persistence. Stats live in memory only — closing the tab IS the reset.
@@ -48,9 +48,9 @@ import {
   OPENER_PLACEMENT_DATA,
   mirrorPlacementData,
   type OpenerPlacementData,
-  type RawPlacement,
 } from './openers/placements.ts';
 import { getBag2Routes } from './openers/bag2-routes.ts';
+import { getBag2Sequence } from './openers/sequences.ts';
 import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
@@ -356,59 +356,16 @@ export function nextDeterministicBag(): PieceType[] {
 }
 
 /**
- * Compute the auto-sequence for a given (opener, mirror, phase). For
- * Bag 1 there is no route; for Bag 2 a routeIndex must be supplied and
- * the steps are layered onto `priorBoard` (the bag1 final board).
+ * Compute the Bag 1 auto-sequence for a given (opener, mirror).
+ * Pure data helper — no routing, no phase awareness.
  */
 export function computeSteps(
   opener: OpenerID,
   mirror: boolean,
-  phase: 'reveal1' | 'reveal2',
-  routeIndex: number,
-  priorBoard: Board,
 ): Step[] {
   const raw = OPENER_PLACEMENT_DATA[opener];
   const data: OpenerPlacementData = mirror ? mirrorPlacementData(raw) : raw;
-
-  if (phase === 'reveal1') {
-    // For gamushiro form_2 the drill uses a reduced Bag 1, but that only
-    // matters once the route is known (phase reveal2). reveal1 always
-    // shows the full placement set.
-    return buildSteps(data.placements);
-  }
-
-  // reveal2: layer the route on top of the bag1 board, mirroring the old
-  // drill `transitionToBag2` behavior.
-  const routes = getBag2Routes(opener, mirror);
-  const route = routes[routeIndex];
-  if (!route) return [];
-  const allPlacements: RawPlacement[] = [
-    ...(route.holdPlacement ? [route.holdPlacement] : []),
-    ...route.placements,
-  ];
-  const filteredSteps = buildSteps(allPlacements, priorBoard);
-
-  // TST step: place T (the 7th Bag 2 piece) into the T-spin pocket.
-  // Find the T placement that clears exactly 3 lines.
-  if (filteredSteps.length > 0) {
-    const bag2FinalBoard = filteredSteps[filteredSteps.length - 1]!.board;
-    const tPlacements = findAllPlacements(bag2FinalBoard, 'T');
-    for (const tp of tPlacements) {
-      const result = lockAndClear(bag2FinalBoard, tp.piece);
-      if (result.linesCleared === 3) {
-        filteredSteps.push({
-          piece: 'T',
-          board: result.board,
-          newCells: getPieceCells(tp.piece),
-          hint: 'T-Spin Triple!',
-          linesCleared: 3,
-        });
-        break;
-      }
-    }
-  }
-
-  return filteredSteps;
+  return buildSteps(data.placements);
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────
@@ -531,13 +488,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         ? state.guess.mirror
         : bestOpener(state.bag1).mirror;
 
-      const cachedSteps = computeSteps(
-        showOpener,
-        showMirror,
-        'reveal1',
-        -1,
-        emptyBoard(),
-      );
+      const cachedSteps = computeSteps(showOpener, showMirror);
 
       const newStats: SessionStats = {
         total: state.sessionStats.total + 1,
@@ -632,20 +583,36 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       ) {
         return state;
       }
-      // L10 finding #7: capture the bag1 final board from cachedSteps
-      // BEFORE computing bag2 steps, matching the existing drill
-      // transitionToBag2 pattern.
-      const finalBag1 =
-        state.cachedSteps.length > 0
-          ? state.cachedSteps[state.cachedSteps.length - 1]!.board
-          : emptyBoard();
-      const routeSteps = computeSteps(
+      // Use getBag2Sequence as single source of truth — it handles
+      // Bag 1 reduction (gamushiro form_2) and joint build internally.
+      const seq = getBag2Sequence(
         state.guess.opener,
         state.guess.mirror,
-        'reveal2',
         action.routeIndex,
-        finalBag1,
       );
+      if (!seq) return state;
+
+      // Build route steps with TST appended. Use fullSteps (includes hold
+      // placement) so the board ancestry matches bag1FinalBoard.
+      const routeSteps = [...seq.fullSteps];
+      if (routeSteps.length > 0) {
+        const bag2FinalBoard = routeSteps[routeSteps.length - 1]!.board;
+        const tPlacements = findAllPlacements(bag2FinalBoard, 'T');
+        for (const tp of tPlacements) {
+          const result = lockAndClear(bag2FinalBoard, tp.piece);
+          if (result.linesCleared === 3) {
+            routeSteps.push({
+              piece: 'T',
+              board: result.board,
+              newCells: getPieceCells(tp.piece),
+              hint: 'T-Spin Triple!',
+              linesCleared: 3,
+            });
+            break;
+          }
+        }
+      }
+
       // SPAWN HOOK (Reframing A+): entering reveal2 in manual mode
       // spawns the first active piece for the bag2 sequence.
       const activePiece =
@@ -658,7 +625,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         routeGuess: action.routeIndex,
         cachedSteps: routeSteps,
         step: 0,
-        board: cloneBoard(finalBag1),
+        board: cloneBoard(seq.bag1FinalBoard),
         activePiece,
         holdPiece: null,
         holdUsed: false,

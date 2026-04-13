@@ -88,9 +88,15 @@ export interface Bag2Sequence {
   mirror: boolean;
   bag: PieceType[];
   holdPiece: PieceType;
+  /** Bag 2 steps WITHOUT hold placement (for visualizer display). */
   steps: Step[];
+  /** ALL Bag 2 steps INCLUDING hold placement (for session manual play). */
+  fullSteps: Step[];
   tSpinSlots: OpenerSequence['tSpinSlots'];
+  /** Bag 1 final + hold piece stamped (for display). */
   baseBoard: Board;
+  /** Bag 1 final WITHOUT hold (matches fullSteps board ancestry). */
+  bag1FinalBoard: Board;
 }
 
 export function getBag2Sequence(
@@ -161,7 +167,9 @@ export function getBag2Sequence(
     bag: route.placements.map((p) => p.piece),
     holdPiece,
     steps,
+    fullSteps: allBag2Steps,
     tSpinSlots: bag1Seq.tSpinSlots,
     baseBoard,
+    bag1FinalBoard: cloneBoard(bag1FinalBoard),
   };
 }

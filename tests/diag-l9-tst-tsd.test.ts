@@ -9,8 +9,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { findAllPlacements, lockAndClear } from '../src/core/engine.ts';
-import { getOpenerSequence, getBag2Sequence } from '../src/openers/sequences.ts';
-import { computeSteps } from '../src/session.ts';
+import { getBag2Sequence } from '../src/openers/sequences.ts';
 import type { OpenerID } from '../src/openers/types.ts';
 import { OPENER_ORDER } from '../src/openers/types.ts';
 
@@ -129,31 +128,40 @@ describe('Post-TST board properties', () => {
   }
 });
 
-describe('computeSteps includes TST step in reveal2', () => {
+describe('getBag2Sequence + TST step', () => {
   const openers: OpenerID[] = [...OPENER_ORDER];
 
   for (const openerId of openers) {
     for (const routeIndex of [0, 1]) {
       const label = `${openerId} route=${routeIndex}`;
 
-      test(`${label}: last step is T-Spin Triple with 3 lines cleared`, () => {
-        // gamushiro form_2 has a known incomplete board (Bag 1 reduction not
-        // handled by computeSteps yet — pre-existing issue)
-        if (openerId === 'gamushiro' && routeIndex === 1) return;
+      test(`${label}: TST can be appended — T clears 3 lines on bag2 final board`, () => {
+        const seq = getBag2Sequence(openerId, false, routeIndex);
+        expect(seq).not.toBeNull();
+        if (!seq) return;
 
-        const opSeq = getOpenerSequence(openerId, false);
-        const bag1Board = opSeq.steps[opSeq.steps.length - 1]!.board;
+        // Bag 2 final board = last step's board
+        const bag2Board =
+          seq.steps.length > 0
+            ? seq.steps[seq.steps.length - 1]!.board
+            : seq.baseBoard;
 
-        const steps = computeSteps(openerId, false, 'reveal2', routeIndex, bag1Board);
-        expect(steps.length).toBeGreaterThan(0);
+        const tPlacements = findAllPlacements(bag2Board, 'T');
+        let found = false;
+        for (const tp of tPlacements) {
+          const result = lockAndClear(bag2Board, tp.piece);
+          if (result.linesCleared === 3) {
+            found = true;
+            const pieces = [
+              ...seq.steps.map(s => s.piece),
+              `T(3L)`,
+            ];
+            console.log(`${label}: ${pieces.length} steps [${pieces.join(', ')}]`);
+            break;
+          }
+        }
 
-        const pieces = steps.map(s => `${s.piece}${s.linesCleared ? `(${s.linesCleared}L)` : ''}`);
-        console.log(`${label}: ${steps.length} steps [${pieces.join(', ')}]`);
-
-        const lastStep = steps[steps.length - 1]!;
-        expect(lastStep.piece).toBe('T');
-        expect(lastStep.linesCleared).toBe(3);
-        expect(lastStep.hint).toContain('T-Spin Triple');
+        expect(found).toBe(true);
       });
     }
   }
