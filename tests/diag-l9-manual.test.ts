@@ -951,9 +951,11 @@ describe('#10 cross-product smoke: full manual cycle', () => {
           expect(s.phase).toBe('guess2');
           s = dispatch(s, { type: 'selectRoute', routeIndex: r });
           expect(s.phase).toBe('reveal2');
-          // Manually clear reveal2.
+          // Manually clear reveal2. TST steps auto-advance (reducer handles
+          // linesCleared steps without manual placement).
           while (s.step < s.cachedSteps.length) {
             const step = s.cachedSteps[s.step]!;
+            if (step.linesCleared) break; // auto-advanced by prior hardDrop
             s = { ...s, activePiece: findActivePieceForStep(s.board, step) };
             s = dispatch(s, { type: 'hardDrop' });
           }

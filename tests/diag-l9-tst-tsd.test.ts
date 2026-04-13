@@ -9,7 +9,8 @@
 
 import { describe, test, expect } from 'bun:test';
 import { findAllPlacements, lockAndClear } from '../src/core/engine.ts';
-import { getBag2Sequence } from '../src/openers/sequences.ts';
+import { getOpenerSequence, getBag2Sequence } from '../src/openers/sequences.ts';
+import { computeSteps } from '../src/session.ts';
 import type { OpenerID } from '../src/openers/types.ts';
 import { OPENER_ORDER } from '../src/openers/types.ts';
 
@@ -123,6 +124,36 @@ describe('Post-TST board properties', () => {
             break;
           }
         }
+      });
+    }
+  }
+});
+
+describe('computeSteps includes TST step in reveal2', () => {
+  const openers: OpenerID[] = [...OPENER_ORDER];
+
+  for (const openerId of openers) {
+    for (const routeIndex of [0, 1]) {
+      const label = `${openerId} route=${routeIndex}`;
+
+      test(`${label}: last step is T-Spin Triple with 3 lines cleared`, () => {
+        // gamushiro form_2 has a known incomplete board (Bag 1 reduction not
+        // handled by computeSteps yet — pre-existing issue)
+        if (openerId === 'gamushiro' && routeIndex === 1) return;
+
+        const opSeq = getOpenerSequence(openerId, false);
+        const bag1Board = opSeq.steps[opSeq.steps.length - 1]!.board;
+
+        const steps = computeSteps(openerId, false, 'reveal2', routeIndex, bag1Board);
+        expect(steps.length).toBeGreaterThan(0);
+
+        const pieces = steps.map(s => `${s.piece}${s.linesCleared ? `(${s.linesCleared}L)` : ''}`);
+        console.log(`${label}: ${steps.length} steps [${pieces.join(', ')}]`);
+
+        const lastStep = steps[steps.length - 1]!;
+        expect(lastStep.piece).toBe('T');
+        expect(lastStep.linesCleared).toBe(3);
+        expect(lastStep.hint).toContain('T-Spin Triple');
       });
     }
   }

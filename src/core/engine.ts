@@ -215,6 +215,8 @@ export interface Step {
   board: Board;
   newCells: { col: number; row: number }[];
   hint: string;
+  /** Lines cleared after this piece was locked. 0 or undefined = no clears. */
+  linesCleared?: number;
 }
 
 // ── Board Builder ──

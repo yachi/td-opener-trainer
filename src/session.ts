@@ -28,6 +28,8 @@ import {
   buildSteps,
   cloneBoard,
   stampCells,
+  findAllPlacements,
+  lockAndClear,
   type Board,
   type Step,
 } from './core/engine.ts';
@@ -384,7 +386,29 @@ export function computeSteps(
     ...(route.holdPlacement ? [route.holdPlacement] : []),
     ...route.placements,
   ];
-  return buildSteps(allPlacements, priorBoard);
+  const filteredSteps = buildSteps(allPlacements, priorBoard);
+
+  // TST step: place T (the 7th Bag 2 piece) into the T-spin pocket.
+  // Find the T placement that clears exactly 3 lines.
+  if (filteredSteps.length > 0) {
+    const bag2FinalBoard = filteredSteps[filteredSteps.length - 1]!.board;
+    const tPlacements = findAllPlacements(bag2FinalBoard, 'T');
+    for (const tp of tPlacements) {
+      const result = lockAndClear(bag2FinalBoard, tp.piece);
+      if (result.linesCleared === 3) {
+        filteredSteps.push({
+          piece: 'T',
+          board: result.board,
+          newCells: getPieceCells(tp.piece),
+          hint: 'T-Spin Triple!',
+          linesCleared: 3,
+        });
+        break;
+      }
+    }
+  }
+
+  return filteredSteps;
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────
@@ -717,11 +741,20 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       }
       // Accepted — lock piece, advance step, spawn next, reset holdUsed.
       const newBoard = stampCells(state.board, dropped.type, cells);
-      const nextStepIdx = state.step + 1;
+      let nextStepIdx = state.step + 1;
+      let finalBoard = newBoard;
+
+      // Auto-advance past line-clear steps (TST/TSD) — not manually placed.
+      const nextStep = state.cachedSteps[nextStepIdx];
+      if (nextStep?.linesCleared) {
+        finalBoard = nextStep.board;
+        nextStepIdx++;
+      }
+
       const nextActivePiece = spawnForCurrentStep(state.cachedSteps, nextStepIdx);
       return {
         ...state,
-        board: newBoard,
+        board: finalBoard,
         step: nextStepIdx,
         activePiece: nextActivePiece,
         holdUsed: false,
