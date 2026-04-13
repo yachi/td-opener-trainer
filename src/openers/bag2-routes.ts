@@ -3,6 +3,7 @@ import type { OpenerID } from './types.ts';
 import type { RawPlacement } from './placements.ts';
 import { mirrorPiece } from './placements.ts';
 import { appearsBefore } from './decision.ts';
+import { type Condition, evaluate, mirrorCondition, conditionToLabel } from './conditions.ts';
 
 // ── Types ──
 
@@ -10,6 +11,7 @@ export interface Bag2Route {
   routeId: string;
   routeLabel: string;
   conditionLabel: string;
+  condition: Condition;
   canSelect: (bag2: PieceType[]) => boolean;
   placements: RawPlacement[];
   holdPlacement: RawPlacement | null;
@@ -30,6 +32,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'ideal',
     routeLabel: 'Standard (J→S→O)',
     conditionLabel: 'Default',
+    condition: { type: 'true' },
     canSelect: () => true,
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -46,6 +49,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'alt_i_left',
     routeLabel: 'I-left variant',
     conditionLabel: 'I before J',
+    condition: { type: 'before', a: 'I', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'I', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -62,6 +66,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'l_before_j',
     routeLabel: 'L-before-J variant',
     conditionLabel: 'L before J',
+    condition: { type: 'before', a: 'L', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'L', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -79,6 +84,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'fb_l_top_left',
     routeLabel: 'Fallback: L top-left',
     conditionLabel: 'L before J',
+    condition: { type: 'before', a: 'L', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'L', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -95,6 +101,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'fb_j_top_right',
     routeLabel: 'Fallback: J top-right',
     conditionLabel: 'J before L',
+    condition: { type: 'before', a: 'J', b: 'L' },
     canSelect: (bag2) => appearsBefore(bag2, 'J', 'L'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -111,6 +118,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'fb_s_early',
     routeLabel: 'Fallback: S top-right',
     conditionLabel: 'S before J',
+    condition: { type: 'before', a: 'S', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'S', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -127,6 +135,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'fb_o_top_left',
     routeLabel: 'Fallback: O top-left',
     conditionLabel: 'O before J',
+    condition: { type: 'before', a: 'O', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'O', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -143,6 +152,7 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'fb_i_center',
     routeLabel: 'Fallback: I center col 6',
     conditionLabel: 'I before J',
+    condition: { type: 'before', a: 'I', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'I', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -163,6 +173,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'setup_a',
     routeLabel: 'Setup A (O early)',
     conditionLabel: 'Default',
+    condition: { type: 'true' },
     canSelect: () => true,
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -179,6 +190,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'setup_b',
     routeLabel: 'Setup B (L before I/J)',
     conditionLabel: 'L before I and J',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'L', b: 'I' }, { type: 'before', a: 'L', b: 'J' }] },
     canSelect: (bag2) => appearsBefore(bag2, 'L', 'I') && appearsBefore(bag2, 'L', 'J'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -196,6 +208,7 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'setup_c',
     routeLabel: 'Setup C (J+O early)',
     conditionLabel: 'J before I, O before S, L after I',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'J', b: 'I' }, { type: 'before', a: 'O', b: 'S' }, { type: 'not', condition: { type: 'before', a: 'L', b: 'I' } }] },
     canSelect: (bag2) => appearsBefore(bag2, 'J', 'I') && appearsBefore(bag2, 'O', 'S') && !appearsBefore(bag2, 'L', 'I'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
@@ -205,27 +218,24 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'I', cells: [{ col: 9, row: 14 }, { col: 9, row: 15 }, { col: 9, row: 16 }, { col: 9, row: 17 }], hint: 'I vertical, col 9, right wall' },
       { piece: 'L', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 8, row: 16 }, { col: 8, row: 17 }], hint: 'L vertical, cols 7-8' },
     ],
-    // holdPlacement L goes at col 6 rows 14-16 + col 7 row 16 (from wiki LL cells),
-    // but BFS engine can't reach that position — set null for now.
-    holdPlacement: null,
+    holdPlacement: { piece: 'L', cells: [{ col: 6, row: 14 }, { col: 6, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }], hint: 'Hold L, center gap-filler' },
     tstStepIndex: -1,
   },
   {
     routeId: 'setup_d',
     routeLabel: 'Setup D (S top-right)',
     conditionLabel: 'S before J and O',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'S', b: 'J' }, { type: 'before', a: 'S', b: 'O' }] },
     canSelect: (bag2) => appearsBefore(bag2, 'S', 'J') && appearsBefore(bag2, 'S', 'O'),
     placements: [
       { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
+      { piece: 'O', cells: [{ col: 8, row: 16 }, { col: 9, row: 16 }, { col: 8, row: 17 }, { col: 9, row: 17 }], hint: 'O flat, cols 8-9, bottom-right' },
       { piece: 'S', cells: [{ col: 8, row: 13 }, { col: 9, row: 13 }, { col: 7, row: 14 }, { col: 8, row: 14 }], hint: 'S flat, cols 7-9, top-right' },
       { piece: 'I', cells: [{ col: 0, row: 14 }, { col: 1, row: 14 }, { col: 2, row: 14 }, { col: 3, row: 14 }], hint: 'I horizontal, cols 0-3' },
       { piece: 'L', cells: [{ col: 9, row: 14 }, { col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'L horizontal, cols 7-9, right' },
       { piece: 'J', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 2, row: 16 }], hint: 'J horizontal, cols 0-2' },
-      { piece: 'O', cells: [{ col: 8, row: 16 }, { col: 9, row: 16 }, { col: 8, row: 17 }, { col: 9, row: 17 }], hint: 'O flat, cols 8-9, bottom-right' },
     ],
-    // holdPlacement L goes at col 6 rows 14-16 + col 7 row 16 (from wiki LL cells),
-    // but BFS engine can't reach that position — set null for now.
-    holdPlacement: null,
+    holdPlacement: { piece: 'L', cells: [{ col: 6, row: 14 }, { col: 6, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }], hint: 'Hold L, center gap-filler' },
     tstStepIndex: -1,
   },
 ];
@@ -236,6 +246,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'j_before_o',
     routeLabel: 'Route 1 (J>O, 98% PC)',
     conditionLabel: 'Default',
+    condition: { type: 'true' },
     canSelect: () => true,
     placements: [
       { piece: 'L', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }, { col: 3, row: 17 }], hint: 'L horizontal, cols 3-5' },
@@ -252,6 +263,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
     routeId: 's_before_j',
     routeLabel: 'Route 2 (S>J, 84% PC)',
     conditionLabel: 'S before J',
+    condition: { type: 'before', a: 'S', b: 'J' },
     canSelect: (bag2) => appearsBefore(bag2, 'S', 'J'),
     placements: [
       { piece: 'L', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 5, row: 16 }, { col: 3, row: 17 }], hint: 'L horizontal, cols 3-5' },
@@ -268,6 +280,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'o_before_sj',
     routeLabel: 'Route 3 (O>SJ, 71% PC)',
     conditionLabel: 'O before S and J',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'O', b: 'S' }, { type: 'before', a: 'O', b: 'J' }] },
     canSelect: (bag2) => appearsBefore(bag2, 'O', 'S') && appearsBefore(bag2, 'O', 'J'),
     placements: [
       { piece: 'J', cells: [{ col: 1, row: 12 }, { col: 2, row: 12 }, { col: 1, row: 13 }, { col: 1, row: 14 }], hint: 'J vertical, cols 1-2' },
@@ -284,6 +297,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
     routeId: 's_before_o_iz_before_j',
     routeLabel: 'Route 4 (S>O IZ>J, 85% PC, Extra)',
     conditionLabel: 'S before O, and I or Z before J',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'S', b: 'O' }, { type: 'or', conditions: [{ type: 'before', a: 'I', b: 'J' }, { type: 'before', a: 'Z', b: 'J' }] }] },
     canSelect: (bag2) => appearsBefore(bag2, 'S', 'O') && (appearsBefore(bag2, 'I', 'J') || appearsBefore(bag2, 'Z', 'J')),
     placements: [
       { piece: 'J', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 8, row: 13 }, { col: 8, row: 14 }], hint: 'J vertical, cols 8-9' },
@@ -300,6 +314,7 @@ const STRAY_CANNON_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'j_before_i',
     routeLabel: 'Route 5 (J>I, 53% PC, Extra)',
     conditionLabel: 'J before I',
+    condition: { type: 'before', a: 'J', b: 'I' },
     canSelect: (bag2) => appearsBefore(bag2, 'J', 'I'),
     placements: [
       { piece: 'O', cells: [{ col: 1, row: 13 }, { col: 2, row: 13 }, { col: 1, row: 14 }, { col: 2, row: 14 }], hint: 'O flat, cols 1-2' },
@@ -320,6 +335,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'form_1',
     routeLabel: 'Form 1 (L→O, 99% PC)',
     conditionLabel: 'Default',
+    condition: { type: 'true' },
     canSelect: () => true,
     placements: [
       { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z flat, cols 3-5' },
@@ -336,6 +352,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'form_2',
     routeLabel: 'Form 2 (OO at bottom)',
     conditionLabel: 'O after J, S, L',
+    condition: { type: 'and', conditions: [{ type: 'not', condition: { type: 'before', a: 'O', b: 'J' } }, { type: 'not', condition: { type: 'before', a: 'O', b: 'S' } }, { type: 'not', condition: { type: 'before', a: 'O', b: 'L' } }] },
     canSelect: (bag2) => !appearsBefore(bag2, 'O', 'J') && !appearsBefore(bag2, 'O', 'S') && !appearsBefore(bag2, 'O', 'L'),
     placements: [
       { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z flat, cols 3-5' },
@@ -352,6 +369,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'o_early',
     routeLabel: 'O early (top-left)',
     conditionLabel: 'O before L',
+    condition: { type: 'before', a: 'O', b: 'L' },
     canSelect: (bag2) => appearsBefore(bag2, 'O', 'L'),
     placements: [
       { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z flat, cols 3-5' },
@@ -368,6 +386,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'o_mid_right',
     routeLabel: 'O mid-right',
     conditionLabel: 'O before S',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'O', b: 'S' }, { type: 'not', condition: { type: 'before', a: 'O', b: 'L' } }] },
     canSelect: (bag2) => appearsBefore(bag2, 'O', 'S') && !appearsBefore(bag2, 'O', 'L'),
     placements: [
       { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z flat, cols 3-5' },
@@ -384,6 +403,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
     routeId: 'l_early',
     routeLabel: 'L early (I col 9)',
     conditionLabel: 'L before I',
+    condition: { type: 'before', a: 'L', b: 'I' },
     canSelect: (bag2) => appearsBefore(bag2, 'L', 'I'),
     placements: [
       { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z flat, cols 3-5' },
@@ -419,6 +439,7 @@ function mirrorBag2Route(route: Bag2Route): Bag2Route {
   return {
     ...route,
     routeLabel: route.routeLabel + ' (Mirror)',
+    condition: mirrorCondition(route.condition),
     canSelect: (bag2) => route.canSelect(bag2.map(mirrorPiece)),
     placements: route.placements.map(mirrorBag2Placement),
     holdPlacement: route.holdPlacement ? mirrorBag2Placement(route.holdPlacement) : null,
