@@ -480,7 +480,7 @@ describe('Known-bug assertions', () => {
     expect(after.cachedSteps.length).toBeGreaterThan(0);
   });
 
-  test('pick({index: 3}) in guess2 stays in guess2 (every opener has 2 routes)', () => {
+  test('pick({index: 99}) in guess2 stays in guess2 (out-of-range for all openers)', () => {
     for (const opener of [
       'stray_cannon',
       'honey_cup',
@@ -497,7 +497,7 @@ describe('Known-bug assertions', () => {
         { type: 'advancePhase' },
       );
       expect(s.phase).toBe('guess2');
-      const after = sessionReducer(s, { type: 'pick', index: 3 });
+      const after = sessionReducer(s, { type: 'pick', index: 99 });
       expect(after.phase).toBe('guess2');
     }
   });
