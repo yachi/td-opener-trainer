@@ -750,7 +750,8 @@ describe('#13 bag 1 piece count per opener', () => {
 
   test('gamushiro form_2 route uses reduced bag2 hold pattern', () => {
     // Gamushiro form_2 canSelect requires O to be after J, S, L in bag2.
-    const bag2Form2: PieceType[] = ['J', 'S', 'L', 'Z', 'I', 'T', 'O'];
+    // Also need I before L so l_early (index 4) doesn't match first.
+    const bag2Form2: PieceType[] = ['J', 'S', 'I', 'L', 'Z', 'T', 'O'];
     const best = bestBag2Route('gamushiro', false, bag2Form2);
     expect(best.routeIndex).toBe(1); // form_2
     expect(best.route.holdPlacement).not.toBeNull();

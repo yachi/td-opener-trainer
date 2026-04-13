@@ -51,7 +51,7 @@ import {
   type RawPlacement,
 } from './openers/placements.ts';
 import { getBag2Routes } from './openers/bag2-routes.ts';
-import { OPENERS, bestOpener } from './openers/decision.ts';
+import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
@@ -814,8 +814,13 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             return _rawSessionReducer(state, { type: 'hardDrop' });
           }
           return _rawSessionReducer(state, { type: 'advancePhase' });
-        case 'guess2':
-          return _rawSessionReducer(state, { type: 'newSession' });
+        case 'guess2': {
+          if (state.guess === null) {
+            return _rawSessionReducer(state, { type: 'newSession' });
+          }
+          const best = bestBag2Route(state.guess.opener, state.guess.mirror, state.bag2);
+          return _rawSessionReducer(state, { type: 'selectRoute', routeIndex: best.routeIndex });
+        }
       }
     }
 

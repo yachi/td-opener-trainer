@@ -277,10 +277,10 @@ describe('guess1: opener picker, mirror, submit/skip', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  test('Digit5 in guess1 is ignored (unmapped)', () => {
+  test('Digit5 in guess1 dispatches pick (reducer handles bounds)', () => {
     const { dispatch } = rig(makeSession({ phase: 'guess1' }));
     fireKeyDown('Digit5');
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 4 });
   });
 });
 
@@ -642,11 +642,12 @@ describe('Phase guards: unmapped and wrong-phase keys are ignored', () => {
     }
   });
 
-  test('Digit5..9 dispatch nothing in guess1', () => {
+  test('Digit5..9 dispatch pick in guess1 (reducer handles bounds)', () => {
     for (const code of ['Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9']) {
       const { dispatch } = rig(makeSession({ phase: 'guess1' }));
       fireKeyDown(code);
-      expect(dispatch).not.toHaveBeenCalled();
+      const expectedIndex = parseInt(code.slice(-1), 10) - 1;
+      expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: expectedIndex });
     }
   });
 

@@ -571,7 +571,10 @@ function drawGuess2Panel(
   }
 
   y += 6;
-  drawPanelLine(ctx, '1-4 select route', y, '#9999BB');
+  const routeCount = session.guess
+    ? getBag2Routes(session.guess.opener, session.guess.mirror).length
+    : 4;
+  drawPanelLine(ctx, `1-${routeCount} select route`, y, '#9999BB');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -703,8 +706,12 @@ function keybindHintForSession(session: Session): string {
       return session.playMode === 'manual'
         ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
         : '\u2190\u2192 step  SPACE next  P manual  R new bag';
-    case 'guess2':
-      return '1-4 select route  R new bag';
+    case 'guess2': {
+      const n = session.guess
+        ? getBag2Routes(session.guess.opener, session.guess.mirror).length
+        : 4;
+      return `1-${n} select route  SPACE best  R new bag`;
+    }
     case 'reveal2':
       return session.playMode === 'manual'
         ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
