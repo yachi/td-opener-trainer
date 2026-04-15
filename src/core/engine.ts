@@ -265,6 +265,32 @@ export function buildSteps(placements: Placement[], startBoard?: Board): Step[] 
   return steps;
 }
 
+/**
+ * Pure cell stamping — no BFS, no reachability check, never fails.
+ *
+ * Each placement's cells are stamped onto the board in sequence. The result
+ * is always faithful to the input data. Used for visualization where the
+ * placement data is the source of truth (from wiki). BFS verification of
+ * reachability is handled separately by tests.
+ *
+ * L9 redesign: replaces `buildSteps` in the visualization path. The class
+ * of bug "BFS can't reach placement X, so the board is wrong" is dissolved.
+ */
+export function stampSteps(placements: Placement[], startBoard?: Board): Step[] {
+  let board = startBoard ? cloneBoard(startBoard) : emptyBoard();
+  const steps: Step[] = [];
+  for (const p of placements) {
+    board = stampCells(cloneBoard(board), p.piece, p.cells);
+    steps.push({
+      piece: p.piece,
+      board: cloneBoard(board),
+      newCells: [...p.cells],
+      hint: p.hint,
+    });
+  }
+  return steps;
+}
+
 // ── Fumen Coordinate Conversion ──
 
 const BOARD_ROWS = BOARD_VISIBLE_HEIGHT;

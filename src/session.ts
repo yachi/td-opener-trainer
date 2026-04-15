@@ -25,7 +25,7 @@
 
 import {
   emptyBoard,
-  buildSteps,
+  stampSteps,
   cloneBoard,
   stampCells,
   findAllPlacements,
@@ -366,7 +366,7 @@ export function computeSteps(
 ): Step[] {
   const raw = OPENER_PLACEMENT_DATA[opener];
   const data: OpenerPlacementData = mirror ? mirrorPlacementData(raw) : raw;
-  return buildSteps(data.placements);
+  return stampSteps(data.placements);
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────
