@@ -159,16 +159,17 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/sequences.ts` — `getOpenerSequence` (extracted from deleted `modes/visualizer.ts`)
 
 **Session (the single state machine — replaces the deleted 4-mode architecture):**
-- `src/session.ts` — unified reducer, `SessionAction` union (16 actions including intent actions `primary`/`pick`), `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. Production `sessionReducer` wraps raw reducer with invariant check.
+- `src/session.ts` — unified reducer, `SessionAction` union (17 actions including intent actions `primary`/`pick` and browse action `browseOpener`), `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. Production `sessionReducer` wraps raw reducer with invariant check.
 - `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix).
 - `src/renderer/board.ts` — canvas primitives, `COLORS` palette, `drawCell`, `drawPieceInBox`
 - `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets).
 - `src/app.ts` — thin entry: canvas setup, `setupKeyboard`, frame loop. ~70 LOC.
 
-**Tests (15 files, 518 tests, ~40,889 assertions):**
-- `tests/diag-l9-session.test.ts` — 44 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
+**Tests (19 files, 888 tests, ~42,017 assertions):**
+- `tests/guard-matrix.test.ts` — 154 tests, declarative guard matrix (17 actions × 8 contexts) + edge cases. Compile-time completeness: adding a new action without guard spec is a type error. L9 testing architecture redesign (`f651cf1`).
+- `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
-- `tests/diag-l9-intent.test.ts` — 20 tests, intent actions `primary`/`pick` (Phase 2.5 for `2cf1565`)
+- `tests/diag-l9-intent.test.ts` — 22 tests, intent actions `primary`/`pick` + browse delegation (Phase 2.5 for `2cf1565` + `964f4ce`)
 - `tests/diag-l9-invariants.test.ts` — 28 tests, runtime invariants + `#0` load-bearing wrapper tests (Phase 2.5 for `d590c8d` + `244a1db`)
 - `tests/diag-l9-property.test.ts` — 13 fast-check properties, 16k+ random runs covering the full action space + float/NaN/Infinity rejection
 - `tests/keyboard.test.ts` — 67 tests, input→dispatch mapping + DAS/ARR timing with mocked clock (browser-free)
