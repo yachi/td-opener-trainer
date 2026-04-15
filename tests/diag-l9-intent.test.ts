@@ -401,32 +401,69 @@ describe('#6 pick in guess2', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// #7 pick in reveal phases is a no-op
+// #7 pick in reveal phases: browse (auto) vs no-op (manual)
 // ═══════════════════════════════════════════════════════════════════════════
-describe('#7 pick is a no-op in reveal phases', () => {
-  test('pick in reveal1 → state unchanged', () => {
+describe('#7 pick in reveal phases: browse (auto) vs no-op (manual)', () => {
+  test('pick in auto reveal1 browses opener (state changes)', () => {
+    // Setup: reach reveal1 auto with ms2
     const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
-    const s = apply(
-      s0,
+    const s = apply(s0,
       { type: 'setGuess', opener: 'ms2', mirror: false },
       { type: 'submitGuess' },
     );
     expect(s.phase).toBe('reveal1');
-    const s2 = intentReducer(s, { type: 'pick', index: 0 });
-    expect(s2).toBe(s);
+    expect(s.playMode).toBe('auto');
+    // pick(0) should browse to stray_cannon
+    const s2 = sessionReducer(s, { type: 'pick', index: 0 });
+    expect(s2).not.toBe(s);
+    expect(s2.guess!.opener).toBe('stray_cannon');
+    expect(s2.phase).toBe('reveal1');
+    expect(s2.step).toBe(0);
   });
 
-  test('pick in reveal2 → state unchanged', () => {
+  test('pick in manual reveal1 is a no-op (safe zone)', () => {
     const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
-    const s = apply(
-      s0,
+    const s = apply(s0,
+      { type: 'setGuess', opener: 'ms2', mirror: false },
+      { type: 'submitGuess' },
+      { type: 'togglePlayMode' }, // switch to manual
+    );
+    expect(s.phase).toBe('reveal1');
+    expect(s.playMode).toBe('manual');
+    const s2 = sessionReducer(s, { type: 'pick', index: 0 });
+    expect(s2).toBe(s); // identity — unchanged
+  });
+
+  test('pick in auto reveal2 switches route (state changes)', () => {
+    const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
+    const s = apply(s0,
       { type: 'setGuess', opener: 'ms2', mirror: false },
       { type: 'submitGuess' },
       { type: 'advancePhase' },
       { type: 'selectRoute', routeIndex: 0 },
     );
     expect(s.phase).toBe('reveal2');
-    const s2 = intentReducer(s, { type: 'pick', index: 0 });
+    expect(s.playMode).toBe('auto');
+    expect(s.routeGuess).toBe(0);
+    // pick(1) should switch to route 1
+    const s2 = sessionReducer(s, { type: 'pick', index: 1 });
+    expect(s2).not.toBe(s);
+    expect(s2.routeGuess).toBe(1);
+    expect(s2.step).toBe(0);
+  });
+
+  test('pick in manual reveal2 is a no-op (safe zone)', () => {
+    const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
+    const s = apply(s0,
+      { type: 'setGuess', opener: 'ms2', mirror: false },
+      { type: 'submitGuess' },
+      { type: 'advancePhase' },
+      { type: 'selectRoute', routeIndex: 0 },
+      { type: 'togglePlayMode' }, // manual
+    );
+    expect(s.phase).toBe('reveal2');
+    expect(s.playMode).toBe('manual');
+    const s2 = sessionReducer(s, { type: 'pick', index: 1 });
     expect(s2).toBe(s);
   });
 });

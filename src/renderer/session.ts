@@ -43,6 +43,8 @@ import {
 } from './board';
 import { OPENERS, DECISION_PIECES, DECISION_PIECES_MIRROR } from '../openers/decision';
 import { getBag2Routes } from '../openers/bag2-routes';
+import { getBag2Sequence } from '../openers/sequences';
+import type { Board } from '../core/srs';
 import type { Session } from '../session';
 
 const FONT = '-apple-system, sans-serif';
@@ -69,6 +71,18 @@ const PANEL_Y = TITLE_BAR_H + 16;
 const PANEL_W = CANVAS_W - PANEL_X - 16;
 const PANEL_LINE_H = 18;
 
+// ── Thumbnail layout ──
+const THUMB_CELL = 6;
+const THUMB_START_ROW = 12;
+const THUMB_END_ROW = 20;
+const THUMB_W = 10 * THUMB_CELL;                            // 60
+const THUMB_H = (THUMB_END_ROW - THUMB_START_ROW) * THUMB_CELL; // 48
+const THUMB_LABEL_H = 14;
+const THUMB_CARD_W = THUMB_W + 4;                            // 64
+const THUMB_CARD_H = THUMB_H + THUMB_LABEL_H + 6;           // 68
+const THUMB_GAP = 6;
+const THUMB_COLS = 4;
+
 // Opener display order shown in the rule card (matches spec §4.4 numbering).
 const OPENER_DISPLAY_ORDER: OpenerID[] = [
   'stray_cannon',
@@ -83,6 +97,101 @@ const OPENER_SHORT: Record<OpenerID, string> = {
   gamushiro: 'Gamushi',
   ms2: 'MS2',
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Route thumbnail helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+const routeBoardCache = new Map<string, Board[]>();
+
+function getRouteFinalBoards(opener: OpenerID, mirror: boolean): Board[] {
+  const key = `${opener}:${mirror}`;
+  const cached = routeBoardCache.get(key);
+  if (cached) return cached;
+  const routes = getBag2Routes(opener, mirror);
+  const boards: Board[] = [];
+  for (let i = 0; i < routes.length; i++) {
+    const seq = getBag2Sequence(opener, mirror, i);
+    if (seq && seq.fullSteps.length > 0) {
+      boards.push(seq.fullSteps[seq.fullSteps.length - 1]!.board);
+    }
+  }
+  routeBoardCache.set(key, boards);
+  return boards;
+}
+
+function drawMiniBoard(
+  ctx: CanvasRenderingContext2D,
+  board: Board,
+  x: number,
+  y: number,
+  cellSz: number,
+  startRow: number,
+  endRow: number,
+): void {
+  const cols = 10;
+  const rows = endRow - startRow;
+  ctx.fillStyle = COLORS.boardBg;
+  ctx.fillRect(x, y, cols * cellSz, rows * cellSz);
+  for (let r = startRow; r < endRow; r++) {
+    const row = board[r];
+    if (!row) continue;
+    for (let c = 0; c < cols; c++) {
+      const cell = row[c];
+      if (cell) {
+        drawCell(ctx, x + c * cellSz, y + (r - startRow) * cellSz, cellSz, COLORS.pieces[cell] ?? '#888888');
+      }
+    }
+  }
+  ctx.strokeStyle = COLORS.boardBorder;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, cols * cellSz - 1, rows * cellSz - 1);
+}
+
+function drawRouteThumbnails(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+  y: number,
+): void {
+  if (!session.guess) return;
+  const { opener, mirror } = session.guess;
+  const boards = getRouteFinalBoards(opener, mirror);
+  const routes = getBag2Routes(opener, mirror);
+  if (boards.length === 0) return;
+  const count = Math.min(boards.length, routes.length);
+  const cols = Math.min(count, THUMB_COLS);
+  const gridW = cols * THUMB_CARD_W + (cols - 1) * THUMB_GAP;
+  const originX = PANEL_X + Math.max(0, (PANEL_W - gridW) / 2);
+
+  for (let i = 0; i < count; i++) {
+    const col = i % THUMB_COLS;
+    const row = Math.floor(i / THUMB_COLS);
+    const cx = originX + col * (THUMB_CARD_W + THUMB_GAP);
+    const cy = y + row * (THUMB_CARD_H + THUMB_GAP);
+    const isSelected = session.phase === 'reveal2' && i === session.routeGuess;
+
+    // Card background.
+    ctx.fillStyle = isSelected ? '#1A1A4A' : COLORS.statCardBg;
+    roundRect(ctx, cx, cy, THUMB_CARD_W, THUMB_CARD_H, 3);
+    ctx.fill();
+    // Border.
+    ctx.strokeStyle = isSelected ? '#FFFFFF' : COLORS.statCardBorder;
+    ctx.lineWidth = isSelected ? 2 : 1;
+    roundRect(ctx, cx, cy, THUMB_CARD_W, THUMB_CARD_H, 3);
+    ctx.stroke();
+    // Mini board.
+    const board = boards[i];
+    if (board) {
+      drawMiniBoard(ctx, board, cx + 2, cy + 2, THUMB_CELL, THUMB_START_ROW, THUMB_END_ROW);
+    }
+    // Label.
+    ctx.fillStyle = isSelected ? '#FFFFFF' : '#9999BB';
+    ctx.font = `${isSelected ? 'bold ' : ''}10px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${i + 1}`, cx + THUMB_CARD_W / 2, cy + THUMB_H + 5);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Public entry point
@@ -570,11 +679,11 @@ function drawGuess2Panel(
     }
   }
 
-  y += 6;
-  const routeCount = session.guess
-    ? getBag2Routes(session.guess.opener, session.guess.mirror).length
-    : 4;
-  drawPanelLine(ctx, `1-${routeCount} select route`, y, '#9999BB');
+  y += 4;
+  // Route thumbnails.
+  if (session.guess) {
+    drawRouteThumbnails(ctx, session, y);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -609,7 +718,7 @@ function drawReveal2Panel(
     const routes = getBag2Routes(session.guess.opener, session.guess.mirror);
     const route = routes[session.routeGuess];
     if (route) {
-      drawPanelLine(ctx, route.routeLabel, y, '#CCAA44');
+      drawPanelLine(ctx, `Route ${session.routeGuess + 1}/${routes.length}: ${route.routeLabel}`, y, '#CCAA44');
       y += PANEL_LINE_H;
       drawPanelLine(ctx, route.conditionLabel, y, '#7777AA');
       y += PANEL_LINE_H + 4;
@@ -620,6 +729,14 @@ function drawReveal2Panel(
   const total = session.cachedSteps.length;
   drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
   y += PANEL_LINE_H + 4;
+
+  // Route thumbnails (auto mode — manual mode uses this space for hold piece).
+  if (session.playMode === 'auto' && session.guess) {
+    drawRouteThumbnails(ctx, session, y);
+    const routes = getBag2Routes(session.guess.opener, session.guess.mirror);
+    const thumbRows = Math.ceil(routes.length / THUMB_COLS);
+    y += thumbRows * (THUMB_CARD_H + THUMB_GAP) + 4;
+  }
 
   // Hold piece (Bug #1 fix — partial symmetry with drawReveal1Panel).
   //
@@ -705,16 +822,21 @@ function keybindHintForSession(session: Session): string {
     case 'reveal1':
       return session.playMode === 'manual'
         ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
-        : '\u2190\u2192 step  SPACE next  P manual  R new bag';
+        : '1-4 opener  M mirror  \u2190\u2192 step  SPACE next  P manual  R new';
     case 'guess2': {
       const n = session.guess
         ? getBag2Routes(session.guess.opener, session.guess.mirror).length
         : 4;
       return `1-${n} select route  SPACE best  R new bag`;
     }
-    case 'reveal2':
-      return session.playMode === 'manual'
-        ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
-        : '\u2190\u2192 step  SPACE new bag  P manual  R new bag';
+    case 'reveal2': {
+      if (session.playMode === 'manual') {
+        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+      }
+      const n = session.guess
+        ? getBag2Routes(session.guess.opener, session.guess.mirror).length
+        : 4;
+      return `1-${n} route  \u2190\u2192 step  SPACE new bag  P manual`;
+    }
   }
 }

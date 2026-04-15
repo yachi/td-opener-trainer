@@ -98,6 +98,12 @@ const arbAction: fc.Arbitrary<SessionAction> = fc.oneof(
   fc.record({ type: fc.constant('hardDrop' as const) }),
   fc.record({ type: fc.constant('hold' as const) }),
   fc.record({ type: fc.constant('softDrop' as const) }),
+  // browse (1)
+  fc.record({
+    type: fc.constant('browseOpener' as const),
+    opener: arbOpener,
+    mirror: fc.boolean(),
+  }),
   // intents (2)
   fc.record({ type: fc.constant('primary' as const) }),
   fc.record({
@@ -204,6 +210,11 @@ const arbActionNoFreshBags: fc.Arbitrary<SessionAction> = fc.oneof(
   fc.record({ type: fc.constant('hardDrop' as const) }),
   fc.record({ type: fc.constant('hold' as const) }),
   fc.record({ type: fc.constant('softDrop' as const) }),
+  fc.record({
+    type: fc.constant('browseOpener' as const),
+    opener: arbOpener,
+    mirror: fc.boolean(),
+  }),
   fc.record({
     type: fc.constant('pick' as const),
     index: fc.integer({ min: -5, max: 10 }),

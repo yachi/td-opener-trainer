@@ -780,9 +780,16 @@ describe('#14 reducer action coverage', () => {
     const snapshot = { ...s };
     s = dispatch(s, { type: 'setGuess', opener: 'honey_cup', mirror: true });
     expect(s.guess).toEqual(snapshot.guess);
-    // toggleMirror during reveal1 is a no-op.
+    // toggleMirror during reveal1 AUTO delegates to browseOpener (flips mirror).
+    const beforeToggle = s;
     s = dispatch(s, { type: 'toggleMirror' });
-    expect(s.guess).toEqual(snapshot.guess);
+    expect(s.guess!.mirror).toBe(!beforeToggle.guess!.mirror);
+    expect(s.phase).toBe('reveal1');
+    // toggleMirror during reveal1 MANUAL is still a no-op.
+    const manualState = dispatch(beforeToggle, { type: 'togglePlayMode' });
+    expect(manualState.playMode).toBe('manual');
+    const afterManualToggle = dispatch(manualState, { type: 'toggleMirror' });
+    expect(afterManualToggle).toBe(manualState);
     // selectRoute during reveal1 is a no-op.
     s = dispatch(s, { type: 'selectRoute', routeIndex: 0 });
     expect(s.phase).toBe('reveal1');

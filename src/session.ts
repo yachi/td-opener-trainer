@@ -14,7 +14,7 @@
  *   2. MS2/Gamushiro are interchangeable for correctness (shared rule).
  *   3. Wrong-guess reveal shows the authoritative bestOpener answer.
  *   4. newSession keeps sessionStats; createSession() zeros them.
- *   5. toggleMirror is guarded to phase==='guess1' && guess !== null.
+ *   5. toggleMirror: guess1 flips mirror; reveal1 auto delegates to browseOpener.
  *   6. pieceDrop compares cells via stringified {col,row} key sets.
  *   7. selectRoute uses getBag2Sequence as single source of truth
  *      (handles Bag 1 reduction + joint build internally).
@@ -133,6 +133,7 @@ export type SessionAction =
   | { type: 'advancePhase' }
   | { type: 'togglePlayMode' }
   | { type: 'selectRoute'; routeIndex: number }
+  | { type: 'browseOpener'; opener: OpenerID; mirror: boolean }
   // ── Reframing A+ manual-play actions ──
   | { type: 'movePiece'; dx: number; dy: number }
   | { type: 'rotatePiece'; direction: 1 | -1 }
@@ -453,14 +454,21 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'toggleMirror': {
-      // L10 finding #5: guarded to guess1 with a guess set so it can
-      // never mutate reveal state.
-      if (state.phase !== 'guess1' || state.guess === null) return state;
-      return {
-        ...state,
-        guess: { ...state.guess, mirror: !state.guess.mirror },
-        // CRITICAL: bag and board MUST NOT change on toggle.
-      };
+      if (state.guess === null) return state;
+      if (state.phase === 'guess1') {
+        return {
+          ...state,
+          guess: { ...state.guess, mirror: !state.guess.mirror },
+        };
+      }
+      if (state.phase === 'reveal1' && state.playMode === 'auto') {
+        return _rawSessionReducer(state, {
+          type: 'browseOpener',
+          opener: state.guess.opener,
+          mirror: !state.guess.mirror,
+        });
+      }
+      return state;
     }
 
     case 'submitGuess': {
@@ -570,7 +578,9 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'selectRoute': {
-      if (state.phase !== 'guess2' || state.guess === null) return state;
+      if (state.guess === null) return state;
+      if (state.phase !== 'guess2' && !(state.phase === 'reveal2' && state.playMode === 'auto')) return state;
+      if (state.phase === 'reveal2' && state.routeGuess === action.routeIndex) return state;
       // Bounds check (Bug #2 fix): selectRoute used to accept any routeIndex
       // and silently produce empty cachedSteps. Now: reject invalid indices.
       // Number.isInteger catches NaN, Infinity, and float values like 0.5
@@ -627,6 +637,30 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         step: 0,
         board: cloneBoard(seq.bag1FinalBoard),
         activePiece,
+        holdPiece: null,
+        holdUsed: false,
+      };
+    }
+
+    case 'browseOpener': {
+      if (state.phase !== 'reveal1') return state;
+      if (state.playMode !== 'auto') return state;
+      if (
+        state.guess !== null &&
+        state.guess.opener === action.opener &&
+        state.guess.mirror === action.mirror
+      ) {
+        return state;
+      }
+      const cachedSteps = computeSteps(action.opener, action.mirror);
+      return {
+        ...state,
+        guess: { opener: action.opener, mirror: action.mirror },
+        cachedSteps,
+        step: 0,
+        board: emptyBoard(),
+        correct: null,
+        activePiece: null,
         holdPiece: null,
         holdUsed: false,
       };
@@ -828,10 +862,38 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             routeIndex: action.index,
           });
         }
-        // pick is a no-op in reveal phases.
-        case 'reveal1':
-        case 'reveal2':
-          return state;
+        case 'reveal1': {
+          if (state.playMode !== 'auto') return state;
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= OPENER_BY_PICK.length
+          ) {
+            return state;
+          }
+          const opener = OPENER_BY_PICK[action.index];
+          if (!opener) return state;
+          return _rawSessionReducer(state, {
+            type: 'browseOpener',
+            opener,
+            mirror: state.guess?.mirror ?? false,
+          });
+        }
+        case 'reveal2': {
+          if (state.playMode !== 'auto' || state.guess === null) return state;
+          const routes = getBag2Routes(state.guess.opener, state.guess.mirror);
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= routes.length
+          ) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
+            type: 'selectRoute',
+            routeIndex: action.index,
+          });
+        }
       }
     }
 

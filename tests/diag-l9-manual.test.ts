@@ -1034,9 +1034,12 @@ describe('#13 L10 surprises still hold after the redesign', () => {
     // No guess set yet → toggleMirror is no-op.
     const noopA = dispatch(s, { type: 'toggleMirror' });
     expect(noopA).toBe(s);
-    // After submit → phase=reveal1 → toggleMirror is no-op.
+    // After submit → phase=reveal1, manual mode → toggleMirror is no-op.
+    s = dispatch(s, { type: 'togglePlayMode' }); // auto → manual
     s = dispatch(s, { type: 'setGuess', opener: 'ms2', mirror: false });
     s = dispatch(s, { type: 'submitGuess' });
+    expect(s.phase).toBe('reveal1');
+    expect(s.playMode).toBe('manual');
     const noopB = dispatch(s, { type: 'toggleMirror' });
     expect(noopB).toBe(s);
   });

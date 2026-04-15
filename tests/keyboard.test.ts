@@ -504,12 +504,12 @@ describe('reveal manual: gameplay keys', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'primary' });
   });
 
-  test('Digit4 in reveal manual dispatches pick(3) (reducer no-ops in reveal)', () => {
+  test('Digit4 in reveal manual dispatches pick(3) (reducer no-ops in manual reveal)', () => {
     const { dispatch } = rig(manualSession());
     fireKeyDown('Digit4');
     // Keyboard is stateless — it always dispatches pick. The reducer's
-    // pick case returns state unchanged in reveal phases. Covered by
-    // tests/diag-l9-intent.test.ts #7.
+    // pick case returns state unchanged in manual reveal phases (auto reveal browses).
+    // Covered by tests/diag-l9-intent.test.ts #7.
     expect(dispatch).toHaveBeenCalledWith({ type: 'pick', index: 3 });
   });
 
