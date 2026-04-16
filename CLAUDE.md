@@ -127,6 +127,61 @@ After the Bug #1 (hold display) and Bug #2 (pick bounds) fixes shipped, an adver
 
 **Cheapest way to NOT converge**: spawn one agent, declare convergence if it finds nothing. Real convergence needs at least 2 adversarial rounds because round 1 often misses what it focused too narrowly on.
 
+### #14. Plan in mind before touching code
+User's literal instruction: *"create a plan in mind, don't change any code yet."* The user explicitly separates planning from implementation and expects me to sit in planning until the plan is 100% confident.
+
+**Rule**: When asked to redesign, DO NOT touch `src/` until:
+1. I've stated the plan concretely (files changed, exact diffs, verified invariants)
+2. I've run empirical probes proving the plan works end-to-end
+3. The user has signaled "go" — explicitly or via a command like `/st go`
+
+**Anti-pattern**: jumping to code after presenting a plan. Even if the plan looks complete, the user wants to iterate on it adversarially (adding new constraints) before code lands. This session had 4+ planning rounds before the empirical probe convinced both sides.
+
+**Signal**: the user repeats "don't change any code yet" — internalize it. Next time, they shouldn't have to say it.
+
+### #15. "Confidence claims require code proof" — empirical probes, not reasoning
+I claimed "100% confidence" multiple times based on theoretical analysis. Each time, the user pushed *"use code to prove your points."* Each probe found gaps:
+- Probe 1 (placeability): "concat approach" fails for 12/44 routes
+- Probe 2 (backtracking): succeeds for 43/44 routes
+- Probe 3 (full pipeline): 44/44 with `bag1Reduction: 1` for Gamushiro form_2
+
+Without probes, the plan would have shipped broken.
+
+**Rule**: when I'm about to claim ≥95% confidence in a design, write a probe FIRST (`/private/tmp/probe-*.ts` — these are throwaway, no commit needed). The probe simulates the entire proposed flow over every input the system encounters. Only after the probe validates do I state confidence.
+
+**Pattern**: `probe-{subject}.ts` in `/private/tmp/`. Uses production imports but doesn't modify src/. Iterates over all openers × mirrors × routes × edge cases. Prints concrete data.
+
+**Why this works**: reasoning finds KNOWN unknowns. Probes find UNKNOWN unknowns. Confidence should scale with probes run, not with introspection quality.
+
+### #16. Testing gap = broken testing ARCHITECTURE (not missing tests)
+User's L9 framing: *"testing gaps is also gaps, delete and design the testing architecture."* When a redesign reveals "oh we should test X", don't just add tests — ask why the architecture allowed X to be untested.
+
+**The 2026-04-16 guard matrix response**: when `browseOpener` shipped with 3 unguarded edge cases, the fix wasn't "add 3 tests." The fix was a DECLARATIVE guard matrix where every `(ActionType × Phase × PlayMode)` cell has an expected outcome, with a compile-time type check that makes missing entries a TYPE ERROR. Adding a new action without declaring its guards becomes structurally impossible.
+
+**Rule**: if I catch myself thinking "I should add a test for X," ask: (1) should the test architecture have REQUIRED this test? (2) can I make future-me's gaps structurally impossible via types / generators / matrices?
+
+**Patterns**:
+- Declarative matrix + generator (guard-matrix.test.ts): cross-product of dimensions → test cases
+- Compile-time completeness (`satisfies` + `Exclude<A, B> extends never`): missing entries = type error
+- Property tests (fast-check): entire classes of inputs verified, not named cases
+
+**Signal**: "add a test for X" is a band-aid; "make X untestable-to-forget" is L9.
+
+### #17. Iterative constraint addition — user narrows the design space
+Over the 2026-04-16 planning loop, the user added constraints one at a time:
+1. "order is wrong" → need engine ordering
+2. "make sure the bag can be placed like the wiki" → need playability guarantee
+3. "stop directly edit cells, all placement through the tetris engine" → engine is single authority
+4. "review as L9" → question the abstraction
+
+Each constraint eliminated a design option. The final plan is the intersection. If I had proposed the final design upfront, I would have missed the middle constraints and shipped a partial fix.
+
+**Rule**: when the user adds a new constraint mid-planning, treat it as another L9 review lens, not a scope change. Re-examine the current plan against ALL accumulated constraints. If the plan doesn't satisfy one, iterate. Don't defend the current plan — ingest the constraint and revise.
+
+**Anti-pattern**: "I've already thought about that." The user wouldn't have added the constraint if it was already addressed. Accept it as new signal.
+
+**This session's net effect**: 7 planning rounds, 3 empirical probes, zero code changes until round 8. The plan that shipped was fundamentally different from round 1's plan — all constraints accumulated into a coherent design. Net result: -820 lines.
+
 ## Technical Reference
 
 ### Opener Conditions (verified by exhaustive enumeration of 5040 permutations)
@@ -165,17 +220,23 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets).
 - `src/app.ts` — thin entry: canvas setup, `setupKeyboard`, frame loop. ~70 LOC.
 
-**Tests (19 files, 888 tests, ~42,017 assertions):**
+**Engine (post-L9 backtracking redesign — commit `044cb40`):**
+- `src/core/engine.ts` — backtracking `buildSteps` (DFS + BFS pruning, mutate+undo, 100K attempt cap, returns longest prefix on failure). `findAllPlacements`, `stampCells`, `lockAndClear`, fumen bridge. `stampSteps` DELETED (was the two-function fight with buildSteps).
+- `src/openers/bag2-routes.ts` — `Bag2Route.bag1Reduction?: number` metadata. Only Gamushiro form_2 sets it (= 1) — its wiki board genuinely can't fit full Bag 1 (verified by 100K attempts failing in `/private/tmp/probe-backtrack.ts`).
+- `src/openers/sequences.ts` — `getBag2Sequence` does ONE `buildSteps` call on `[bag1Used + hold + bag2]`, throws on incomplete (data bug, not runtime fallback).
+
+**Tests (19 files, 940 tests, ~43,721 assertions):**
 - `tests/guard-matrix.test.ts` — 154 tests, declarative guard matrix (17 actions × 8 contexts) + edge cases. Compile-time completeness: adding a new action without guard spec is a type error. L9 testing architecture redesign (`f651cf1`).
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
 - `tests/diag-l9-intent.test.ts` — 22 tests, intent actions `primary`/`pick` + browse delegation (Phase 2.5 for `2cf1565` + `964f4ce`)
 - `tests/diag-l9-invariants.test.ts` — 28 tests, runtime invariants + `#0` load-bearing wrapper tests (Phase 2.5 for `d590c8d` + `244a1db`)
 - `tests/diag-l9-property.test.ts` — 13 fast-check properties, 16k+ random runs covering the full action space + float/NaN/Infinity rejection
+- `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
+- `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
 - `tests/keyboard.test.ts` — 67 tests, input→dispatch mapping + DAS/ARR timing with mocked clock (browser-free)
 - `tests/render-contract.test.ts` — 44 tests, recording canvas proxy verifies state→render contract (browser-free)
-- `tests/acceptance.test.ts` — gravity, cell count, wiki oracle
-- `tests/diag-l9-proof.test.ts` — prior L9 drill redesign proof (kept as historical record)
+- `tests/acceptance.test.ts` — gravity, cell count, wiki oracle (uses `route.bag1Reduction` metadata)
 
 **Deleted in L9 redesigns (don't look for these):**
 - `src/modes/{onboarding,quiz,visualizer,drill}.ts` — the 4-mode architecture (deleted `9f4d8ae`)
@@ -183,5 +244,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/stats/tracker.ts` — localStorage stats (deleted with persistence layer)
 - `src/dispatcher/visualizer.ts` — (deleted)
 - `src/renderer/{onboarding,drill,canvas}.ts` — mode-specific renderers (deleted)
+- `src/core/engine.ts :: stampSteps` — raw cell-stamping function (deleted `044cb40`, was one side of the two-function fight; replaced by backtracking buildSteps)
+- `tests/diag-l9-proof.test.ts` — historical Phase 2.5 proof (deleted `044cb40`, negative assertions inverted under backtracking)
 - `localStorage` keys `onboarding_progress` and `tetris-td-quiz-stats` — persistence removed. Session lives in memory only; closing the tab IS the reset.
 
