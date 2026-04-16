@@ -247,11 +247,26 @@ function computeStepsForPhase(
   const routes = getBag2Routes(opener, mirror);
   const route = routes[routeIndex];
   if (!route) return [];
+  // priorBoard was built from the FULL Bag 1. For routes with bag1Reduction,
+  // we can't simply reuse it — the engine must replan the joint order from
+  // scratch (bag1Used + hold + bag2). Delegate to the same logic as
+  // getBag2Sequence so the two paths stay consistent.
+  const reduction = route.bag1Reduction ?? 0;
+  if (reduction === 0) {
+    const all = [
+      ...(route.holdPlacement ? [route.holdPlacement] : []),
+      ...route.placements,
+    ];
+    return buildSteps(all, priorBoard);
+  }
+  const bag1Used = data.placements.slice(0, data.placements.length - reduction);
   const all = [
+    ...bag1Used,
     ...(route.holdPlacement ? [route.holdPlacement] : []),
     ...route.placements,
   ];
-  return buildSteps(all, priorBoard);
+  const allSteps = buildSteps(all);
+  return allSteps.slice(bag1Used.length);
 }
 
 /** Spawn the active piece for the current (state.step) cachedStep, or null. */

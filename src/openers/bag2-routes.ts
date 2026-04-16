@@ -16,6 +16,8 @@ export interface Bag2Route {
   placements: RawPlacement[];
   holdPlacement: RawPlacement | null;
   tstStepIndex: number;
+  /** How many pieces to drop from end of Bag 1 for this route. Default 0. */
+  bag1Reduction?: number;
 }
 
 export interface Bag2Data {
@@ -350,6 +352,7 @@ const GAMUSHIRO_BAG2_ROUTES: Bag2Route[] = [
   },
   {
     routeId: 'form_2',
+    bag1Reduction: 1,
     routeLabel: 'Form 2 (OO at bottom)',
     conditionLabel: 'O after J, S, L',
     condition: { type: 'and', conditions: [{ type: 'not', condition: { type: 'before', a: 'O', b: 'J' } }, { type: 'not', condition: { type: 'before', a: 'O', b: 'S' } }, { type: 'not', condition: { type: 'before', a: 'O', b: 'L' } }] },

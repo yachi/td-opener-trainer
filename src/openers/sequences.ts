@@ -4,11 +4,13 @@
  * Extracted from the now-deleted src/modes/visualizer.ts during the L9
  * Session redesign. These helpers are data-only: they take an opener id
  * (and optional mirror/route) and return the placement Step[] via
- * `stampSteps` — no state, no mutation, no class.
+ * `buildSteps` — no state, no mutation, no class.
  *
- * L9 stamp-over-BFS redesign: visualization uses `stampSteps` (pure cell
- * stamping, no BFS). The wiki placement data is the source of truth.
- * BFS reachability verification lives in tests, not in the rendering path.
+ * L9 backtracking redesign: visualization uses `buildSteps` with a
+ * backtracking solver. Every placement goes through the engine — no direct
+ * cell editing. Routes that need a smaller Bag 1 declare `bag1Reduction`
+ * explicitly in `bag2-routes.ts` (route metadata is the single source of
+ * truth, no silent fallbacks).
  */
 
 import type { PieceType } from '../core/types.ts';
@@ -20,10 +22,9 @@ import {
 } from './placements.ts';
 import { getBag2Routes } from './bag2-routes.ts';
 import {
-  stampSteps,
+  buildSteps,
   emptyBoard,
   cloneBoard,
-  stampCells,
   type Board,
   type Step,
 } from '../core/engine.ts';
@@ -60,7 +61,7 @@ export function getOpenerSequence(
   const holdPiece = mirror ? def.holdPieceMirror : def.holdPiece;
   const rawData = OPENER_PLACEMENT_DATA[openerId];
   const data = mirror ? mirrorPlacementData(rawData) : rawData;
-  const steps = stampSteps(data.placements);
+  const steps = buildSteps(data.placements);
   const bag = [...steps.map((s) => s.piece), holdPiece];
   return {
     openerId,
@@ -77,10 +78,11 @@ export function getOpenerSequence(
  * Bag 1 final board. Returns `null` for an invalid route index so callers
  * can cleanly skip unsupported cases.
  *
- * L9 redesign: uses `stampSteps` instead of BFS-based `buildSteps`.
- * The wiki placement data IS the source of truth — cells are stamped
- * directly onto the Bag 1 board. No BFS reachability, no Bag 1 reduction.
- * BFS verification lives in tests (board oracle + reachability tests).
+ * L9 backtracking redesign: ONE `buildSteps` call resolves the joint order
+ * of [bag1Used + hold + bag2]. Routes that can't fit on the full Bag 1
+ * declare `bag1Reduction` to drop pieces from the end of Bag 1. Throws if
+ * the engine can't place every piece — that's a data bug, not a runtime
+ * fallback.
  */
 export interface Bag2Sequence {
   openerId: OpenerID;
@@ -107,44 +109,43 @@ export function getBag2Sequence(
   if (routeIndex < 0 || routeIndex >= routes.length) return null;
   const route = routes[routeIndex]!;
 
-  // 1. Bag 1 final board — stamp directly, no BFS.
   const rawData = OPENER_PLACEMENT_DATA[openerId];
   const data = mirror ? mirrorPlacementData(rawData) : rawData;
-  const bag1Steps = stampSteps(data.placements);
-  const bag1FinalBoard = bag1Steps.length > 0
-    ? bag1Steps[bag1Steps.length - 1]!.board
+  const reduction = route.bag1Reduction ?? 0;
+  const bag1Used = data.placements.slice(0, data.placements.length - reduction);
+
+  const holdArr = route.holdPlacement ? [route.holdPlacement] : [];
+  const allPlacements = [...bag1Used, ...holdArr, ...route.placements];
+
+  const allSteps = buildSteps(allPlacements);
+  if (allSteps.length !== allPlacements.length) {
+    throw new Error(
+      `getBag2Sequence: route ${openerId}/${route.routeId} (mirror=${mirror}) ` +
+      `not fully engine-placeable (${allSteps.length}/${allPlacements.length}). ` +
+      `Add or adjust bag1Reduction in route data.`,
+    );
+  }
+
+  const bag1End = bag1Used.length;
+  const bag1FinalBoard = bag1End > 0
+    ? allSteps[bag1End - 1]!.board
     : emptyBoard();
 
-  // 2. Hold placement — stamp onto Bag 1 board (if any).
-  let board = cloneBoard(bag1FinalBoard);
-  const holdSteps: Step[] = [];
-  if (route.holdPlacement) {
-    const emptyCells = route.holdPlacement.cells.filter(
-      (c) => board[c.row]?.[c.col] === null,
-    );
-    if (emptyCells.length > 0) {
-      board = stampCells(cloneBoard(board), route.holdPlacement.piece, emptyCells);
-      holdSteps.push({
-        piece: route.holdPlacement.piece,
-        board: cloneBoard(board),
-        newCells: emptyCells,
-        hint: route.holdPlacement.hint ?? '',
-      });
-    }
+  // baseBoard = bag1FinalBoard + hold (if any). The engine may have placed
+  // hold in any order, so locate its step by hint and use that step's board.
+  let baseBoard = cloneBoard(bag1FinalBoard);
+  const holdHint = route.holdPlacement?.hint;
+  if (holdHint) {
+    const holdStep = allSteps.find((s) => s.hint === holdHint);
+    if (holdStep) baseBoard = cloneBoard(holdStep.board);
   }
-  const baseBoard = cloneBoard(board);
 
-  // 3. Bag 2 pieces — stamp one by one onto the board.
-  const bag2Steps: Step[] = [];
-  for (const p of route.placements) {
-    board = stampCells(cloneBoard(board), p.piece, p.cells);
-    bag2Steps.push({
-      piece: p.piece,
-      board: cloneBoard(board),
-      newCells: [...p.cells],
-      hint: p.hint ?? '',
-    });
-  }
+  // Bag 2 steps = everything after bag1.
+  const allBag2Steps = allSteps.slice(bag1End);
+  // Display steps = exclude hold.
+  const steps = holdHint
+    ? allBag2Steps.filter((s) => s.hint !== holdHint)
+    : allBag2Steps;
 
   const holdPiece = mirror
     ? OPENERS[openerId].holdPieceMirror
@@ -155,8 +156,8 @@ export function getBag2Sequence(
     mirror,
     bag: route.placements.map((p) => p.piece),
     holdPiece,
-    steps: bag2Steps,
-    fullSteps: [...holdSteps, ...bag2Steps],
+    steps,
+    fullSteps: allBag2Steps,
     tSpinSlots: data.tSpinSlots,
     baseBoard,
     bag1FinalBoard: cloneBoard(bag1FinalBoard),

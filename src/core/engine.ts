@@ -232,63 +232,66 @@ export interface Step {
  * This eliminates ALL manual ordering fields (holdInsertIndex, bag1PieceCount).
  * The engine determines the correct order automatically.
  */
-export function buildSteps(placements: Placement[], startBoard?: Board): Step[] {
-  const steps: Step[] = [];
-  let board = startBoard ? cloneBoard(startBoard) : emptyBoard();
-  let remaining = [...placements];
-
-  while (remaining.length > 0) {
-    let progress = false;
-    const deferred: Placement[] = [];
-
-    for (const p of remaining) {
-      const allEmpty = p.cells.every(c => board[c.row]?.[c.col] === null);
-
-      if (allEmpty && isPlacementReachable(board, p.piece, p.cells)) {
-        board = stampCells(board, p.piece, p.cells);
-        steps.push({
-          piece: p.piece,
-          board: cloneBoard(board),
-          newCells: [...p.cells],
-          hint: p.hint,
-        });
-        progress = true;
-      } else {
-        deferred.push(p);
-      }
-    }
-
-    remaining = deferred;
-    if (!progress) break;
-  }
-
-  return steps;
-}
-
 /**
- * Pure cell stamping — no BFS, no reachability check, never fails.
+ * Backtracking placement order solver.
  *
- * Each placement's cells are stamped onto the board in sequence. The result
- * is always faithful to the input data. Used for visualization where the
- * placement data is the source of truth (from wiki). BFS verification of
- * reachability is handled separately by tests.
+ * Tries every permutation of `placements` (depth-first) until it finds an
+ * order in which each piece is (a) cell-clear and (b) BFS-reachable from
+ * spawn at the moment it's placed. Mutates the working board in place and
+ * undoes on backtrack — only Step snapshots allocate per branch.
  *
- * L9 redesign: replaces `buildSteps` in the visualization path. The class
- * of bug "BFS can't reach placement X, so the board is wrong" is dissolved.
+ * Returns the full sequence when found; the longest valid prefix otherwise
+ * (preserves the greedy contract for callers that ignore the missing tail).
+ *
+ * Bounded by `MAX_ATTEMPTS` to guarantee termination.
  */
-export function stampSteps(placements: Placement[], startBoard?: Board): Step[] {
-  let board = startBoard ? cloneBoard(startBoard) : emptyBoard();
+const MAX_ATTEMPTS = 100_000;
+
+export function buildSteps(placements: Placement[], startBoard?: Board): Step[] {
+  if (placements.length === 0) return [];
+  const board: Board = startBoard ? cloneBoard(startBoard) : emptyBoard();
+  const used = new Uint8Array(placements.length);
   const steps: Step[] = [];
-  for (const p of placements) {
-    board = stampCells(cloneBoard(board), p.piece, p.cells);
-    steps.push({
-      piece: p.piece,
-      board: cloneBoard(board),
-      newCells: [...p.cells],
-      hint: p.hint,
-    });
+  let bestPrefix: Step[] = [];
+  let attempts = 0;
+
+  function unstampCells(cells: { col: number; row: number }[]): void {
+    for (const c of cells) {
+      if (board[c.row]) (board[c.row] as (PieceType | null)[])[c.col] = null;
+    }
   }
-  return steps;
+
+  function dfs(): boolean {
+    if (steps.length > bestPrefix.length) bestPrefix = steps.slice();
+    if (steps.length === placements.length) return true;
+    if (++attempts > MAX_ATTEMPTS) return false;
+
+    for (let i = 0; i < placements.length; i++) {
+      if (used[i]) continue;
+      const p = placements[i]!;
+      let clear = true;
+      for (const c of p.cells) {
+        if (board[c.row]?.[c.col] !== null) { clear = false; break; }
+      }
+      if (!clear) continue;
+      if (!isPlacementReachable(board, p.piece, p.cells)) continue;
+
+      // Apply: mutate in place
+      for (const c of p.cells) (board[c.row] as (PieceType | null)[])[c.col] = p.piece;
+      used[i] = 1;
+      steps.push({ piece: p.piece, board: cloneBoard(board), newCells: [...p.cells], hint: p.hint });
+
+      if (dfs()) return true;
+
+      // Undo
+      steps.pop();
+      used[i] = 0;
+      unstampCells(p.cells);
+    }
+    return false;
+  }
+
+  return dfs() ? steps : bestPrefix;
 }
 
 // ── Fumen Coordinate Conversion ──

@@ -46,17 +46,8 @@ function buildFlatSequence(
       ]
     : [];
 
-  let bag1Used = bag1Placements;
-  if (route && bag2All.length > 0) {
-    const fullSteps = buildSteps([...bag1Placements, ...bag2All]);
-    if (fullSteps.length < bag1Placements.length + bag2All.length) {
-      const reduced = bag1Placements.slice(0, bag1Placements.length - 1);
-      const reducedSteps = buildSteps([...reduced, ...bag2All]);
-      if (reducedSteps.length >= reduced.length + bag2All.length) {
-        bag1Used = reduced;
-      }
-    }
-  }
+  const reduction = route?.bag1Reduction ?? 0;
+  const bag1Used = bag1Placements.slice(0, bag1Placements.length - reduction);
 
   const allPlacements = route ? [...bag1Used, ...bag2All] : [...bag1Placements];
   return { steps: buildSteps(allPlacements), bag1End: bag1Used.length };
