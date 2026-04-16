@@ -44,6 +44,7 @@ import {
 import { OPENERS, DECISION_PIECES, DECISION_PIECES_MIRROR } from '../openers/decision';
 import { getBag2Routes } from '../openers/bag2-routes';
 import { getBag2Sequence } from '../openers/sequences';
+import { getBag3Hint } from '../openers/bag3-hints';
 import type { Board } from '../core/srs';
 import type { Session } from '../session';
 
@@ -428,6 +429,46 @@ function drawPanelLine(
 }
 
 /**
+ * Word-wrap text to fit within maxWidth using measureText.
+ * Falls back to character-level splitting for words exceeding maxWidth.
+ */
+export function computeWrappedLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  if (text === '') return [];
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const trial = current ? current + ' ' + word : word;
+    if (ctx.measureText(trial).width <= maxWidth) {
+      current = trial;
+    } else {
+      if (current) lines.push(current);
+      if (ctx.measureText(word).width > maxWidth) {
+        // Character-level split for oversized words
+        let chunk = '';
+        for (const ch of word) {
+          if (ctx.measureText(chunk + ch).width <= maxWidth) {
+            chunk += ch;
+          } else {
+            if (chunk) lines.push(chunk);
+            chunk = ch;
+          }
+        }
+        current = chunk;
+      } else {
+        current = word;
+      }
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+/**
  * Draw the bag pieces inline as small piece previews. Returns the y-coordinate
  * just below the bag row.
  */
@@ -722,6 +763,30 @@ function drawReveal2Panel(
       y += PANEL_LINE_H;
       drawPanelLine(ctx, route.conditionLabel, y, '#7777AA');
       y += PANEL_LINE_H + 4;
+    }
+
+    // Bag 3 PC hint card (wiki-sourced)
+    const hint = getBag3Hint(session.guess.opener, session.guess.mirror);
+    if (hint) {
+      const cardPad = 6;
+      const lineH = 14;
+      ctx.font = `11px ${FONT}`;
+      const lines = computeWrappedLines(ctx, hint, PANEL_W - cardPad * 2);
+      const cardH = lines.length * lineH + cardPad * 2;
+      ctx.fillStyle = COLORS.statCardBg;
+      roundRect(ctx, PANEL_X, y, PANEL_W, cardH, 4);
+      ctx.fill();
+      ctx.strokeStyle = COLORS.statCardBorder;
+      ctx.lineWidth = 1;
+      roundRect(ctx, PANEL_X + 0.5, y + 0.5, PANEL_W - 1, cardH - 1, 4);
+      ctx.stroke();
+      ctx.fillStyle = '#9999BB';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i]!, PANEL_X + cardPad, y + cardPad + i * lineH);
+      }
+      y += cardH + 6;
     }
   }
 

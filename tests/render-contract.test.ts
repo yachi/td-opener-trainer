@@ -35,7 +35,7 @@ import {
   type Session,
   type SessionAction,
 } from '../src/session.ts';
-import { renderSession } from '../src/renderer/session.ts';
+import { renderSession, computeWrappedLines } from '../src/renderer/session.ts';
 import { COLORS } from '../src/renderer/board.ts';
 import { OPENERS } from '../src/openers/decision.ts';
 import type { OpenerID } from '../src/openers/types.ts';
@@ -71,6 +71,7 @@ interface RecordingContext {
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
   fillText(text: string, x: number, y: number): void;
+  measureText(text: string): { width: number };
   beginPath(): void;
   closePath(): void;
   moveTo(x: number, y: number): void;
@@ -136,6 +137,10 @@ function createRecordingCtx(): RecordingContext {
     },
     fillText(text: string, x: number, y: number) {
       calls.push({ kind: 'method', name: 'fillText', args: [text, x, y] });
+    },
+    measureText(text: string) {
+      // Approximate: 7px per character at 12px font (matches Playwright probe)
+      return { width: text.length * 7 };
     },
     beginPath() { calls.push({ kind: 'method', name: 'beginPath' }); },
     closePath() { calls.push({ kind: 'method', name: 'closePath' }); },
@@ -515,5 +520,55 @@ describe('#9 state→render diff contract', () => {
     } else {
       expect(texts.some((t) => t.includes('WRONG'))).toBe(true);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// computeWrappedLines
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('computeWrappedLines', () => {
+  // Use RecordingContext's measureText (7px per char)
+  const ctx = createRecordingCtx() as unknown as CanvasRenderingContext2D;
+
+  test('empty string returns empty array', () => {
+    expect(computeWrappedLines(ctx, '', 200)).toEqual([]);
+  });
+
+  test('short text fits on one line', () => {
+    expect(computeWrappedLines(ctx, 'hello', 200)).toEqual(['hello']);
+  });
+
+  test('wraps at word boundary when exceeding maxWidth', () => {
+    // "Bag 3 PC" = 8 chars = 56px, fits in 100px
+    // "Bag 3 PC ~96%" = 14 chars = 98px, fits in 100px
+    // "Bag 3 PC ~96% (100%" = 20 chars = 140px, exceeds 100px
+    const lines = computeWrappedLines(ctx, 'Bag 3 PC ~96% (100% if T early).', 100);
+    expect(lines.length).toBeGreaterThan(1);
+    // Each line should fit within maxWidth
+    for (const line of lines) {
+      expect(line.length * 7).toBeLessThanOrEqual(100);
+    }
+  });
+
+  test('preserves all words across lines', () => {
+    const text = 'one two three four five';
+    const lines = computeWrappedLines(ctx, text, 50);
+    const joined = lines.join(' ');
+    expect(joined).toBe(text);
+  });
+
+  test('handles single-word overflow via char split', () => {
+    // A word longer than maxWidth gets split char-by-char
+    const lines = computeWrappedLines(ctx, 'abcdefghijklmnop', 35); // 5 chars = 35px
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join('')).toBe('abcdefghijklmnop');
+  });
+
+  test('arrow characters in hint text wrap correctly', () => {
+    const text = 'Bag 3 PC: L→O 99%, J→O 97%, S→O 87%.';
+    const lines = computeWrappedLines(ctx, text, 200);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    expect(lines.join(' ')).toBe(text);
   });
 });
