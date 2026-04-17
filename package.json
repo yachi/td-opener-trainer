@@ -5,7 +5,10 @@
   "private": true,
   "scripts": {
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bun test",
+    "test:fast": "bun test --filter-out 'diag-drill-queue|diag-l9-property'",
+    "test:slow": "bun test tests/diag-drill-queue.test.ts tests/diag-l9-property.test.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

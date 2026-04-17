@@ -161,6 +161,27 @@ export function isPlacementReachable(
   });
 }
 
+// ── Line Clear ──
+
+/**
+ * Clear completed rows from a board. Returns new board and count.
+ * Rows are removed bottom-to-top; empty rows added at top to maintain height.
+ */
+export function clearFullRows(board: Board): { board: Board; linesCleared: number } {
+  const newBoard: MutableBoard = board.map(row => [...row]);
+  let linesCleared = 0;
+  for (let row = BOARD_VISIBLE_HEIGHT - 1; row >= 0; row--) {
+    if (newBoard[row]!.every(cell => cell !== null)) {
+      newBoard.splice(row, 1);
+      linesCleared++;
+    }
+  }
+  while (newBoard.length < BOARD_VISIBLE_HEIGHT) {
+    newBoard.unshift(Array.from({ length: BOARD_WIDTH }, () => null));
+  }
+  return { board: newBoard as Board, linesCleared };
+}
+
 // ── Lock + Line Clear ──
 
 /**
@@ -174,32 +195,16 @@ export function lockAndClear(
   board: Board,
   piece: ActivePiece,
 ): { board: Board; linesCleared: number } {
-  // Deep-copy the board
-  const newBoard: MutableBoard = board.map(row => [...row]);
-
-  // Place piece cells
+  // Deep-copy the board and stamp piece cells
+  const stamped: MutableBoard = board.map(row => [...row]);
   const cells = getPieceCells(piece);
   for (const { col, row } of cells) {
     if (row >= 0 && row < BOARD_VISIBLE_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
-      newBoard[row]![col] = piece.type;
+      stamped[row]![col] = piece.type;
     }
   }
 
-  // Remove full lines
-  let linesCleared = 0;
-  for (let row = BOARD_VISIBLE_HEIGHT - 1; row >= 0; row--) {
-    if (newBoard[row]!.every(cell => cell !== null)) {
-      newBoard.splice(row, 1);
-      linesCleared++;
-    }
-  }
-
-  // Add empty lines at top
-  while (newBoard.length < BOARD_VISIBLE_HEIGHT) {
-    newBoard.unshift(Array.from({ length: BOARD_WIDTH }, () => null));
-  }
-
-  return { board: newBoard, linesCleared };
+  return clearFullRows(stamped as Board);
 }
 
 // ── Builder Types ──
@@ -292,6 +297,42 @@ export function buildSteps(placements: Placement[], startBoard?: Board): Step[] 
   }
 
   return dfs() ? steps : bestPrefix;
+}
+
+/**
+ * Replay an ordered sequence of placements with intermediate line clears.
+ *
+ * Unlike buildSteps (which finds a valid ORDER for fixed-coordinate placements
+ * via DFS backtracking), this replays a KNOWN sequence linearly. Each
+ * placement's coordinates are relative to the board state after all previous
+ * placements and their line clears.
+ *
+ * Use for: PC (Perfect Clear) solutions where intermediate line clears
+ * shift the board between placements.
+ */
+export function replayPcSteps(board: Board, placements: Placement[]): Step[] {
+  const steps: Step[] = [];
+  let currentBoard = cloneBoard(board);
+  for (const p of placements) {
+    for (const c of p.cells) {
+      if (currentBoard[c.row]?.[c.col] !== null) {
+        throw new Error(
+          `Cell conflict at (${c.col},${c.row}) for ${p.piece} at step ${steps.length}`,
+        );
+      }
+      (currentBoard[c.row] as (PieceType | null)[])[c.col] = p.piece;
+    }
+    const { board: cleared, linesCleared } = clearFullRows(currentBoard);
+    steps.push({
+      piece: p.piece,
+      board: cleared,
+      newCells: [...p.cells],
+      hint: p.hint,
+      linesCleared: linesCleared || undefined,
+    });
+    currentBoard = cleared;
+  }
+  return steps;
 }
 
 // ── Fumen Coordinate Conversion ──
