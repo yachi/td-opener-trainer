@@ -182,6 +182,15 @@ Each constraint eliminated a design option. The final plan is the intersection. 
 
 **This session's net effect**: 7 planning rounds, 3 empirical probes, zero code changes until round 8. The plan that shipped was fundamentally different from round 1's plan — all constraints accumulated into a coherent design. Net result: -820 lines.
 
+### #18. Scattered string guards = shotgun surgery — use metadata tables
+Adding guess3/reveal3 required updating 15+ locations with `phase === 'reveal1' || phase === 'reveal2' || phase === 'reveal3'`. Two were missed in keyboard.ts, causing bugs that the test suite didn't catch (guard-matrix tests cover reducer, not keyboard/renderer behavior).
+
+**The L9 reframe**: the problem isn't "we forgot 2 locations" — the architecture allows an unbounded number of locations to forget. The fix: `PHASE_META: Record<Phase, PhaseMeta>` with `satisfies` for compile-time completeness. `isRevealPhase()` / `isGuessPhase()` replace all 13 scattered triples. Adding a new phase = 1 table row. Missing it = type error.
+
+**Rule**: when you find 3+ locations branching on the same enum/union values, replace with a metadata table + query helpers. The table is the single source of truth; the helpers are the API. This generalizes beyond phases to any discriminated union.
+
+**Mutation testing proof**: `isRevealPhase=true` → 236 test failures; `isGuessPhase=true` → 74 failures. Both functions are load-bearing. Commit `291d820`.
+
 ## Technical Reference
 
 ### Opener Conditions (verified by exhaustive enumeration of 5040 permutations)
@@ -214,10 +223,11 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/sequences.ts` — `getOpenerSequence` (extracted from deleted `modes/visualizer.ts`)
 
 **Session (the single state machine — replaces the deleted 4-mode architecture):**
-- `src/session.ts` — unified reducer, `SessionAction` union (17 actions including intent actions `primary`/`pick` and browse action `browseOpener`), `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. Production `sessionReducer` wraps raw reducer with invariant check.
-- `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix).
+- `src/session.ts` — unified reducer, `SessionAction` union (18 actions including intent actions `primary`/`pick`, browse action `browseOpener`, and `selectPcSolution`), `PHASE_META` table (`satisfies Record<Phase, PhaseMeta>` for compile-time completeness), `isRevealPhase`/`isGuessPhase` helpers, `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. Production `sessionReducer` wraps raw reducer with invariant check.
+- `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix). 6 phase panels: guess1/reveal1/guess2/reveal2/guess3/reveal3.
 - `src/renderer/board.ts` — canvas primitives, `COLORS` palette, `drawCell`, `drawPieceInBox`
-- `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets).
+- `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. Uses `isRevealPhase()` from session.ts — no hardcoded phase strings. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets).
+- `src/openers/bag3-pc.ts` — HC Perfect Clear solutions (4 normal + 4 mirror), `getPcSolutions(opener, mirror)`
 - `src/app.ts` — thin entry: canvas setup, `setupKeyboard`, frame loop. ~70 LOC.
 
 **Engine (post-L9 backtracking redesign — commit `044cb40`):**
@@ -225,8 +235,8 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/bag2-routes.ts` — `Bag2Route.bag1Reduction?: number` metadata. Only Gamushiro form_2 sets it (= 1) — its wiki board genuinely can't fit full Bag 1 (verified by 100K attempts failing in `/private/tmp/probe-backtrack.ts`).
 - `src/openers/sequences.ts` — `getBag2Sequence` does ONE `buildSteps` call on `[bag1Used + hold + bag2]`, throws on incomplete (data bug, not runtime fallback).
 
-**Tests (19 files, 940 tests, ~43,721 assertions):**
-- `tests/guard-matrix.test.ts` — 154 tests, declarative guard matrix (17 actions × 8 contexts) + edge cases. Compile-time completeness: adding a new action without guard spec is a type error. L9 testing architecture redesign (`f651cf1`).
+**Tests (21 files, 1092 tests, ~45,253 assertions):**
+- `tests/guard-matrix.test.ts` — 237 tests, declarative guard matrix (18 actions × 12 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
 - `tests/diag-l9-intent.test.ts` — 22 tests, intent actions `primary`/`pick` + browse delegation (Phase 2.5 for `2cf1565` + `964f4ce`)
