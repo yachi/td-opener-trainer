@@ -25,6 +25,7 @@ import {
   type Placement,
 } from '../src/core/engine.ts';
 import { getBag2Sequence } from '../src/openers/sequences.ts';
+import { getPcSolutions, type PcSolution } from '../src/openers/bag3-pc.ts';
 import type { PieceType } from '../src/core/types.ts';
 import { BOARD_WIDTH, BOARD_VISIBLE_HEIGHT } from '../src/core/types.ts';
 
@@ -305,6 +306,79 @@ describe('real post-TST boards', () => {
           if (board[r]![c] === null) emptyCells++;
       expect(emptyCells).toBe(24);
       expect(emptyCells % 4).toBe(0);
+    });
+  }
+});
+
+// ── HC PC solution data tests ──
+
+describe('HC PC solutions (bag3-pc data)', () => {
+  const ALL_PIECES: PieceType[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+
+  test('getPcSolutions returns 4 HC normal solutions', () => {
+    const solutions = getPcSolutions('honey_cup', false);
+    expect(solutions.length).toBe(4);
+  });
+
+  test('getPcSolutions returns 4 HC mirror solutions', () => {
+    const solutions = getPcSolutions('honey_cup', true);
+    expect(solutions.length).toBe(4);
+  });
+
+  test('returns empty for openers without PC data', () => {
+    expect(getPcSolutions('stray_cannon', false)).toEqual([]);
+    expect(getPcSolutions('ms2', false)).toEqual([]);
+    expect(getPcSolutions('gamushiro', false)).toEqual([]);
+  });
+
+  // Verify every normal solution achieves PC
+  const normalSolutions = getPcSolutions('honey_cup', false);
+  for (let i = 0; i < normalSolutions.length; i++) {
+    const sol = normalSolutions[i]!;
+
+    test(`normal sol ${i} (hold=${sol.holdPiece}): exactly 6 placements, 6 unique pieces`, () => {
+      expect(sol.placements.length).toBe(6);
+      const types = new Set(sol.placements.map(p => p.piece));
+      expect(types.size).toBe(6);
+      // holdPiece is the 7th unused type
+      expect(types.has(sol.holdPiece)).toBe(false);
+      const allUsed = [...types, sol.holdPiece].sort();
+      expect(allUsed).toEqual([...ALL_PIECES].sort());
+    });
+
+    test(`normal sol ${i} (hold=${sol.holdPiece}): achieves PC via replayPcSteps`, () => {
+      const board = getPostTstBoard('honey_cup', false, 0)!;
+      const steps = replayPcSteps(board, sol.placements);
+      expect(steps.length).toBe(6);
+      const finalBoard = steps[steps.length - 1]!.board;
+      expect(countCells(finalBoard)).toBe(0); // Perfect Clear
+    });
+
+    test(`normal sol ${i} (hold=${sol.holdPiece}): each placement has 4 cells`, () => {
+      for (const p of sol.placements) {
+        expect(p.cells.length).toBe(4);
+      }
+    });
+  }
+
+  // Verify every mirror solution achieves PC on the mirrored post-TST board
+  const mirrorSolutions = getPcSolutions('honey_cup', true);
+  for (let i = 0; i < mirrorSolutions.length; i++) {
+    const sol = mirrorSolutions[i]!;
+
+    test(`mirror sol ${i} (hold=${sol.holdPiece}): exactly 6 placements, 6 unique pieces`, () => {
+      expect(sol.placements.length).toBe(6);
+      const types = new Set(sol.placements.map(p => p.piece));
+      expect(types.size).toBe(6);
+      expect(types.has(sol.holdPiece)).toBe(false);
+    });
+
+    test(`mirror sol ${i} (hold=${sol.holdPiece}): achieves PC via replayPcSteps`, () => {
+      const board = getPostTstBoard('honey_cup', true, 0)!;
+      const steps = replayPcSteps(board, sol.placements);
+      expect(steps.length).toBe(6);
+      const finalBoard = steps[steps.length - 1]!.board;
+      expect(countCells(finalBoard)).toBe(0); // Perfect Clear
     });
   }
 });
