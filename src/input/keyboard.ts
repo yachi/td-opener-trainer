@@ -76,7 +76,7 @@ export function setupKeyboard(
 
   function isManualReveal(session: Session): boolean {
     return (
-      (session.phase === 'reveal1' || session.phase === 'reveal2') &&
+      (session.phase === 'reveal1' || session.phase === 'reveal2' || session.phase === 'reveal3') &&
       session.playMode === 'manual'
     );
   }
@@ -162,7 +162,7 @@ export function setupKeyboard(
     }
 
     // ── Auto reveal: arrow keys step through cachedSteps ──
-    if (session.phase === 'reveal1' || session.phase === 'reveal2') {
+    if (session.phase === 'reveal1' || session.phase === 'reveal2' || session.phase === 'reveal3') {
       if (code === 'ArrowLeft') {
         e.preventDefault();
         dispatch({ type: 'stepBackward' });

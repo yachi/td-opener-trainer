@@ -56,7 +56,7 @@ import type { PieceType } from '../src/core/types.ts';
 const ACTION_TYPES = [
   'newSession', 'setGuess', 'toggleMirror', 'submitGuess',
   'stepForward', 'stepBackward', 'advancePhase', 'togglePlayMode',
-  'selectRoute', 'browseOpener',
+  'selectRoute', 'selectPcSolution', 'browseOpener',
   'movePiece', 'rotatePiece', 'hardDrop', 'hold', 'softDrop',
   'primary', 'pick',
 ] as const;
@@ -111,6 +111,20 @@ function buildState(phase: Phase, playMode: PlayMode): Session {
   if (phase === 'reveal2') {
     s = sessionReducer(s, { type: 'selectRoute', routeIndex: 0 });
   }
+  // guess3/reveal3 require PC solutions — only honey_cup has those.
+  // Rebuild from scratch with honey_cup to reach these phases.
+  if (phase === 'guess3' || phase === 'reveal3') {
+    const hcBag = bagFor('honey_cup');
+    s = createSession(hcBag, hcBag);
+    s = sessionReducer(s, { type: 'setGuess', opener: 'honey_cup', mirror: false });
+    s = sessionReducer(s, { type: 'submitGuess' });         // → reveal1
+    s = sessionReducer(s, { type: 'advancePhase' });        // → guess2
+    s = sessionReducer(s, { type: 'selectRoute', routeIndex: 0 }); // → reveal2
+    s = sessionReducer(s, { type: 'advancePhase' });        // → guess3
+  }
+  if (phase === 'reveal3') {
+    s = sessionReducer(s, { type: 'selectPcSolution', solutionIndex: 0 }); // → reveal3
+  }
   // Switch playMode LAST so we reach the target phase via normal path first.
   if (s.playMode !== playMode) {
     s = sessionReducer(s, { type: 'togglePlayMode' });
@@ -140,6 +154,7 @@ function buildAction(type: ActionType): SessionAction {
     case 'advancePhase':    return { type: 'advancePhase' };
     case 'togglePlayMode':  return { type: 'togglePlayMode' };
     case 'selectRoute':     return { type: 'selectRoute', routeIndex: 1 };
+    case 'selectPcSolution': return { type: 'selectPcSolution', solutionIndex: 1 };
     case 'browseOpener':    return { type: 'browseOpener', opener: 'stray_cannon', mirror: false };
     case 'movePiece':       return { type: 'movePiece', dx: -1, dy: 0 };
     case 'rotatePiece':     return { type: 'rotatePiece', direction: 1 };
@@ -167,7 +182,7 @@ function buildAction(type: ActionType): SessionAction {
 type Context = `${Phase}_${PlayMode}`;
 type Expectation = 'identity' | 'change';
 
-const ALL_PHASES: Phase[] = ['guess1', 'reveal1', 'guess2', 'reveal2'];
+const ALL_PHASES: Phase[] = ['guess1', 'reveal1', 'guess2', 'reveal2', 'guess3', 'reveal3'];
 const ALL_MODES: PlayMode[] = ['auto', 'manual'];
 
 const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
@@ -178,6 +193,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'change', reveal1_manual: 'change',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'change',
+    guess3_auto: 'change', guess3_manual: 'change',
+    reveal3_auto: 'change', reveal3_manual: 'change',
   },
 
   setGuess: {
@@ -185,6 +202,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'identity',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
   },
 
   toggleMirror: {
@@ -192,6 +211,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
   },
 
   submitGuess: {
@@ -199,6 +220,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'identity',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
   },
 
   stepForward: {
@@ -206,6 +229,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'change', reveal1_manual: 'change',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'change', reveal2_manual: 'change',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'change', reveal3_manual: 'change',
   },
 
   stepBackward: {
@@ -216,6 +241,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'identity',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
   },
 
   advancePhase: {
@@ -223,6 +250,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'change', reveal1_manual: 'change',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'change', reveal2_manual: 'change',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'change', reveal3_manual: 'change',
   },
 
   togglePlayMode: {
@@ -230,6 +259,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'change', reveal1_manual: 'change',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'change',
+    guess3_auto: 'change', guess3_manual: 'change',
+    reveal3_auto: 'change', reveal3_manual: 'change',
   },
 
   selectRoute: {
@@ -237,6 +268,17 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'identity',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
+  },
+
+  selectPcSolution: {
+    guess1_auto: 'identity', guess1_manual: 'identity',
+    reveal1_auto: 'identity', reveal1_manual: 'identity',
+    guess2_auto: 'identity', guess2_manual: 'identity',
+    reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'change', guess3_manual: 'change',
+    reveal3_auto: 'change', reveal3_manual: 'identity',
   },
 
   browseOpener: {
@@ -244,6 +286,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
   },
 
   // ── Manual-play actions ──
@@ -253,6 +297,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'change',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'change',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'change',
   },
 
   rotatePiece: {
@@ -260,6 +306,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'change',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'change',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'change',
   },
 
   hardDrop: {
@@ -270,6 +318,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'identity',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
   },
 
   hold: {
@@ -277,6 +327,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'change',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'change',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'change',
   },
 
   softDrop: {
@@ -284,6 +336,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal1_auto: 'identity', reveal1_manual: 'change',
     guess2_auto: 'identity', guess2_manual: 'identity',
     reveal2_auto: 'identity', reveal2_manual: 'change',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'change',
   },
 
   // ── Intent actions ──
@@ -295,10 +349,13 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     // reveal auto: advancePhase → change
     // reveal manual: hardDrop (may fail match) → identity
     // guess2: selectRoute(best) → change
+    // guess3: selectPcSolution(0) → change
     guess1_auto: 'change', guess1_manual: 'change',
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'identity',
+    guess3_auto: 'change', guess3_manual: 'change',
+    reveal3_auto: 'change', reveal3_manual: 'identity',
   },
 
   pick: {
@@ -308,10 +365,15 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     // guess2: selectRoute → change
     // reveal2 auto: selectRoute → change (pick(1) = route 1, differs from route 0)
     // reveal2 manual: no-op (safe zone)
+    // guess3: selectPcSolution → change
+    // reveal3 auto: selectPcSolution → change (pick(1) = solution 1, differs from 0)
+    // reveal3 manual: no-op (safe zone)
     guess1_auto: 'change', guess1_manual: 'change',
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'identity',
+    guess3_auto: 'change', guess3_manual: 'change',
+    reveal3_auto: 'change', reveal3_manual: 'identity',
   },
 };
 

@@ -427,6 +427,16 @@ describe('Property 5: full guess1 → reveal1 → guess2 → reveal2 → newSess
 
           s = sessionReducer(s, { type: 'advancePhase' });
           assertSessionInvariants(s);
+
+          // HC has PC data → goes to guess3; others → restart to guess1.
+          if (s.phase === 'guess3') {
+            // Continue through guess3 → reveal3 → guess1
+            s = sessionReducer(s, { type: 'selectPcSolution', solutionIndex: 0 });
+            assertSessionInvariants(s);
+            expect(s.phase).toBe('reveal3');
+            s = sessionReducer(s, { type: 'advancePhase' });
+            assertSessionInvariants(s);
+          }
           expect(s.phase).toBe('guess1');
           expect(s.guess).toBeNull();
           // Stats carry forward; we made 1 submission.

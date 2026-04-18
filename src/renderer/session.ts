@@ -45,6 +45,7 @@ import { OPENERS, DECISION_PIECES, DECISION_PIECES_MIRROR } from '../openers/dec
 import { getBag2Routes } from '../openers/bag2-routes';
 import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
+import { getPcSolutions } from '../openers/bag3-pc';
 import type { Board } from '../core/srs';
 import type { Session } from '../session';
 
@@ -226,6 +227,12 @@ export function renderSession(
     case 'reveal2':
       drawReveal2Panel(ctx, session);
       break;
+    case 'guess3':
+      drawGuess3Panel(ctx, session);
+      break;
+    case 'reveal3':
+      drawReveal3Panel(ctx, session);
+      break;
   }
 
   // 5. Keybind bar (bottom).
@@ -322,7 +329,7 @@ function drawLiveBoard(
   // phase with playMode='manual'. Resolved default: always show the hint in
   // manual mode (no separate H toggle in Session shape).
   const isReveal =
-    session.phase === 'reveal1' || session.phase === 'reveal2';
+    session.phase === 'reveal1' || session.phase === 'reveal2' || session.phase === 'reveal3';
   if (isReveal && session.playMode === 'manual') {
     drawNextTargetGhost(ctx, session, startBoardRow);
   }
@@ -852,6 +859,154 @@ function drawReveal2Panel(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Phase: guess3
+// ═══════════════════════════════════════════════════════════════════════════
+
+function drawGuess3Panel(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+): void {
+  let y = PANEL_Y;
+  drawPanelHeading(ctx, 'Phase: pick PC solution', y);
+  y += PANEL_LINE_H + 4;
+
+  // Opener context.
+  if (session.guess) {
+    const def = OPENERS[session.guess.opener];
+    const mirrorLabel = session.guess.mirror ? ' (Mirror)' : '';
+    drawPanelLine(
+      ctx,
+      `${def.nameEn}${mirrorLabel} (post-TST board)`,
+      y,
+      '#CCAA44',
+      true,
+    );
+    y += PANEL_LINE_H + 4;
+  }
+
+  // List PC solutions.
+  if (session.guess) {
+    const solutions = getPcSolutions(session.guess.opener, session.guess.mirror);
+    if (solutions.length === 0) {
+      drawPanelLine(ctx, 'No PC solutions available', y, '#9999BB');
+      y += PANEL_LINE_H;
+    } else {
+      drawPanelLine(ctx, 'PC solutions:', y);
+      y += PANEL_LINE_H;
+      for (let i = 0; i < solutions.length; i++) {
+        const sol = solutions[i]!;
+        const isSelected = session.pcSolutionIndex === i;
+
+        // Selected highlight bar.
+        if (isSelected) {
+          ctx.fillStyle = COLORS.buttonActive;
+          roundRect(ctx, PANEL_X - 4, y - 2, PANEL_W, PANEL_LINE_H + 2, 4);
+          ctx.fill();
+        }
+
+        const label = `(${i + 1}) hold ${sol.holdPiece}`;
+        drawPanelLine(
+          ctx,
+          label,
+          y,
+          isSelected ? '#FFFFFF' : COLORS.panelText,
+          isSelected,
+        );
+
+        // Draw the hold piece preview inline.
+        const textW = ctx.measureText(label).width;
+        const previewX = PANEL_X + textW + 8;
+        const previewSz = 16;
+        const cellSz = 3;
+        drawPieceInBox(ctx, sol.holdPiece, previewX, y - 1, previewSz, previewSz, cellSz);
+
+        y += PANEL_LINE_H;
+      }
+    }
+  }
+
+  y += 6;
+  drawPanelLine(ctx, '1-4 pick \u00b7 ENTER auto-pick \u00b7 SPACE skip', y, '#9999BB');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase: reveal3
+// ═══════════════════════════════════════════════════════════════════════════
+
+function drawReveal3Panel(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+): void {
+  let y = PANEL_Y;
+  drawPanelHeading(
+    ctx,
+    `PC Reveal (${session.playMode})`,
+    y,
+  );
+  y += PANEL_LINE_H + 4;
+
+  // Solution info.
+  if (session.guess) {
+    const solutions = getPcSolutions(session.guess.opener, session.guess.mirror);
+    const sol = solutions[session.pcSolutionIndex];
+    if (sol) {
+      drawPanelLine(
+        ctx,
+        `Solution ${session.pcSolutionIndex + 1}/${solutions.length} (hold ${sol.holdPiece})`,
+        y,
+        COLORS.panelHeading,
+        true,
+      );
+      y += PANEL_LINE_H + 4;
+
+      // Hold piece box.
+      drawPanelLine(ctx, 'Hold:', y);
+      y += PANEL_LINE_H;
+      const slotX = PANEL_X;
+      const slotY = y;
+      const slotW = 50;
+      const slotH = 50;
+      ctx.fillStyle = COLORS.statCardBg;
+      ctx.fillRect(slotX, slotY, slotW, slotH);
+      ctx.strokeStyle = COLORS.boardBorder;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(slotX + 0.5, slotY + 0.5, slotW - 1, slotH - 1);
+      drawPieceInBox(ctx, sol.holdPiece, slotX, slotY, slotW, slotH, 10);
+      y += slotH + 8;
+    }
+  }
+
+  // Step counter.
+  const total = session.cachedSteps.length;
+  const atEnd = session.step >= total;
+  drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
+  y += PANEL_LINE_H + 4;
+
+  // "Perfect Clear!" banner when all steps are placed.
+  if (atEnd && total > 0) {
+    ctx.fillStyle = COLORS.correct;
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Perfect Clear!', PANEL_X, y);
+    y += 24;
+  }
+
+  // Navigation hint.
+  if (session.playMode === 'manual') {
+    drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
+  } else {
+    drawPanelLine(ctx, '\u2190 \u2192 step \u00b7 SPACE next \u00b7 1-4 browse', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Keybind bar (bottom)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -901,7 +1056,22 @@ function keybindHintForSession(session: Session): string {
       const n = session.guess
         ? getBag2Routes(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} route  \u2190\u2192 step  SPACE new bag  P manual`;
+      return `1-${n} route  \u2190\u2192 step  SPACE next  P manual`;
+    }
+    case 'guess3': {
+      const n = session.guess
+        ? getPcSolutions(session.guess.opener, session.guess.mirror).length
+        : 4;
+      return `1-${n} pick solution  ENTER auto-pick  SPACE skip  R new bag`;
+    }
+    case 'reveal3': {
+      if (session.playMode === 'manual') {
+        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+      }
+      const n = session.guess
+        ? getPcSolutions(session.guess.opener, session.guess.mirror).length
+        : 4;
+      return `1-${n} browse  \u2190\u2192 step  SPACE next  P manual`;
     }
   }
 }

@@ -30,6 +30,7 @@ import {
   stampCells,
   findAllPlacements,
   lockAndClear,
+  replayPcSteps,
   type Board,
   type Step,
 } from './core/engine.ts';
@@ -52,10 +53,11 @@ import {
 import { getBag2Routes } from './openers/bag2-routes.ts';
 import { getBag2Sequence } from './openers/sequences.ts';
 import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
+import { getPcSolutions } from './openers/bag3-pc.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
-export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2';
+export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2' | 'guess3' | 'reveal3';
 export type PlayMode = 'auto' | 'manual';
 
 export interface Guess {
@@ -87,6 +89,8 @@ export interface Session {
   cachedSteps: Step[];
   /** Route index selected during guess2 (-1 if not yet selected). */
   routeGuess: number;
+  /** PC solution index selected during guess3 (-1 if not yet selected). */
+  pcSolutionIndex: number;
 
   // ── Reframing A+ fields (manual-play in-flight state) ──
   /**
@@ -112,8 +116,9 @@ export interface Session {
 /**
  * Discriminated union of every reducer action.
  *
- *   - 9 session-level: newSession, setGuess, toggleMirror, submitGuess,
- *     stepForward, stepBackward, advancePhase, togglePlayMode, selectRoute
+ *   - 10 session-level: newSession, setGuess, toggleMirror, submitGuess,
+ *     stepForward, stepBackward, advancePhase, togglePlayMode, selectRoute,
+ *     selectPcSolution
  *   - 5 manual-play: movePiece, rotatePiece, hardDrop, hold, softDrop
  *   - 2 intent actions: primary, pick
  *
@@ -133,6 +138,7 @@ export type SessionAction =
   | { type: 'advancePhase' }
   | { type: 'togglePlayMode' }
   | { type: 'selectRoute'; routeIndex: number }
+  | { type: 'selectPcSolution'; solutionIndex: number }
   | { type: 'browseOpener'; opener: OpenerID; mirror: boolean }
   // ── Reframing A+ manual-play actions ──
   | { type: 'movePiece'; dx: number; dy: number }
@@ -193,7 +199,7 @@ export function assertSessionInvariants(s: Session): void {
   // Catches Bug #2's root effect: selectRoute with an out-of-range routeIndex
   // produced empty cachedSteps but still transitioned to reveal2.
   if (
-    (s.phase === 'reveal1' || s.phase === 'reveal2') &&
+    (s.phase === 'reveal1' || s.phase === 'reveal2' || s.phase === 'reveal3') &&
     s.cachedSteps.length === 0
   ) {
     throw new InvariantViolation(
@@ -211,6 +217,20 @@ export function assertSessionInvariants(s: Session): void {
     if (s.routeGuess < 0 || s.routeGuess >= routes.length) {
       throw new InvariantViolation(
         `reveal2 routeGuess (${s.routeGuess}) out of range [0, ${routes.length})`,
+        s,
+      );
+    }
+  }
+
+  // ── 3b. reveal3 pcSolutionIndex within PC solutions list ──
+  if (s.phase === 'reveal3') {
+    if (s.guess === null) {
+      throw new InvariantViolation('reveal3 requires a non-null guess', s);
+    }
+    const pcSolutions = getPcSolutions(s.guess.opener, s.guess.mirror);
+    if (s.pcSolutionIndex < 0 || s.pcSolutionIndex >= pcSolutions.length) {
+      throw new InvariantViolation(
+        `reveal3 pcSolutionIndex (${s.pcSolutionIndex}) out of range [0, ${pcSolutions.length})`,
         s,
       );
     }
@@ -246,7 +266,7 @@ export function assertSessionInvariants(s: Session): void {
     );
   }
 
-  // ── 5. null guess implies guess1 phase ──
+  // ── 5. null guess implies guess1 phase (all other phases require a guess) ──
   if (s.guess === null && s.phase !== 'guess1') {
     throw new InvariantViolation(
       `phase=${s.phase} requires a guess, but guess is null`,
@@ -257,7 +277,7 @@ export function assertSessionInvariants(s: Session): void {
   // ── 6. Manual reveal with a pending step must have activePiece (unless
   //      the user just used hold-with-peek at the final step). ──
   const isManualReveal =
-    (s.phase === 'reveal1' || s.phase === 'reveal2') &&
+    (s.phase === 'reveal1' || s.phase === 'reveal2' || s.phase === 'reveal3') &&
     s.playMode === 'manual';
   if (
     isManualReveal &&
@@ -283,7 +303,7 @@ export function assertSessionInvariants(s: Session): void {
   }
 
   // ── 8. Non-reveal phases have no in-flight play state ──
-  if (s.phase === 'guess1' || s.phase === 'guess2') {
+  if (s.phase === 'guess1' || s.phase === 'guess2' || s.phase === 'guess3') {
     if (s.activePiece !== null) {
       throw new InvariantViolation(`${s.phase} must not have an activePiece`, s);
     }
@@ -404,6 +424,7 @@ export function createSession(
     sessionStats: { total: 0, correct: 0, streak: 0 },
     cachedSteps: [],
     routeGuess: -1,
+    pcSolutionIndex: -1,
     activePiece: null,
     holdPiece: null,
     holdUsed: false,
@@ -418,6 +439,19 @@ function spawnForCurrentStep(
   const next = cachedSteps[step];
   if (!next) return null;
   return spawnPiece(next.piece);
+}
+
+/** Compute the post-TST board for a given (opener, mirror, route). */
+function computePostTstBoard(opener: OpenerID, mirror: boolean, routeIndex: number): Board | null {
+  const seq = getBag2Sequence(opener, mirror, routeIndex);
+  if (!seq || seq.fullSteps.length === 0) return null;
+  const bag2FinalBoard = seq.fullSteps[seq.fullSteps.length - 1]!.board;
+  const tPlacements = findAllPlacements(bag2FinalBoard, 'T');
+  for (const tp of tPlacements) {
+    const result = lockAndClear(bag2FinalBoard, tp.piece);
+    if (result.linesCleared === 3) return result.board;
+  }
+  return null;
 }
 
 // ── Reducer ───────────────────────────────────────────────────────────────
@@ -527,7 +561,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'stepForward': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
       if (state.step >= state.cachedSteps.length) return state;
       const nextStep = state.step + 1;
       const board = state.cachedSteps[nextStep - 1]!.board;
@@ -535,7 +569,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'stepBackward': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
       if (state.step <= 0) return state;
       const prevStep = state.step - 1;
       const board =
@@ -565,8 +599,53 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           holdUsed: false,
         };
       }
-      // reveal2 → new guess1 with fresh bags (stats carry forward).
+      // reveal2 → guess3 (if PC solutions exist AND board is compatible).
+      // PC solutions are designed for a specific post-TST board shape.
+      // Not all routes produce the same shape (routes 3-7 differ from 0-2
+      // for HC), so we must verify compatibility before entering guess3.
       if (state.phase === 'reveal2') {
+        const pcSolutions = state.guess
+          ? getPcSolutions(state.guess.opener, state.guess.mirror)
+          : [];
+        const restartState = {
+          ...createSession(),
+          playMode: state.playMode,
+          sessionStats: state.sessionStats,
+        };
+        if (pcSolutions.length === 0) return restartState;
+        // Check board compatibility: post-TST board must exist and
+        // at least one PC solution must replay without conflict.
+        const postTstBoard = computePostTstBoard(
+          state.guess!.opener, state.guess!.mirror, state.routeGuess,
+        );
+        if (!postTstBoard) return restartState;
+        let anyCompatible = false;
+        for (const sol of pcSolutions) {
+          try {
+            replayPcSteps(postTstBoard, sol.placements);
+            anyCompatible = true;
+            break;
+          } catch { /* board mismatch — try next */ }
+        }
+        if (!anyCompatible) return restartState;
+        const finalBoard =
+          state.cachedSteps.length > 0
+            ? cloneBoard(state.cachedSteps[state.cachedSteps.length - 1]!.board)
+            : state.board;
+        return {
+          ...state,
+          phase: 'guess3',
+          board: finalBoard,
+          step: 0,
+          cachedSteps: [],
+          pcSolutionIndex: -1,
+          activePiece: null,
+          holdPiece: null,
+          holdUsed: false,
+        };
+      }
+      // reveal3 → new guess1 with fresh bags (stats carry forward).
+      if (state.phase === 'reveal3') {
         return {
           ...createSession(),
           playMode: state.playMode,
@@ -642,6 +721,47 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       };
     }
 
+    case 'selectPcSolution': {
+      if (state.guess === null) return state;
+      if (state.phase !== 'guess3' && !(state.phase === 'reveal3' && state.playMode === 'auto')) return state;
+      if (state.phase === 'reveal3' && state.pcSolutionIndex === action.solutionIndex) return state;
+
+      const pcSolutions = getPcSolutions(state.guess.opener, state.guess.mirror);
+      if (
+        !Number.isInteger(action.solutionIndex) ||
+        action.solutionIndex < 0 ||
+        action.solutionIndex >= pcSolutions.length
+      ) {
+        return state;
+      }
+
+      // Recompute post-TST board (deterministic from opener/mirror/route).
+      const postTstBoard = computePostTstBoard(
+        state.guess.opener, state.guess.mirror, state.routeGuess,
+      );
+      if (!postTstBoard) return state;
+
+      const solution = pcSolutions[action.solutionIndex]!;
+      const pcSteps = replayPcSteps(postTstBoard, solution.placements);
+
+      const activePiece =
+        state.playMode === 'manual'
+          ? spawnForCurrentStep(pcSteps, 0)
+          : null;
+
+      return {
+        ...state,
+        phase: 'reveal3',
+        pcSolutionIndex: action.solutionIndex,
+        cachedSteps: pcSteps,
+        step: 0,
+        board: cloneBoard(postTstBoard),
+        activePiece,
+        holdPiece: null,
+        holdUsed: false,
+      };
+    }
+
     case 'browseOpener': {
       if (state.phase !== 'reveal1') return state;
       if (state.playMode !== 'auto') return state;
@@ -672,7 +792,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       //   - auto→manual in a reveal phase spawns the current step's piece
       //   - manual→auto clears activePiece + hold state
       //   - toggle outside reveal (e.g., during guess1) does NOT spawn
-      const isReveal = state.phase === 'reveal1' || state.phase === 'reveal2';
+      const isReveal = state.phase === 'reveal1' || state.phase === 'reveal2' || state.phase === 'reveal3';
       const activePiece =
         nextMode === 'manual' && isReveal
           ? spawnForCurrentStep(state.cachedSteps, state.step)
@@ -689,7 +809,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     // ── Reframing A+ manual-play actions ──
 
     case 'movePiece': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       // Defense-in-depth: ensure dx/dy are integers before passing to
@@ -710,7 +830,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'rotatePiece': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       const rotated = tryRotate(state.board, state.activePiece, action.direction);
@@ -719,7 +839,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'hardDrop': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       const expectedStep = state.cachedSteps[state.step];
@@ -763,7 +883,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'hold': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2') return state;
+      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       if (state.holdUsed) return state;
@@ -809,6 +929,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             : _rawSessionReducer(state, { type: 'newSession' });
         case 'reveal1':
         case 'reveal2':
+        case 'reveal3':
           // Manual with an active piece: drop it.
           // Manual at end (activePiece === null) OR auto mode: advance phase.
           if (state.playMode === 'manual' && state.activePiece !== null) {
@@ -821,6 +942,10 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           }
           const best = bestBag2Route(state.guess.opener, state.guess.mirror, state.bag2);
           return _rawSessionReducer(state, { type: 'selectRoute', routeIndex: best.routeIndex });
+        }
+        case 'guess3': {
+          // Auto-select first PC solution.
+          return _rawSessionReducer(state, { type: 'selectPcSolution', solutionIndex: 0 });
         }
       }
     }
@@ -892,6 +1017,36 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           return _rawSessionReducer(state, {
             type: 'selectRoute',
             routeIndex: action.index,
+          });
+        }
+        case 'guess3': {
+          if (state.guess === null) return state;
+          const pcSols = getPcSolutions(state.guess.opener, state.guess.mirror);
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= pcSols.length
+          ) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
+            type: 'selectPcSolution',
+            solutionIndex: action.index,
+          });
+        }
+        case 'reveal3': {
+          if (state.playMode !== 'auto' || state.guess === null) return state;
+          const pcSols2 = getPcSolutions(state.guess.opener, state.guess.mirror);
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= pcSols2.length
+          ) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
+            type: 'selectPcSolution',
+            solutionIndex: action.index,
           });
         }
       }
