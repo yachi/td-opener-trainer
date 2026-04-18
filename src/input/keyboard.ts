@@ -34,7 +34,7 @@
  * Waiting for the next rAF tick creates a race with keyup (commit 0ddbe99).
  */
 
-import type { Session, SessionAction } from '../session.ts';
+import { isRevealPhase, type Session, type SessionAction } from '../session.ts';
 
 // ── DAS/ARR timing (copied from deleted src/play/manual.ts) ──
 const DAS_DELAY = 167; // ms before auto-repeat starts
@@ -75,10 +75,7 @@ export function setupKeyboard(
   const keyStates = new Map<string, KeyState>();
 
   function isManualReveal(session: Session): boolean {
-    return (
-      (session.phase === 'reveal1' || session.phase === 'reveal2' || session.phase === 'reveal3') &&
-      session.playMode === 'manual'
-    );
+    return isRevealPhase(session.phase) && session.playMode === 'manual';
   }
 
   function onKeyDown(e: KeyboardEvent): void {
@@ -162,7 +159,7 @@ export function setupKeyboard(
     }
 
     // ── Auto reveal: arrow keys step through cachedSteps ──
-    if (session.phase === 'reveal1' || session.phase === 'reveal2' || session.phase === 'reveal3') {
+    if (isRevealPhase(session.phase)) {
       if (code === 'ArrowLeft') {
         e.preventDefault();
         dispatch({ type: 'stepBackward' });

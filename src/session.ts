@@ -60,6 +60,30 @@ import { getPcSolutions } from './openers/bag3-pc.ts';
 export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2' | 'guess3' | 'reveal3';
 export type PlayMode = 'auto' | 'manual';
 
+// ── Phase metadata table (L9: single source of truth for phase properties) ──
+
+interface PhaseMeta {
+  kind: 'guess' | 'reveal';
+  bag: 1 | 2 | 3;
+}
+
+const PHASE_META = {
+  guess1:  { kind: 'guess',  bag: 1 },
+  reveal1: { kind: 'reveal', bag: 1 },
+  guess2:  { kind: 'guess',  bag: 2 },
+  reveal2: { kind: 'reveal', bag: 2 },
+  guess3:  { kind: 'guess',  bag: 3 },
+  reveal3: { kind: 'reveal', bag: 3 },
+} as const satisfies Record<Phase, PhaseMeta>;
+
+export function isRevealPhase(phase: Phase): boolean {
+  return PHASE_META[phase].kind === 'reveal';
+}
+
+export function isGuessPhase(phase: Phase): boolean {
+  return PHASE_META[phase].kind === 'guess';
+}
+
 export interface Guess {
   opener: OpenerID;
   mirror: boolean;
@@ -198,10 +222,7 @@ export function assertSessionInvariants(s: Session): void {
   // ── 2. reveal phases require non-empty cachedSteps ──
   // Catches Bug #2's root effect: selectRoute with an out-of-range routeIndex
   // produced empty cachedSteps but still transitioned to reveal2.
-  if (
-    (s.phase === 'reveal1' || s.phase === 'reveal2' || s.phase === 'reveal3') &&
-    s.cachedSteps.length === 0
-  ) {
+  if (isRevealPhase(s.phase) && s.cachedSteps.length === 0) {
     throw new InvariantViolation(
       `phase=${s.phase} but cachedSteps is empty — invalid transition`,
       s,
@@ -276,9 +297,7 @@ export function assertSessionInvariants(s: Session): void {
 
   // ── 6. Manual reveal with a pending step must have activePiece (unless
   //      the user just used hold-with-peek at the final step). ──
-  const isManualReveal =
-    (s.phase === 'reveal1' || s.phase === 'reveal2' || s.phase === 'reveal3') &&
-    s.playMode === 'manual';
+  const isManualReveal = isRevealPhase(s.phase) && s.playMode === 'manual';
   if (
     isManualReveal &&
     s.step < s.cachedSteps.length &&
@@ -303,7 +322,7 @@ export function assertSessionInvariants(s: Session): void {
   }
 
   // ── 8. Non-reveal phases have no in-flight play state ──
-  if (s.phase === 'guess1' || s.phase === 'guess2' || s.phase === 'guess3') {
+  if (isGuessPhase(s.phase)) {
     if (s.activePiece !== null) {
       throw new InvariantViolation(`${s.phase} must not have an activePiece`, s);
     }
@@ -561,7 +580,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'stepForward': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
+      if (!isRevealPhase(state.phase)) return state;
       if (state.step >= state.cachedSteps.length) return state;
       const nextStep = state.step + 1;
       const board = state.cachedSteps[nextStep - 1]!.board;
@@ -569,7 +588,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'stepBackward': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
+      if (!isRevealPhase(state.phase)) return state;
       if (state.step <= 0) return state;
       const prevStep = state.step - 1;
       const board =
@@ -792,7 +811,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       //   - auto→manual in a reveal phase spawns the current step's piece
       //   - manual→auto clears activePiece + hold state
       //   - toggle outside reveal (e.g., during guess1) does NOT spawn
-      const isReveal = state.phase === 'reveal1' || state.phase === 'reveal2' || state.phase === 'reveal3';
+      const isReveal = isRevealPhase(state.phase);
       const activePiece =
         nextMode === 'manual' && isReveal
           ? spawnForCurrentStep(state.cachedSteps, state.step)
@@ -809,7 +828,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     // ── Reframing A+ manual-play actions ──
 
     case 'movePiece': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
+      if (!isRevealPhase(state.phase)) return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       // Defense-in-depth: ensure dx/dy are integers before passing to
@@ -830,7 +849,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'rotatePiece': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
+      if (!isRevealPhase(state.phase)) return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       const rotated = tryRotate(state.board, state.activePiece, action.direction);
@@ -839,7 +858,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'hardDrop': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
+      if (!isRevealPhase(state.phase)) return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       const expectedStep = state.cachedSteps[state.step];
@@ -883,7 +902,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'hold': {
-      if (state.phase !== 'reveal1' && state.phase !== 'reveal2' && state.phase !== 'reveal3') return state;
+      if (!isRevealPhase(state.phase)) return state;
       if (state.playMode !== 'manual') return state;
       if (state.activePiece === null) return state;
       if (state.holdUsed) return state;

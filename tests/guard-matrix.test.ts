@@ -36,6 +36,8 @@ import { describe, test, expect } from 'bun:test';
 import {
   createSession,
   sessionReducer,
+  isRevealPhase,
+  isGuessPhase,
   type Session,
   type SessionAction,
   type Phase,
@@ -553,6 +555,38 @@ describe('Edge cases: pick delegation paths', () => {
     const s = buildState('reveal2', 'auto');
     const next = sessionReducer(s, { type: 'pick', index: 99 });
     expect(next).toBe(s);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// §6  Phase metadata structural enforcement
+//
+// Verifies that isRevealPhase / isGuessPhase are exhaustive and consistent
+// with ALL_PHASES. If a new Phase is added to the union but not to
+// PHASE_META, the TypeScript compiler catches it (Record<Phase, PhaseMeta>
+// in session.ts). These tests verify the runtime behavior matches.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Phase metadata: isRevealPhase / isGuessPhase structural coverage', () => {
+  test('every phase is either guess or reveal (exhaustive)', () => {
+    for (const phase of ALL_PHASES) {
+      const isR = isRevealPhase(phase);
+      const isG = isGuessPhase(phase);
+      expect(isR || isG).toBe(true);
+      expect(isR && isG).toBe(false); // mutually exclusive
+    }
+  });
+
+  test('reveal phases match hardcoded expectation', () => {
+    const expected = new Set<Phase>(['reveal1', 'reveal2', 'reveal3']);
+    const actual = new Set(ALL_PHASES.filter(isRevealPhase));
+    expect(actual).toEqual(expected);
+  });
+
+  test('guess phases match hardcoded expectation', () => {
+    const expected = new Set<Phase>(['guess1', 'guess2', 'guess3']);
+    const actual = new Set(ALL_PHASES.filter(isGuessPhase));
+    expect(actual).toEqual(expected);
   });
 });
 

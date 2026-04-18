@@ -47,7 +47,7 @@ import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
 import type { Board } from '../core/srs';
-import type { Session } from '../session';
+import { isRevealPhase, type Session } from '../session';
 
 const FONT = '-apple-system, sans-serif';
 
@@ -328,8 +328,7 @@ function drawLiveBoard(
   // Manual-mode hint overlay: outline the next target cells when in a reveal
   // phase with playMode='manual'. Resolved default: always show the hint in
   // manual mode (no separate H toggle in Session shape).
-  const isReveal =
-    session.phase === 'reveal1' || session.phase === 'reveal2' || session.phase === 'reveal3';
+  const isReveal = isRevealPhase(session.phase);
   if (isReveal && session.playMode === 'manual') {
     drawNextTargetGhost(ctx, session, startBoardRow);
   }
