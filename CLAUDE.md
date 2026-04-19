@@ -235,15 +235,22 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/bag2-routes.ts` — `Bag2Route.bag1Reduction?: number` metadata. Only Gamushiro form_2 sets it (= 1) — its wiki board genuinely can't fit full Bag 1 (verified by 100K attempts failing in `/private/tmp/probe-backtrack.ts`).
 - `src/openers/sequences.ts` — `getBag2Sequence` does ONE `buildSteps` call on `[bag1Used + hold + bag2]`, throws on incomplete (data bug, not runtime fallback).
 
-**Tests (21 files, 1092 tests, ~45,253 assertions):**
+**Test infrastructure (L9 speed redesign — commit `c73efe0`, 377s → 18s):**
+- `tests/pbt-config.ts` — fast-check `configureGlobal` preload: dev=50 runs/5s cap, CI=2000 runs/60s cap
+- `scripts/generate-drill-golden.ts` — golden fixture generator for drill-queue (gofmt/rustc/Z3 pattern). Re-run when placement data changes.
+- `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 44 opener×mirror×route combos (25KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
+- Scripts: `test:fast` (19 files, ~15s dev loop), `test:slow` (2 heavy files), `test:ci` (CI=true, full PBT ~60s)
+
+**Tests (21 files, 1092 tests, ~45,253 assertions, 18s full suite):**
 - `tests/guard-matrix.test.ts` — 237 tests, declarative guard matrix (18 actions × 12 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
 - `tests/diag-l9-intent.test.ts` — 22 tests, intent actions `primary`/`pick` + browse delegation (Phase 2.5 for `2cf1565` + `964f4ce`)
 - `tests/diag-l9-invariants.test.ts` — 28 tests, runtime invariants + `#0` load-bearing wrapper tests (Phase 2.5 for `d590c8d` + `244a1db`)
-- `tests/diag-l9-property.test.ts` — 13 fast-check properties, 16k+ random runs covering the full action space + float/NaN/Infinity rejection
+- `tests/diag-l9-property.test.ts` — 13 fast-check properties, dev=50 runs (via pbt-config.ts), CI=2000 runs. Covers full action space + float/NaN/Infinity rejection.
 - `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
 - `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
+- `tests/diag-drill-queue.test.ts` — 169 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
 - `tests/keyboard.test.ts` — 67 tests, input→dispatch mapping + DAS/ARR timing with mocked clock (browser-free)
 - `tests/render-contract.test.ts` — 44 tests, recording canvas proxy verifies state→render contract (browser-free)
 - `tests/acceptance.test.ts` — gravity, cell count, wiki oracle (uses `route.bag1Reduction` metadata)
