@@ -576,7 +576,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         guess: { opener: showOpener, mirror: showMirror },
         cachedSteps,
         step: 0,
-        board: emptyBoard(),
         baseBoard: emptyBoard(),
         sessionStats: newStats,
         activePiece,
@@ -588,20 +587,13 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     case 'stepForward': {
       if (!isRevealPhase(state.phase)) return state;
       if (state.step >= state.cachedSteps.length) return state;
-      const nextStep = state.step + 1;
-      const board = state.cachedSteps[nextStep - 1]!.board;
-      return { ...state, step: nextStep, board: cloneBoard(board) };
+      return { ...state, step: state.step + 1 };
     }
 
     case 'stepBackward': {
       if (!isRevealPhase(state.phase)) return state;
       if (state.step <= 0) return state;
-      const prevStep = state.step - 1;
-      const board =
-        prevStep === 0
-          ? cloneBoard(state.baseBoard)
-          : cloneBoard(state.cachedSteps[prevStep - 1]!.board);
-      return { ...state, step: prevStep, board };
+      return { ...state, step: state.step - 1 };
     }
 
     case 'advancePhase': {
@@ -733,14 +725,12 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         state.playMode === 'manual'
           ? spawnForCurrentStep(routeSteps, 0)
           : null;
-      const bag1Board = cloneBoard(seq.bag1FinalBoard);
       return {
         ...state,
         phase: 'reveal2',
         routeGuess: action.routeIndex,
         cachedSteps: routeSteps,
         step: 0,
-        board: bag1Board,
         baseBoard: cloneBoard(seq.bag1FinalBoard),
         activePiece,
         holdPiece: null,
@@ -782,7 +772,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         pcSolutionIndex: action.solutionIndex,
         cachedSteps: pcSteps,
         step: 0,
-        board: cloneBoard(postTstBoard),
         baseBoard: cloneBoard(postTstBoard),
         activePiece,
         holdPiece: null,
@@ -806,7 +795,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         guess: { opener: action.opener, mirror: action.mirror },
         cachedSteps,
         step: 0,
-        board: emptyBoard(),
         baseBoard: emptyBoard(),
         correct: null,
         activePiece: null,
@@ -1087,10 +1075,34 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
 }
 
 /**
- * Public reducer — wraps `_rawSessionReducer` with a post-reduction
- * invariant assertion. Any reducer case that produces an invalid Session
- * throws `InvariantViolation` at this boundary, making state corruption
- * impossible to silently propagate.
+ * Centralized board derivation — the SINGLE source of truth for what the
+ * board looks like at any step in auto-reveal mode.
+ *
+ * L9 redesign: individual actions no longer set `board:` for reveal+auto
+ * states. They set `step`, `baseBoard`, and `cachedSteps`; this function
+ * derives the board. Eliminates the bug class where an action changes
+ * step but forgets to update board (caused 2 bugs: emptyBoard at step 0,
+ * shared-reference mutation in replayPcSteps).
+ *
+ * Manual reveal with step > 0: board is a live workspace managed by
+ * hardDrop — don't touch it.
+ */
+function deriveBoard(state: Session): Session {
+  if (!isRevealPhase(state.phase)) return state;
+  // Manual reveal after the user has started placing pieces — leave board alone
+  if (state.playMode === 'manual' && state.step > 0) return state;
+  // Auto reveal (all steps) or manual reveal at step 0 (entry point)
+  const board =
+    state.step === 0
+      ? cloneBoard(state.baseBoard)
+      : cloneBoard(state.cachedSteps[state.step - 1]!.board);
+  return { ...state, board };
+}
+
+/**
+ * Public reducer — wraps `_rawSessionReducer` with:
+ *   1. deriveBoard — centralized board sync for reveal+auto states
+ *   2. assertSessionInvariants — runtime state validation
  *
  * Design contract: tests/diag-l9-session.test.ts + tests/diag-l9-manual.test.ts
  *                  + tests/diag-l9-intent.test.ts + tests/diag-l9-invariants.test.ts
@@ -1098,7 +1110,9 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
  * Spec for the invariants is in tests/diag-l9-invariants.test.ts (Phase 2.5).
  */
 export function sessionReducer(state: Session, action: SessionAction): Session {
-  const next = _rawSessionReducer(state, action);
-  assertSessionInvariants(next);
-  return next;
+  const raw = _rawSessionReducer(state, action);
+  // No-op: skip deriveBoard (preserves reference equality) but still check invariants
+  const synced = raw === state ? state : deriveBoard(raw);
+  assertSessionInvariants(synced);
+  return synced;
 }
