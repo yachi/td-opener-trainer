@@ -795,3 +795,87 @@ describe('#14 reducer action coverage', () => {
     expect(s.phase).toBe('reveal1');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Diag: reveal3 stepBackward to step 0 must restore post-TST board (not empty)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('reveal3 stepBackward baseBoard', () => {
+  function toReveal3(): Session {
+    const bag = bagForTargetOpener('honey_cup', false);
+    let s = createSession(bag, bag);
+    s = dispatch(s, { type: 'setGuess', opener: 'honey_cup', mirror: false });
+    s = dispatch(s, { type: 'submitGuess' }); // → reveal1
+    s = dispatch(s, { type: 'advancePhase' }); // → guess2
+    s = dispatch(s, { type: 'selectRoute', routeIndex: 0 }); // → reveal2
+    s = dispatch(s, { type: 'advancePhase' }); // → guess3
+    s = dispatch(s, { type: 'selectPcSolution', solutionIndex: 0 }); // → reveal3
+    return s;
+  }
+
+  test('step 0 board is the post-TST board, not emptyBoard', () => {
+    let s = toReveal3();
+    expect(s.phase).toBe('reveal3');
+    expect(s.step).toBe(0);
+    const step0Board = s.board;
+    // The post-TST board must have occupied cells (it has bag1+bag2 minus cleared rows).
+    const occupiedCells = step0Board.flat().filter(c => c !== null).length;
+    expect(occupiedCells).toBeGreaterThan(0);
+
+    // Step forward to 2, then backward to 0 — board must equal the original step 0.
+    s = dispatch(s, { type: 'stepForward' }); // step 1
+    s = dispatch(s, { type: 'stepForward' }); // step 2
+    expect(s.step).toBe(2);
+    s = dispatch(s, { type: 'stepBackward' }); // step 1
+    s = dispatch(s, { type: 'stepBackward' }); // step 0
+    expect(s.step).toBe(0);
+    // This is the bug: stepBackward to 0 was returning emptyBoard()
+    expect(boardHash(s.board)).toBe(boardHash(step0Board));
+  });
+
+  test('stepBackward from step 1 shows cachedSteps[0] (not empty)', () => {
+    let s = toReveal3();
+    s = dispatch(s, { type: 'stepForward' }); // step 1
+    expect(s.step).toBe(1);
+    const step1Board = s.board;
+    const occupiedCells = step1Board.flat().filter(c => c !== null).length;
+    expect(occupiedCells).toBeGreaterThan(0);
+
+    s = dispatch(s, { type: 'stepForward' }); // step 2
+    s = dispatch(s, { type: 'stepBackward' }); // step 1
+    expect(boardHash(s.board)).toBe(boardHash(step1Board));
+  });
+
+  test('reveal2 stepBackward to 0 shows bag1FinalBoard (not empty)', () => {
+    const bag = bagForTargetOpener('honey_cup', false);
+    let s = createSession(bag, bag);
+    s = dispatch(s, { type: 'setGuess', opener: 'honey_cup', mirror: false });
+    s = dispatch(s, { type: 'submitGuess' }); // → reveal1
+    s = dispatch(s, { type: 'advancePhase' }); // → guess2
+    s = dispatch(s, { type: 'selectRoute', routeIndex: 0 }); // → reveal2
+    expect(s.phase).toBe('reveal2');
+    expect(s.step).toBe(0);
+    const step0Board = s.board;
+    // reveal2 starts from bag1FinalBoard — must have occupied cells
+    const occupiedCells = step0Board.flat().filter(c => c !== null).length;
+    expect(occupiedCells).toBeGreaterThan(0);
+
+    s = dispatch(s, { type: 'stepForward' }); // step 1
+    s = dispatch(s, { type: 'stepBackward' }); // step 0
+    expect(s.step).toBe(0);
+    expect(boardHash(s.board)).toBe(boardHash(step0Board));
+  });
+
+  test('reveal1 stepBackward to 0 still uses emptyBoard', () => {
+    const bag = bagForTargetOpener('ms2', false);
+    let s = createSession(bag, bag);
+    s = dispatch(s, { type: 'setGuess', opener: 'ms2', mirror: false });
+    s = dispatch(s, { type: 'submitGuess' }); // → reveal1
+    s = dispatch(s, { type: 'stepForward' }); // step 1
+    s = dispatch(s, { type: 'stepBackward' }); // step 0
+    expect(s.step).toBe(0);
+    // reveal1 starts from empty board — all cells null
+    const occupiedCells = s.board.flat().filter(c => c !== null).length;
+    expect(occupiedCells).toBe(0);
+  });
+});

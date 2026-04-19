@@ -111,6 +111,10 @@ export interface Session {
    * steps layered on top of the Bag 1 final board.
    */
   cachedSteps: Step[];
+  /** Board state at step 0 (before any cached step). emptyBoard() for
+   *  reveal1/reveal2, postTstBoard for reveal3. stepBackward to 0 restores
+   *  this instead of hardcoding emptyBoard(). */
+  baseBoard: Board;
   /** Route index selected during guess2 (-1 if not yet selected). */
   routeGuess: number;
   /** PC solution index selected during guess3 (-1 if not yet selected). */
@@ -438,6 +442,7 @@ export function createSession(
     guess: null,
     correct: null,
     board: emptyBoard(),
+    baseBoard: emptyBoard(),
     step: 0,
     playMode: 'auto',
     sessionStats: { total: 0, correct: 0, streak: 0 },
@@ -572,6 +577,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         cachedSteps,
         step: 0,
         board: emptyBoard(),
+        baseBoard: emptyBoard(),
         sessionStats: newStats,
         activePiece,
         holdPiece: null,
@@ -593,7 +599,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       const prevStep = state.step - 1;
       const board =
         prevStep === 0
-          ? emptyBoard()
+          ? cloneBoard(state.baseBoard)
           : cloneBoard(state.cachedSteps[prevStep - 1]!.board);
       return { ...state, step: prevStep, board };
     }
@@ -727,13 +733,15 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         state.playMode === 'manual'
           ? spawnForCurrentStep(routeSteps, 0)
           : null;
+      const bag1Board = cloneBoard(seq.bag1FinalBoard);
       return {
         ...state,
         phase: 'reveal2',
         routeGuess: action.routeIndex,
         cachedSteps: routeSteps,
         step: 0,
-        board: cloneBoard(seq.bag1FinalBoard),
+        board: bag1Board,
+        baseBoard: cloneBoard(seq.bag1FinalBoard),
         activePiece,
         holdPiece: null,
         holdUsed: false,
@@ -775,6 +783,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         cachedSteps: pcSteps,
         step: 0,
         board: cloneBoard(postTstBoard),
+        baseBoard: cloneBoard(postTstBoard),
         activePiece,
         holdPiece: null,
         holdUsed: false,
@@ -798,6 +807,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         cachedSteps,
         step: 0,
         board: emptyBoard(),
+        baseBoard: emptyBoard(),
         correct: null,
         activePiece: null,
         holdPiece: null,
