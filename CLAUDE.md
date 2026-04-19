@@ -198,7 +198,7 @@ Adding guess3/reveal3 required updating 15+ locations with `phase === 'reveal1' 
 
 **Rule**: when adding new board-mutation logic, add it to `engine.ts` as a validated function (with BFS reachability or equivalent). NEVER add `stampCells`, `lockAndClear`, or direct `board[row][col] =` to `session.ts`. The architecture test catches this.
 
-**Auto-advance rule**: `hardDrop` auto-advance past line-clear steps ONLY applies in `reveal2` (TST step, system-placed). In `reveal3` (PC), ALL steps are user-placed — no auto-advance. Commit `TBD`.
+**Auto-advance rule**: `hardDrop` auto-advance past line-clear steps ONLY applies in `reveal2` (TST step, system-placed). In `reveal3` (PC), ALL steps are user-placed — no auto-advance. Commit `2dc0c24`.
 
 ## Technical Reference
 
