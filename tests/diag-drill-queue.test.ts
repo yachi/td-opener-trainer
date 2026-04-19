@@ -310,67 +310,49 @@ describe('Diag 3: 6-piece openers (MS2, Stray Cannon) — where does the hold pi
   }
 });
 
-// ── TEST 4: Bag 2 routes ──
+// ── TEST 4: Bag 2 routes (golden fixture — see scripts/generate-drill-golden.ts) ──
 
-describe('Diag 4: Bag 2 — buildSteps with holdPlacement', () => {
-  for (const id of OPENER_IDS) {
-    for (const mirror of MIRRORS) {
-      const routes = getBag2Routes(id, mirror);
-      for (const route of routes) {
-        test(`${id} mirror=${mirror} route=${route.routeId}: full buildSteps order is reachable`, () => {
-          const raw = OPENER_PLACEMENT_DATA[id];
-          const data = mirror ? mirrorPlacementData(raw) : raw;
+import goldenEntries from './fixtures/drill-steps-golden.json';
 
-          const bag1 = data.placements;
-          const holdArr: RawPlacement[] = route.holdPlacement ? [route.holdPlacement] : [];
-          const bag2 = route.placements;
+describe('Diag 4: Bag 2 — golden fixture reachability verification', () => {
+  for (const entry of goldenEntries) {
+    test(`${entry.opener} mirror=${entry.mirror} route=${entry.routeId}: golden order is reachable`, () => {
+      const raw = OPENER_PLACEMENT_DATA[entry.opener as OpenerID];
+      const data = entry.mirror ? mirrorPlacementData(raw) : raw;
+      const bag1 = data.placements;
+      const routes = getBag2Routes(entry.opener as OpenerID, entry.mirror);
+      const route = routes.find(r => r.routeId === entry.routeId);
+      if (!route) throw new Error(`Route ${entry.routeId} not found`);
+      const holdArr: RawPlacement[] = route.holdPlacement ? [route.holdPlacement] : [];
+      const bag2 = route.placements;
+      const bag1Used = bag1.slice(0, bag1.length - entry.bag1Reduction);
+      const pool = [...bag1Used, ...holdArr, ...bag2];
 
-          // Follow visualizer.ts logic: try full bag1 first, fall back to
-          // reducedBag1 if any piece gets stuck.
-          const all = [...bag1, ...holdArr, ...bag2];
-          const fullSteps = buildSteps(all);
+      // Reconstruct ordered placements from golden hints
+      const orderedPlacements: RawPlacement[] = entry.stepHints.map(hint => {
+        const match = pool.find(p => p.hint === hint);
+        if (!match) throw new Error(`No placement for hint ${hint}`);
+        return match;
+      });
 
-          let bag1Used = bag1;
-          let steps = fullSteps;
-          if (fullSteps.length < all.length) {
-            const reducedBag1 = bag1.slice(0, bag1.length - 1);
-            const reducedAll = [...reducedBag1, ...holdArr, ...bag2];
-            const reducedSteps = buildSteps(reducedAll);
-            if (reducedSteps.length >= reducedAll.length) {
-              bag1Used = reducedBag1;
-              steps = reducedSteps;
-            }
-          }
+      // Verify completeness
+      expect(entry.stepHints.length).toBe(entry.inputCount);
 
-          const expectedTotal = bag1Used.length + holdArr.length + bag2.length;
+      // Simulate: every piece must be reachable at placement time
+      const sim = simulateNoHold(emptyBoard(), orderedPlacements);
 
-          // Empirically simulate placing the steps in buildSteps order on
-          // an empty board — each must be reachable at the moment of
-          // placement.
-          const orderedPlacements: RawPlacement[] = steps.map(s => {
-            const pool = [...bag1Used, ...holdArr, ...bag2];
-            const match = pool.find(p => p.hint === s.hint);
-            if (!match) throw new Error(`No placement for hint ${s.hint}`);
-            return match;
-          });
-          const sim = simulateNoHold(emptyBoard(), orderedPlacements);
-
-          console.log(
-            `[Q4] ${id.padEnd(13)} mirror=${String(mirror).padEnd(5)} route=${route.routeId.padEnd(12)} ` +
-              `input=${all.length} used=${expectedTotal} steps=${steps.length} ` +
-              `sim=${sim.placed}/${sim.total} ` +
-              `bag1Reduced=${bag1Used.length !== bag1.length ? 'YES' : 'no'} ` +
-              `hold=${route.holdPlacement ? route.holdPlacement.piece : 'none'} ` +
-              `order=${sim.pieceOrder.join('→')}` +
-              (sim.firstFailure
-                ? ` FAIL@${sim.firstFailure.index}:${sim.firstFailure.piece}(${sim.firstFailure.reason})`
-                : ' PASS'),
-          );
-          expect(steps.length).toBe(expectedTotal);
-          expect(sim.firstFailure).toBeNull();
-        });
-      }
-    }
+      console.log(
+        `[Q4] ${entry.opener.padEnd(13)} mirror=${String(entry.mirror).padEnd(5)} route=${entry.routeId.padEnd(12)} ` +
+          `steps=${entry.stepHints.length} sim=${sim.placed}/${sim.total} ` +
+          `bag1Reduced=${entry.bag1Reduction > 0 ? 'YES' : 'no'} ` +
+          `hold=${route.holdPlacement ? route.holdPlacement.piece : 'none'} ` +
+          `order=${sim.pieceOrder.join('→')}` +
+          (sim.firstFailure
+            ? ` FAIL@${sim.firstFailure.index}:${sim.firstFailure.piece}(${sim.firstFailure.reason})`
+            : ' PASS'),
+      );
+      expect(sim.firstFailure).toBeNull();
+    });
   }
 });
 

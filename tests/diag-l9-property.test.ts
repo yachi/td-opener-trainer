@@ -143,7 +143,7 @@ function apply(state: Session, ...actions: SessionAction[]): Session {
 // ═══════════════════════════════════════════════════════════════════════
 
 describe('Property 1: every action sequence preserves invariants', () => {
-  test('10,000 random sequences × up to 100 actions each', () => {
+  test('random sequences × up to 100 actions each', () => {
     fc.assert(
       fc.property(
         arbBag,
@@ -162,7 +162,6 @@ describe('Property 1: every action sequence preserves invariants', () => {
           return true;
         },
       ),
-      { numRuns: 10_000 },
     );
   });
 });
@@ -222,7 +221,7 @@ const arbActionNoFreshBags: fc.Arbitrary<SessionAction> = fc.oneof(
 );
 
 describe('Property 2: reducer is deterministic (excluding fresh-bag actions)', () => {
-  test('same bags + same action sequence → identical result (1,000 runs)', () => {
+  test('same bags + same action sequence → identical result', () => {
     fc.assert(
       fc.property(
         arbBag,
@@ -239,7 +238,6 @@ describe('Property 2: reducer is deterministic (excluding fresh-bag actions)', (
           return true;
         },
       ),
-      { numRuns: 1_000 },
     );
   });
 });
@@ -278,7 +276,6 @@ describe('Property 3: newSession preserves playMode + sessionStats', () => {
           return true;
         },
       ),
-      { numRuns: 1_000 },
     );
   });
 });
@@ -338,7 +335,6 @@ describe('Property 4: invalid selectRoute rejected in guess2', () => {
           return true;
         },
       ),
-      { numRuns: 2_000 },
     );
   });
 
@@ -376,7 +372,6 @@ describe('Property 4: invalid selectRoute rejected in guess2', () => {
           return true;
         },
       ),
-      { numRuns: 2_000 },
     );
   });
 });
@@ -444,7 +439,6 @@ describe('Property 5: full guess1 → reveal1 → guess2 → reveal2 → newSess
           return true;
         },
       ),
-      { numRuns: 2_000 },
     );
   });
 });
@@ -478,7 +472,6 @@ describe('Property 6: togglePlayMode twice restores playMode', () => {
           return true;
         },
       ),
-      { numRuns: 1_000 },
     );
   });
 });

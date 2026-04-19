@@ -7,8 +7,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "bun test",
-    "test:fast": "bun test --filter-out 'diag-drill-queue|diag-l9-property'",
-    "test:slow": "bun test tests/diag-drill-queue.test.ts tests/diag-l9-property.test.ts"
+    "test:fast": "bun test tests/acceptance.test.ts tests/bag2-golden.test.ts tests/bag3-hints.test.ts tests/cold-clear.test.ts tests/diag-l9-board-oracle.test.ts tests/diag-l9-intent.test.ts tests/diag-l9-invariants.test.ts tests/diag-l9-manual.test.ts tests/diag-l9-pc.test.ts tests/diag-l9-pfrow.test.ts tests/diag-l9-session.test.ts tests/diag-l9-stamp.test.ts tests/diag-l9-tst-tsd.test.ts tests/field-engine.test.ts tests/guard-matrix.test.ts tests/keyboard.test.ts tests/reachability.test.ts tests/render-contract.test.ts tests/srs.test.ts",
+    "test:slow": "bun test tests/diag-drill-queue.test.ts tests/diag-l9-property.test.ts",
+    "test:ci": "CI=true bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
