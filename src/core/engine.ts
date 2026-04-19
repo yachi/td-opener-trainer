@@ -325,7 +325,7 @@ export function replayPcSteps(board: Board, placements: Placement[]): Step[] {
     const { board: cleared, linesCleared } = clearFullRows(currentBoard);
     steps.push({
       piece: p.piece,
-      board: cleared,
+      board: cloneBoard(cleared),
       newCells: [...p.cells],
       hint: p.hint,
       linesCleared: linesCleared || undefined,

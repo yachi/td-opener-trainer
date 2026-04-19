@@ -878,4 +878,27 @@ describe('reveal3 stepBackward baseBoard', () => {
     const occupiedCells = s.board.flat().filter(c => c !== null).length;
     expect(occupiedCells).toBe(0);
   });
+
+  test('reveal3 each step adds exactly 1 piece (no shared-reference mutation)', () => {
+    let s = toReveal3();
+    expect(s.phase).toBe('reveal3');
+    expect(s.cachedSteps.length).toBeGreaterThan(1);
+
+    // Count occupied cells at step 0 (postTstBoard)
+    const step0Cells = s.board.flat().filter(c => c !== null).length;
+
+    // Step to 1 — should differ by at most 4 cells (1 piece) plus line-clear effects
+    s = dispatch(s, { type: 'stepForward' });
+    const step1Cells = s.board.flat().filter(c => c !== null).length;
+    // Without line clears: exactly 4 new cells. With line clears: could be fewer.
+    // But should NEVER be 8+ new cells (that means 2 pieces were stamped).
+    const cellDiff = step1Cells - step0Cells;
+    expect(cellDiff).toBeLessThanOrEqual(4);
+
+    // Structural test: each step's board is independent (no aliased references).
+    // If boards are aliased, later steps' boards would be identical to each other.
+    const hashes = s.cachedSteps.map(st => boardHash(st.board));
+    const uniqueHashes = new Set(hashes);
+    expect(uniqueHashes.size).toBe(hashes.length);
+  });
 });
