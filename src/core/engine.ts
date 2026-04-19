@@ -314,6 +314,12 @@ export function replayPcSteps(board: Board, placements: Placement[]): Step[] {
   const steps: Step[] = [];
   let currentBoard = cloneBoard(board);
   for (const p of placements) {
+    // BFS reachability: verify piece can physically reach target from spawn
+    if (!isPlacementReachable(currentBoard, p.piece, p.cells)) {
+      throw new Error(
+        `${p.piece} at step ${steps.length} is not reachable via SRS moves (hint: ${p.hint})`,
+      );
+    }
     for (const c of p.cells) {
       if (currentBoard[c.row]?.[c.col] !== null) {
         throw new Error(
