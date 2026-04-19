@@ -341,6 +341,34 @@ export function replayPcSteps(board: Board, placements: Placement[]): Step[] {
   return steps;
 }
 
+// ── TST Step Finder ──
+
+/**
+ * Find the T-Spin Triple step for a given board state.
+ *
+ * Searches all BFS-reachable T placements and returns the first that
+ * clears exactly 3 lines (TST). Returns null if no TST is possible.
+ *
+ * This is the validated API for TST discovery — session.ts should use this
+ * instead of calling findAllPlacements + lockAndClear directly.
+ */
+export function findTstStep(board: Board): Step | null {
+  const tPlacements = findAllPlacements(board, 'T');
+  for (const tp of tPlacements) {
+    const result = lockAndClear(board, tp.piece);
+    if (result.linesCleared === 3) {
+      return {
+        piece: 'T',
+        board: result.board,
+        newCells: getPieceCells(tp.piece),
+        hint: 'T-Spin Triple!',
+        linesCleared: 3,
+      };
+    }
+  }
+  return null;
+}
+
 // ── Fumen Coordinate Conversion ──
 
 const BOARD_ROWS = BOARD_VISIBLE_HEIGHT;

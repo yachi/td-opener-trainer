@@ -191,6 +191,15 @@ Adding guess3/reveal3 required updating 15+ locations with `phase === 'reveal1' 
 
 **Mutation testing proof**: `isRevealPhase=true` → 236 test failures; `isGuessPhase=true` → 74 failures. Both functions are load-bearing. Commit `291d820`.
 
+### #19. Engine gateway — session.ts MUST NOT import raw placement functions
+`session.ts` had `stampCells` and `lockAndClear` imports that bypassed BFS validation. This caused 2 latent bugs: (1) stampCells doesn't clear lines, so PC manual play produced wrong boards after intermediate line clears, (2) the auto-advance skipped user-placed PC steps with line clears.
+
+**The L9 reframe**: the problem isn't "these callers forgot to validate" — the architecture allowed importing unvalidated functions. The fix: session.ts only imports engine-validated APIs (`buildSteps`, `replayPcSteps`, `findTstStep`). Raw placement functions (`stampCells`, `lockAndClear`, `lockPiece`) stay in engine.ts for internal use and tests. `tests/diag-l9-engine-gateway.test.ts` enforces the boundary via source-text grep — importing a raw function is a test failure.
+
+**Rule**: when adding new board-mutation logic, add it to `engine.ts` as a validated function (with BFS reachability or equivalent). NEVER add `stampCells`, `lockAndClear`, or direct `board[row][col] =` to `session.ts`. The architecture test catches this.
+
+**Auto-advance rule**: `hardDrop` auto-advance past line-clear steps ONLY applies in `reveal2` (TST step, system-placed). In `reveal3` (PC), ALL steps are user-placed — no auto-advance. Commit `TBD`.
+
 ## Technical Reference
 
 ### Opener Conditions (verified by exhaustive enumeration of 5040 permutations)
@@ -223,7 +232,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/sequences.ts` — `getOpenerSequence` (extracted from deleted `modes/visualizer.ts`)
 
 **Session (the single state machine — replaces the deleted 4-mode architecture):**
-- `src/session.ts` — unified reducer, `SessionAction` union (18 actions including intent actions `primary`/`pick`, browse action `browseOpener`, and `selectPcSolution`), `PHASE_META` table (`satisfies Record<Phase, PhaseMeta>` for compile-time completeness), `isRevealPhase`/`isGuessPhase` helpers, `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. `deriveBoard` centrally computes board from `(baseBoard, cachedSteps, step)` for reveal+auto states — individual actions set step/baseBoard/cachedSteps, never board. Production `sessionReducer` wraps raw reducer with deriveBoard + invariant check.
+- `src/session.ts` — unified reducer, `SessionAction` union (18 actions including intent actions `primary`/`pick`, browse action `browseOpener`, and `selectPcSolution`), `PHASE_META` table (`satisfies Record<Phase, PhaseMeta>` for compile-time completeness), `isRevealPhase`/`isGuessPhase` helpers, `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. `deriveBoard` centrally computes board from `(baseBoard, cachedSteps, step)` for reveal+auto states — individual actions set step/baseBoard/cachedSteps, never board. `hardDrop` uses `cachedSteps[step].board` (engine-validated) instead of raw `stampCells`; auto-advance restricted to `reveal2` only. **Does NOT import stampCells/lockAndClear** — all boards come from engine-validated functions. Production `sessionReducer` wraps raw reducer with deriveBoard + invariant check.
 - `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix). 6 phase panels: guess1/reveal1/guess2/reveal2/guess3/reveal3.
 - `src/renderer/board.ts` — canvas primitives, `COLORS` palette, `drawCell`, `drawPieceInBox`
 - `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. Uses `isRevealPhase()` from session.ts — no hardcoded phase strings. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets).
@@ -231,7 +240,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/app.ts` — thin entry: canvas setup, `setupKeyboard`, frame loop. ~70 LOC.
 
 **Engine (post-L9 backtracking redesign — commit `044cb40`):**
-- `src/core/engine.ts` — backtracking `buildSteps` (DFS + BFS pruning, mutate+undo, 100K attempt cap, returns longest prefix on failure). `findAllPlacements`, `stampCells`, `lockAndClear`, fumen bridge. `stampSteps` DELETED (was the two-function fight with buildSteps).
+- `src/core/engine.ts` — backtracking `buildSteps` (DFS + BFS pruning, mutate+undo, 100K attempt cap, returns longest prefix on failure). `findAllPlacements`, `stampCells`, `lockAndClear`, `findTstStep` (validated TST finder), `replayPcSteps` (BFS-validated PC replay), fumen bridge. **session.ts MUST NOT import `stampCells`/`lockAndClear`/`findAllPlacements`** — use `buildSteps`/`replayPcSteps`/`findTstStep` instead. Architecture enforced by `tests/diag-l9-engine-gateway.test.ts`.
 - `src/openers/bag2-routes.ts` — `Bag2Route.bag1Reduction?: number` metadata. Only Gamushiro form_2 sets it (= 1) — its wiki board genuinely can't fit full Bag 1 (verified by 100K attempts failing in `/private/tmp/probe-backtrack.ts`).
 - `src/openers/sequences.ts` — `getBag2Sequence` does ONE `buildSteps` call on `[bag1Used + hold + bag2]`, throws on incomplete (data bug, not runtime fallback).
 
@@ -241,7 +250,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 44 opener×mirror×route combos (25KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
 - Scripts: `test:fast` (19 files, ~15s dev loop), `test:slow` (2 heavy files), `test:ci` (CI=true, full PBT ~60s)
 
-**Tests (21 files, 1092 tests, ~45,253 assertions, 18s full suite):**
+**Tests (22 files, 1113 tests, ~46K assertions, 19s full suite):**
 - `tests/guard-matrix.test.ts` — 237 tests, declarative guard matrix (18 actions × 12 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
@@ -250,6 +259,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/diag-l9-property.test.ts` — 13 fast-check properties, dev=50 runs (via pbt-config.ts), CI=2000 runs. Covers full action space + float/NaN/Infinity rejection.
 - `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
 - `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
+- `tests/diag-l9-engine-gateway.test.ts` — 7 tests, architecture boundary (session.ts doesn't import raw placement functions), PC manual hardDrop with line clears, reveal2 TST auto-advance
 - `tests/diag-drill-queue.test.ts` — 169 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
 - `tests/keyboard.test.ts` — 67 tests, input→dispatch mapping + DAS/ARR timing with mocked clock (browser-free)
 - `tests/render-contract.test.ts` — 44 tests, recording canvas proxy verifies state→render contract (browser-free)

@@ -27,10 +27,8 @@ import {
   emptyBoard,
   buildSteps,
   cloneBoard,
-  stampCells,
-  findAllPlacements,
-  lockAndClear,
   replayPcSteps,
+  findTstStep,
   type Board,
   type Step,
 } from './core/engine.ts';
@@ -470,12 +468,8 @@ function computePostTstBoard(opener: OpenerID, mirror: boolean, routeIndex: numb
   const seq = getBag2Sequence(opener, mirror, routeIndex);
   if (!seq || seq.fullSteps.length === 0) return null;
   const bag2FinalBoard = seq.fullSteps[seq.fullSteps.length - 1]!.board;
-  const tPlacements = findAllPlacements(bag2FinalBoard, 'T');
-  for (const tp of tPlacements) {
-    const result = lockAndClear(bag2FinalBoard, tp.piece);
-    if (result.linesCleared === 3) return result.board;
-  }
-  return null;
+  const tstStep = findTstStep(bag2FinalBoard);
+  return tstStep?.board ?? null;
 }
 
 // ── Reducer ───────────────────────────────────────────────────────────────
@@ -703,20 +697,8 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       const routeSteps = [...seq.fullSteps];
       if (routeSteps.length > 0) {
         const bag2FinalBoard = routeSteps[routeSteps.length - 1]!.board;
-        const tPlacements = findAllPlacements(bag2FinalBoard, 'T');
-        for (const tp of tPlacements) {
-          const result = lockAndClear(bag2FinalBoard, tp.piece);
-          if (result.linesCleared === 3) {
-            routeSteps.push({
-              piece: 'T',
-              board: result.board,
-              newCells: getPieceCells(tp.piece),
-              hint: 'T-Spin Triple!',
-              linesCleared: 3,
-            });
-            break;
-          }
-        }
+        const tstStep = findTstStep(bag2FinalBoard);
+        if (tstStep) routeSteps.push(tstStep);
       }
 
       // SPAWN HOOK (Reframing A+): entering reveal2 in manual mode
@@ -877,22 +859,28 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       ) {
         return state;
       }
-      // Accepted — lock piece, advance step, spawn next, reset holdUsed.
-      const newBoard = stampCells(state.board, dropped.type, cells);
+      // Accepted — advance step, use engine-validated board from cachedSteps.
+      // Cells were validated above, so expectedStep.board is the correct
+      // post-placement board (including any line clears from replayPcSteps).
       let nextStepIdx = state.step + 1;
-      let finalBoard = newBoard;
 
-      // Auto-advance past line-clear steps (TST/TSD) — not manually placed.
-      const nextStep = state.cachedSteps[nextStepIdx];
-      if (nextStep?.linesCleared) {
-        finalBoard = nextStep.board;
-        nextStepIdx++;
+      // Auto-advance past TST step in reveal2 (system-placed, not user-placed).
+      // NOT applied in reveal3 (PC) where intermediate line clears are user-placed.
+      // Auto-advance past TST step in reveal2 (system-placed, not user-placed).
+      // NOT applied in reveal3 (PC) where intermediate line clears are user-placed.
+      if (state.phase === 'reveal2') {
+        const nextStep = state.cachedSteps[nextStepIdx];
+        if (nextStep?.linesCleared) {
+          nextStepIdx++;
+        }
       }
 
+      // Board = most recent cached step (handles line clears correctly)
+      const lastPlacedStep = state.cachedSteps[nextStepIdx - 1]!;
       const nextActivePiece = spawnForCurrentStep(state.cachedSteps, nextStepIdx);
       return {
         ...state,
-        board: finalBoard,
+        board: cloneBoard(lastPlacedStep.board),
         step: nextStepIdx,
         activePiece: nextActivePiece,
         holdUsed: false,
