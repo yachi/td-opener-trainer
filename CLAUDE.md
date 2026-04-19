@@ -200,6 +200,20 @@ Adding guess3/reveal3 required updating 15+ locations with `phase === 'reveal1' 
 
 **Auto-advance rule**: `hardDrop` auto-advance past line-clear steps ONLY applies in `reveal2` (TST step, system-placed). In `reveal3` (PC), ALL steps are user-placed — no auto-advance. Commit `2dc0c24`.
 
+## Architectural Invariants (MUST follow — enforced by tests)
+
+### ALL piece placements go through the tetris engine
+Every piece placed on a board MUST be validated by the engine's BFS reachability check (`isPlacementReachable`). There are exactly 3 validated entry points:
+- **`buildSteps`** — DFS backtracking with BFS pruning (Bag 1/2 placements)
+- **`replayPcSteps`** — linear replay with BFS check per step (PC placements)
+- **`findTstStep`** — BFS-validated T-Spin Triple finder
+
+**`session.ts` MUST NOT import**: `stampCells`, `lockAndClear`, `findAllPlacements`, `lockPiece`. These are internal engine primitives. If you need to place a piece from session.ts, add a new validated function to `engine.ts` that wraps the raw operation with BFS validation.
+
+**`hardDrop` uses `cachedSteps[step].board`** (engine-validated) instead of stamping directly. Auto-advance past line-clear steps is **reveal2-only** (TST); in reveal3 (PC) all steps are user-placed.
+
+**Enforced by**: `tests/diag-l9-engine-gateway.test.ts` — architecture test greps session.ts source; importing banned functions or writing `board[row][col] =` is a test failure.
+
 ## Technical Reference
 
 ### Opener Conditions (verified by exhaustive enumeration of 5040 permutations)
