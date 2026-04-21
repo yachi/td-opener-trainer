@@ -207,6 +207,13 @@ User wanted phase navigation (jump between Bag 1/2/3). First design: rebuild the
 
 **Rule**: when designing "jump to previous state" in a reducer, always prefer snapshot-at-entry over replay-from-scratch. Replay is fragile (actions have side effects like `newSession` redirect), slow (re-runs computation), and complex (must handle every intermediate guard). Snapshots are 4 fields and zero risk. Commit `16c11fa`.
 
+### #21. Centralize derived state — don't scatter it across action cases
+Snapshot management was scattered across 4 action cases (submitGuess, selectRoute, selectPcSolution, browseOpener), each manually saving/clearing `revealSnapshots`. This caused 2 staleness bugs (browseOpener didn't clear downstream, selectRoute didn't clear reveal3) and made the system fragile to new actions — same disease as scattered phase-string guards (lesson #18).
+
+**The L9 reframe**: snapshot consistency is DERIVED STATE, not an obligation of each action. Same pattern as `deriveBoard` — move ALL snapshot logic to ONE post-reduction step: `deriveSnapshots(prev, next, action)`. The dependency DAG (reveal1←opener, reveal2←route, reveal3←pc) determines CLEAR rules. SAVE fires when entering a reveal phase with new cachedSteps. jumpToBag is detected as a restore (not a decision) and skips derivation.
+
+**Rule**: when a post-reduction property depends on comparing prev vs next state (cache invalidation, derived indexes, undo history), centralize it in the reducer wrapper pipeline — never scatter it across N action cases. The pipeline is: `_rawSessionReducer` → `deriveBoard` → `deriveSnapshots` → `assertSessionInvariants`. Each step handles one concern. Adding a new action that changes opener/route/PC gets correct snapshot behavior for free. Commit `a68121c`.
+
 ## Architectural Invariants (MUST follow — enforced by tests)
 
 ### ALL piece placements go through the tetris engine
@@ -220,6 +227,11 @@ Every piece placed on a board MUST be validated by the engine's BFS reachability
 **`hardDrop` uses `cachedSteps[step].board`** (engine-validated) instead of stamping directly. Auto-advance past line-clear steps is **reveal2-only** (TST); in reveal3 (PC) all steps are user-placed.
 
 **Enforced by**: `tests/diag-l9-engine-gateway.test.ts` — architecture test greps session.ts source; importing banned functions or writing `board[row][col] =` is a test failure.
+
+### Snapshot management goes through deriveSnapshots — never in action cases
+Individual reducer action cases MUST NOT set `revealSnapshots:`. All snapshot save/clear logic lives in `deriveSnapshots(prev, next, action)`, called in the post-reduction pipeline. The dependency DAG: `reveal1 ← (opener, mirror)`, `reveal2 ← (routeGuess)`, `reveal3 ← (pcSolutionIndex)`. Upstream changes auto-clear downstream snapshots. `jumpToBag` is a restore (not a decision) and skips derivation.
+
+**Enforced by**: `tests/diag-l9-snapshot-centralize.test.ts` — equivalence proof (§1), consistency invariant (§2), SNAPSHOT_DEPS structural (§3), invariant 9b load-bearing (§4). Mutation testing: 5/5 guards load-bearing.
 
 ## Technical Reference
 
@@ -253,8 +265,8 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/openers/sequences.ts` — `getOpenerSequence` (extracted from deleted `modes/visualizer.ts`)
 
 **Session (the single state machine — replaces the deleted 4-mode architecture):**
-- `src/session.ts` — unified reducer, `SessionAction` union (19 actions including intent actions `primary`/`pick`, browse action `browseOpener`, `selectPcSolution`, and `jumpToBag`), `PHASE_META` table (exported, `satisfies Record<Phase, PhaseMeta>` for compile-time completeness), `isRevealPhase`/`isGuessPhase` helpers, `RevealSnapshot` type, `assertSessionInvariants` (9 runtime invariants), `InvariantViolation`, `createSession`. `deriveBoard` centrally computes board from `(baseBoard, cachedSteps, step)` for reveal+auto states — individual actions set step/baseBoard/cachedSteps, never board. `hardDrop` uses `cachedSteps[step].board` (engine-validated) instead of raw `stampCells`; auto-advance restricted to `reveal2` only. `jumpToBag` restores from `revealSnapshots` in O(1). **Does NOT import stampCells/lockAndClear** — all boards come from engine-validated functions. Production `sessionReducer` wraps raw reducer with deriveBoard + invariant check.
-- `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix). 6 phase panels: guess1/reveal1/guess2/reveal2/guess3/reveal3. Nav bar with 3 tabs (Bag 1/2/3) between title bar and board.
+- `src/session.ts` — unified reducer, `SessionAction` union (19 actions including intent actions `primary`/`pick`, browse action `browseOpener`, `selectPcSolution`, and `jumpToBag`), `PHASE_META` table (exported, `satisfies Record<Phase, PhaseMeta>` for compile-time completeness), `isRevealPhase`/`isGuessPhase` helpers, `RevealSnapshot` type, `assertSessionInvariants` (10 runtime invariants including 9b stale-snapshot detection), `InvariantViolation`, `createSession`. `deriveBoard` centrally computes board from `(baseBoard, cachedSteps, step)` for reveal+auto states. `deriveSnapshots(prev, next, action)` centrally manages snapshot save/clear — individual actions NEVER set `revealSnapshots:` (dependency DAG: reveal1←opener, reveal2←route, reveal3←pc; jumpToBag detected as restore, skips derivation). `hardDrop` uses `cachedSteps[step].board` (engine-validated) instead of raw `stampCells`; auto-advance restricted to `reveal2` only. `jumpToBag` restores from `revealSnapshots` in O(1). **Does NOT import stampCells/lockAndClear** — all boards come from engine-validated functions. Production `sessionReducer` wraps raw reducer with deriveBoard → deriveSnapshots → invariant check.
+- `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix). 6 phase panels: guess1/reveal1/guess2/reveal2/guess3/reveal3. Nav bar with contextual breadcrumb labels (HC ✓, Rt 3/8, PC 2/4) between title bar and board.
 - `src/renderer/board.ts` — canvas primitives, `COLORS` palette, `drawCell`, `drawPieceInBox`
 - `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. Uses `isRevealPhase()` and `PHASE_META` from session.ts — no hardcoded phase strings. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets). `[`/`]` dispatch `jumpToBag`.
 - `src/openers/bag3-pc.ts` — HC Perfect Clear solutions (4 normal + 4 mirror), `getPcSolutions(opener, mirror)`
@@ -271,7 +283,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 44 opener×mirror×route combos (25KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
 - Scripts: `test:fast` (19 files, ~15s dev loop), `test:slow` (2 heavy files), `test:ci` (CI=true, full PBT ~60s)
 
-**Tests (23 files, 1154 tests, ~7K assertions, ~22s full suite):**
+**Tests (24 files, 1180 tests, ~7K assertions, ~22s full suite):**
 - `tests/guard-matrix.test.ts` — 237 tests, declarative guard matrix (18 actions × 12 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
@@ -281,7 +293,8 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
 - `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
 - `tests/diag-l9-engine-gateway.test.ts` — 7 tests, architecture boundary (session.ts doesn't import raw placement functions), PC manual hardDrop with line clears, reveal2 TST auto-advance
-- `tests/diag-l9-nav.test.ts` — 23 tests, phase navigation: snapshot saving (§1), jumpToBag semantics (§2), invariant safety (§3)
+- `tests/diag-l9-nav.test.ts` — 29 tests, phase navigation: snapshot saving (§1), jumpToBag semantics (§2), invariant safety (§3), causal invalidation (§4)
+- `tests/diag-l9-snapshot-centralize.test.ts` — 20 tests, centralized deriveSnapshots proof: equivalence (§1), consistency invariant (§2), SNAPSHOT_DEPS structural (§3), invariant 9b load-bearing (§4)
 - `tests/diag-drill-queue.test.ts` — 169 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
 - `tests/keyboard.test.ts` — 73 tests, input→dispatch mapping + DAS/ARR timing + nav keys (browser-free)
 - `tests/render-contract.test.ts` — 44 tests, recording canvas proxy verifies state→render contract (browser-free)
