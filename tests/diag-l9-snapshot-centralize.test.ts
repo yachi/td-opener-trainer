@@ -20,15 +20,11 @@ import {
   createSession,
   sessionReducer,
   assertSessionInvariants,
-  InvariantViolation,
   type Session,
   type SessionAction,
-  type RevealSnapshot,
   PHASE_META,
   isRevealPhase,
 } from '../src/session';
-import type { Step } from '../src/core/engine';
-import type { Board } from '../src/core/srs';
 
 // ── Test helpers ──
 
@@ -67,142 +63,11 @@ function buildFullChain(): {
   return { reveal1, guess2, reveal2, reveal3 };
 }
 
-// ── §1: Prove deriveSnapshots logic is equivalent to manual snapshot management ──
-
-describe('§1 deriveSnapshots equivalence', () => {
-  /**
-   * Simulate what a centralized deriveSnapshots(prev, next) would do,
-   * then compare against what the current manual code produces.
-   */
-  function simulateDeriveSnapshots(prev: Session, next: Session): Session {
-    // Identity — no change
-    if (prev === next) return next;
-
-    let snapshots = { ...next.revealSnapshots };
-
-    // CLEAR: upstream field changes clear downstream snapshots
-    const openerChanged =
-      prev.guess?.opener !== next.guess?.opener ||
-      prev.guess?.mirror !== next.guess?.mirror;
-    const routeChanged = prev.routeGuess !== next.routeGuess;
-    const pcChanged = prev.pcSolutionIndex !== next.pcSolutionIndex;
-
-    if (openerChanged) {
-      // Opener change invalidates everything downstream of reveal1
-      delete snapshots.reveal2;
-      delete snapshots.reveal3;
-    }
-    if (routeChanged) {
-      // Route change invalidates everything downstream of reveal2
-      delete snapshots.reveal3;
-    }
-    // pcChanged doesn't clear anything (reveal3 is a leaf)
-
-    // SAVE: if we're in a reveal phase and cachedSteps changed, save snapshot
-    if (isRevealPhase(next.phase) && next.cachedSteps !== prev.cachedSteps) {
-      const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3';
-      snapshots[key] = {
-        cachedSteps: next.cachedSteps,
-        baseBoard: next.baseBoard,
-        routeGuess: next.routeGuess,
-        pcSolutionIndex: next.pcSolutionIndex,
-      };
-    }
-
-    return { ...next, revealSnapshots: snapshots };
-  }
-
-  test('submitGuess: centralized produces same snapshots as manual', () => {
-    let s = createSession(HC_BAG1, HC_BAG2);
-    s = dispatch(s, { type: 'setGuess', opener: 'honey_cup', mirror: false });
-    const prev = s;
-    const next = dispatch(s, { type: 'submitGuess' });
-
-    const centralized = simulateDeriveSnapshots(prev, next);
-    // Both should have reveal1 snapshot with matching cachedSteps
-    expect(centralized.revealSnapshots.reveal1).toBeDefined();
-    expect(centralized.revealSnapshots.reveal1!.cachedSteps).toBe(next.cachedSteps);
-    expect(centralized.revealSnapshots.reveal2).toBeUndefined();
-    expect(centralized.revealSnapshots.reveal3).toBeUndefined();
-  });
-
-  test('selectRoute: centralized produces same snapshots as manual', () => {
-    const chain = buildFullChain();
-    const prev = chain.guess2;
-    const next = dispatch(prev, { type: 'selectRoute', routeIndex: 0 });
-
-    const centralized = simulateDeriveSnapshots(prev, next);
-    expect(centralized.revealSnapshots.reveal1).toBeDefined();
-    expect(centralized.revealSnapshots.reveal2).toBeDefined();
-    expect(centralized.revealSnapshots.reveal2!.cachedSteps).toBe(next.cachedSteps);
-    expect(centralized.revealSnapshots.reveal3).toBeUndefined();
-  });
-
-  test('selectPcSolution: centralized produces same snapshots as manual', () => {
-    const chain = buildFullChain();
-    if (!chain.reveal3) { test.skip; return; }
-    const prev = chain.reveal2;
-    const next = dispatch(prev, { type: 'selectPcSolution', solutionIndex: 0 });
-
-    const centralized = simulateDeriveSnapshots(prev, next);
-    expect(centralized.revealSnapshots.reveal1).toBeDefined();
-    expect(centralized.revealSnapshots.reveal2).toBeDefined();
-    expect(centralized.revealSnapshots.reveal3).toBeDefined();
-    expect(centralized.revealSnapshots.reveal3!.cachedSteps).toBe(next.cachedSteps);
-  });
-
-  test('browseOpener: centralized clears downstream + saves new reveal1', () => {
-    const chain = buildFullChain();
-    const prev = chain.reveal2; // has reveal1 + reveal2 snapshots
-    // Jump back to bag 1, then browse
-    const atBag1 = dispatch(prev, { type: 'jumpToBag', bag: 1 });
-    const next = dispatch(atBag1, { type: 'browseOpener', opener: 'stray_cannon', mirror: false });
-
-    const centralized = simulateDeriveSnapshots(atBag1, next);
-    expect(centralized.revealSnapshots.reveal1).toBeDefined();
-    expect(centralized.revealSnapshots.reveal1!.cachedSteps).toBe(next.cachedSteps);
-    expect(centralized.revealSnapshots.reveal2).toBeUndefined();
-    expect(centralized.revealSnapshots.reveal3).toBeUndefined();
-  });
-
-  test('selectRoute change: centralized clears reveal3', () => {
-    const chain = buildFullChain();
-    if (!chain.reveal3) { test.skip; return; }
-    // Jump back to bag 2, change route
-    const atBag2 = dispatch(chain.reveal3, { type: 'jumpToBag', bag: 2 });
-    const next = dispatch(atBag2, { type: 'selectRoute', routeIndex: 1 });
-
-    const centralized = simulateDeriveSnapshots(atBag2, next);
-    expect(centralized.revealSnapshots.reveal2).toBeDefined();
-    expect(centralized.revealSnapshots.reveal2!.cachedSteps).toBe(next.cachedSteps);
-    expect(centralized.revealSnapshots.reveal3).toBeUndefined();
-  });
-
-  test('no-op action: centralized preserves all snapshots', () => {
-    const chain = buildFullChain();
-    const prev = chain.reveal2;
-    // stepForward at last step = no-op
-    let s = prev;
-    while (s.step < s.cachedSteps.length) {
-      s = dispatch(s, { type: 'stepForward' });
-    }
-    const next = dispatch(s, { type: 'stepForward' }); // no-op
-    // For identity, simulateDeriveSnapshots returns same object
-    expect(next).toBe(s); // identity from reducer
-  });
-
-  test('jumpToBag: centralized preserves snapshots (phase changes but cachedSteps restored from snapshot)', () => {
-    const chain = buildFullChain();
-    const prev = chain.reveal2;
-    const next = dispatch(prev, { type: 'jumpToBag', bag: 1 });
-
-    const centralized = simulateDeriveSnapshots(prev, next);
-    // Jumping back: phase changed, cachedSteps changed (from snapshot restore),
-    // but opener didn't change, so reveal2 should be preserved
-    expect(centralized.revealSnapshots.reveal1).toBeDefined();
-    expect(centralized.revealSnapshots.reveal2).toBeDefined();
-  });
-});
+// §1 was the Phase 2.5 equivalence proof (simulateDeriveSnapshots vs production).
+// Deleted after centralization shipped: it tested double-application (simulation
+// on top of already-derived state), not true equivalence. The behavioral contract
+// is enforced by diag-l9-nav.test.ts §1-§4 (29 tests) and property tests (19
+// action types × 50+ random sequences including jumpToBag + selectPcSolution).
 
 // ── §2: Prove the invariant "current-phase snapshot.cachedSteps === state.cachedSteps" ──
 

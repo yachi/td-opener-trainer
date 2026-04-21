@@ -104,6 +104,19 @@ const arbAction: fc.Arbitrary<SessionAction> = fc.oneof(
     opener: arbOpener,
     mirror: fc.boolean(),
   }),
+  // navigation + PC (2)
+  fc.record({
+    type: fc.constant('selectPcSolution' as const),
+    solutionIndex: fc.integer({ min: -2, max: 5 }),
+  }),
+  fc.record({
+    type: fc.constant('jumpToBag' as const),
+    bag: fc.oneof(
+      fc.constant(1 as 1 | 2 | 3),
+      fc.constant(2 as 1 | 2 | 3),
+      fc.constant(3 as 1 | 2 | 3),
+    ),
+  }),
   // intents (2)
   fc.record({ type: fc.constant('primary' as const) }),
   fc.record({
@@ -213,6 +226,18 @@ const arbActionNoFreshBags: fc.Arbitrary<SessionAction> = fc.oneof(
     type: fc.constant('browseOpener' as const),
     opener: arbOpener,
     mirror: fc.boolean(),
+  }),
+  fc.record({
+    type: fc.constant('selectPcSolution' as const),
+    solutionIndex: fc.integer({ min: -2, max: 5 }),
+  }),
+  fc.record({
+    type: fc.constant('jumpToBag' as const),
+    bag: fc.oneof(
+      fc.constant(1 as 1 | 2 | 3),
+      fc.constant(2 as 1 | 2 | 3),
+      fc.constant(3 as 1 | 2 | 3),
+    ),
   }),
   fc.record({
     type: fc.constant('pick' as const),
