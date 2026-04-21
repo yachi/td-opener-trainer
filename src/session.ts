@@ -348,7 +348,22 @@ export function assertSessionInvariants(s: Session): void {
     }
   }
 
-  // ── 9. bag1 and bag2 are valid 7-piece permutations ──
+  // ── 9b. Current-phase snapshot consistency ──
+  // If a snapshot exists for the current reveal phase, its cachedSteps must
+  // be the same object as state.cachedSteps. A mismatch means the snapshot
+  // was saved for a different opener/route/PC and is stale.
+  if (isRevealPhase(s.phase)) {
+    const key = s.phase as 'reveal1' | 'reveal2' | 'reveal3';
+    const snap = s.revealSnapshots[key];
+    if (snap && snap.cachedSteps !== s.cachedSteps) {
+      throw new InvariantViolation(
+        `${s.phase} snapshot.cachedSteps !== state.cachedSteps (stale snapshot)`,
+        s,
+      );
+    }
+  }
+
+  // ── 10. bag1 and bag2 are valid 7-piece permutations ──
   // TypeScript guarantees the piece TYPE but nothing prevents wrong length,
   // duplicates, or externally mutated values. Validate shape explicitly.
   for (const name of ['bag1', 'bag2'] as const) {
@@ -589,15 +604,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         activePiece,
         holdPiece: null,
         holdUsed: false,
-        revealSnapshots: {
-          ...state.revealSnapshots,
-          reveal1: {
-            cachedSteps,
-            baseBoard: emptyBoard(),
-            routeGuess: -1,
-            pcSolutionIndex: -1,
-          },
-        },
       };
     }
 
@@ -741,16 +747,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         activePiece,
         holdPiece: null,
         holdUsed: false,
-        revealSnapshots: {
-          ...state.revealSnapshots,
-          reveal2: {
-            cachedSteps: routeSteps,
-            baseBoard: baseBoardClone,
-            routeGuess: action.routeIndex,
-            pcSolutionIndex: state.pcSolutionIndex,
-          },
-          reveal3: undefined,
-        },
       };
     }
 
@@ -793,15 +789,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         activePiece,
         holdPiece: null,
         holdUsed: false,
-        revealSnapshots: {
-          ...state.revealSnapshots,
-          reveal3: {
-            cachedSteps: pcSteps,
-            baseBoard: pcBaseBoardClone,
-            routeGuess: state.routeGuess,
-            pcSolutionIndex: action.solutionIndex,
-          },
-        },
       };
     }
 
@@ -826,14 +813,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         activePiece: null,
         holdPiece: null,
         holdUsed: false,
-        revealSnapshots: {
-          reveal1: {
-            cachedSteps,
-            baseBoard: emptyBoard(),
-            routeGuess: -1,
-            pcSolutionIndex: -1,
-          },
-        },
       };
     }
 
@@ -1164,19 +1143,85 @@ function deriveBoard(state: Session): Session {
 }
 
 /**
+ * Centralized snapshot derivation — the SINGLE source of truth for when
+ * snapshots are saved, updated, or cleared.
+ *
+ * L9 redesign: individual actions no longer set `revealSnapshots:`.
+ * They set opener/route/pc fields; this function derives the snapshots.
+ * Eliminates the bug class where an action changes upstream state but
+ * forgets to invalidate downstream snapshots (caused 2 bugs: browseOpener
+ * didn't update reveal1/clear reveal2+3, selectRoute didn't clear reveal3).
+ *
+ * Dependency DAG:
+ *   reveal1 ← (guess.opener, guess.mirror)
+ *   reveal2 ← (routeGuess) + all reveal1 deps
+ *   reveal3 ← (pcSolutionIndex) + all reveal2 deps
+ *
+ * Rules:
+ *   SAVE: entering a reveal phase with new cachedSteps → save snapshot
+ *   CLEAR: upstream field changed → clear all downstream snapshots
+ */
+function deriveSnapshots(prev: Session, next: Session, action: SessionAction): Session {
+  // jumpToBag is a RESTORE — fields change because we're loading a snapshot,
+  // not because of a new decision. Skip all derivation; the raw reducer
+  // already preserves the snapshot map via spread.
+  if (action.type === 'jumpToBag') return next;
+
+  let snapshots = next.revealSnapshots;
+  let changed = false;
+
+  // CLEAR: opener/mirror changed → clear reveal2 + reveal3
+  const openerChanged =
+    prev.guess?.opener !== next.guess?.opener ||
+    prev.guess?.mirror !== next.guess?.mirror;
+  if (openerChanged && (snapshots.reveal2 || snapshots.reveal3)) {
+    snapshots = { ...snapshots, reveal2: undefined, reveal3: undefined };
+    changed = true;
+  }
+
+  // CLEAR: routeGuess changed → clear reveal3
+  if (prev.routeGuess !== next.routeGuess && snapshots.reveal3) {
+    snapshots = changed ? snapshots : { ...snapshots };
+    snapshots.reveal3 = undefined;
+    changed = true;
+  }
+
+  // SAVE: if in a reveal phase with new cachedSteps, save snapshot for current phase
+  if (isRevealPhase(next.phase) && next.cachedSteps !== prev.cachedSteps) {
+    const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3';
+    snapshots = changed ? snapshots : { ...snapshots };
+    snapshots[key] = {
+      cachedSteps: next.cachedSteps,
+      baseBoard: next.baseBoard,
+      routeGuess: next.routeGuess,
+      pcSolutionIndex: next.pcSolutionIndex,
+    };
+    changed = true;
+  }
+
+  return changed ? { ...next, revealSnapshots: snapshots } : next;
+}
+
+/**
  * Public reducer — wraps `_rawSessionReducer` with:
  *   1. deriveBoard — centralized board sync for reveal+auto states
- *   2. assertSessionInvariants — runtime state validation
+ *   2. deriveSnapshots — centralized snapshot save/clear
+ *   3. assertSessionInvariants — runtime state validation
  *
  * Design contract: tests/diag-l9-session.test.ts + tests/diag-l9-manual.test.ts
  *                  + tests/diag-l9-intent.test.ts + tests/diag-l9-invariants.test.ts
+ *                  + tests/diag-l9-snapshot-centralize.test.ts
  *
  * Spec for the invariants is in tests/diag-l9-invariants.test.ts (Phase 2.5).
  */
 export function sessionReducer(state: Session, action: SessionAction): Session {
   const raw = _rawSessionReducer(state, action);
-  // No-op: skip deriveBoard (preserves reference equality) but still check invariants
-  const synced = raw === state ? state : deriveBoard(raw);
+  // No-op: skip derive steps (preserves reference equality) but still check invariants
+  if (raw === state) {
+    assertSessionInvariants(state);
+    return state;
+  }
+  const synced = deriveSnapshots(state, deriveBoard(raw), action);
   assertSessionInvariants(synced);
   return synced;
 }
