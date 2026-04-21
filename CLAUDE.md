@@ -283,18 +283,18 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 44 opener×mirror×route combos (25KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
 - Scripts: `test:fast` (19 files, ~15s dev loop), `test:slow` (2 heavy files), `test:ci` (CI=true, full PBT ~60s)
 
-**Tests (24 files, 1180 tests, ~7K assertions, ~22s full suite):**
+**Tests (24 files, 1173 tests, ~7K assertions, ~22s full suite):**
 - `tests/guard-matrix.test.ts` — 237 tests, declarative guard matrix (18 actions × 12 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
 - `tests/diag-l9-intent.test.ts` — 22 tests, intent actions `primary`/`pick` + browse delegation (Phase 2.5 for `2cf1565` + `964f4ce`)
 - `tests/diag-l9-invariants.test.ts` — 28 tests, runtime invariants + `#0` load-bearing wrapper tests (Phase 2.5 for `d590c8d` + `244a1db`)
-- `tests/diag-l9-property.test.ts` — 13 fast-check properties, dev=50 runs (via pbt-config.ts), CI=2000 runs. Covers full action space + float/NaN/Infinity rejection.
+- `tests/diag-l9-property.test.ts` — 13 fast-check properties, dev=50 runs (via pbt-config.ts), CI=2000 runs. Covers all 19 action types (including selectPcSolution + jumpToBag) + float/NaN/Infinity rejection.
 - `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
 - `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
 - `tests/diag-l9-engine-gateway.test.ts` — 7 tests, architecture boundary (session.ts doesn't import raw placement functions), PC manual hardDrop with line clears, reveal2 TST auto-advance
 - `tests/diag-l9-nav.test.ts` — 29 tests, phase navigation: snapshot saving (§1), jumpToBag semantics (§2), invariant safety (§3), causal invalidation (§4)
-- `tests/diag-l9-snapshot-centralize.test.ts` — 20 tests, centralized deriveSnapshots proof: equivalence (§1), consistency invariant (§2), SNAPSHOT_DEPS structural (§3), invariant 9b load-bearing (§4)
+- `tests/diag-l9-snapshot-centralize.test.ts` — 13 tests, centralized deriveSnapshots proof: consistency invariant (§2), SNAPSHOT_DEPS structural (§3), invariant 9b load-bearing (§4)
 - `tests/diag-drill-queue.test.ts` — 169 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
 - `tests/keyboard.test.ts` — 73 tests, input→dispatch mapping + DAS/ARR timing + nav keys (browser-free)
 - `tests/render-contract.test.ts` — 44 tests, recording canvas proxy verifies state→render contract (browser-free)
