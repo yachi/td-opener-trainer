@@ -667,7 +667,7 @@ function drawGuess1Panel(
   if (session.correct === null) {
     drawPanelLine(
       ctx,
-      'ENTER submit \u00b7 SPACE skip',
+      'ENTER submit \u00b7 SPACE new bag',
       y,
       '#9999BB',
     );
@@ -761,17 +761,13 @@ function drawReveal1Panel(
     y += slotH + 8;
   }
 
-  // Navigation hint — differs by playMode.
+  // Navigation hint — manual only (auto hints live in keybind bar).
   if (session.playMode === 'manual') {
     drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
     y += PANEL_LINE_H;
     drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
     y += PANEL_LINE_H;
     drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
-  } else {
-    drawPanelLine(ctx, '\u2190 \u2192 step \u00b7 SPACE continue', y, '#9999BB');
-    y += PANEL_LINE_H;
-    drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
   }
 }
 
@@ -948,17 +944,13 @@ function drawReveal2Panel(
     y += 4;
   }
 
-  // Navigation hint — differs by playMode.
+  // Navigation hint — manual only (auto hints live in keybind bar).
   if (session.playMode === 'manual') {
     drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
     y += PANEL_LINE_H;
     drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
     y += PANEL_LINE_H;
     drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
-  } else {
-    drawPanelLine(ctx, '\u2190 \u2192 step \u00b7 SPACE new bag', y, '#9999BB');
-    y += PANEL_LINE_H;
-    drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
   }
 }
 
@@ -1030,7 +1022,7 @@ function drawGuess3Panel(
   }
 
   y += 6;
-  drawPanelLine(ctx, '1-4 pick \u00b7 ENTER auto-pick \u00b7 SPACE skip', y, '#9999BB');
+  drawPanelLine(ctx, '1-4 pick \u00b7 SPACE first', y, '#9999BB');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1096,17 +1088,13 @@ function drawReveal3Panel(
     y += 24;
   }
 
-  // Navigation hint.
+  // Navigation hint — manual only (auto hints live in keybind bar).
   if (session.playMode === 'manual') {
     drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
     y += PANEL_LINE_H;
     drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
     y += PANEL_LINE_H;
     drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
-  } else {
-    drawPanelLine(ctx, '\u2190 \u2192 step \u00b7 SPACE next \u00b7 1-4 browse', y, '#9999BB');
-    y += PANEL_LINE_H;
-    drawPanelLine(ctx, 'P toggle auto/manual', y, '#9999BB');
   }
 }
 
@@ -1140,18 +1128,25 @@ function drawKeybindBar(
 }
 
 function keybindHintForSession(session: Session): string {
+  // Show [/] nav only when an adjacent bag's snapshot exists (jumping is possible).
+  const bag = PHASE_META[session.phase].bag;
+  const snaps = session.revealSnapshots;
+  const canJumpPrev = bag > 1 && !!(snaps as Record<string, unknown>)[`reveal${bag - 1}`];
+  const canJumpNext = bag < 3 && !!(snaps as Record<string, unknown>)[`reveal${bag + 1}`];
+  const nav = canJumpPrev || canJumpNext ? '  [/] nav' : '';
+
   switch (session.phase) {
     case 'guess1':
       return '1/2/3/4 opener  M mirror  ENTER submit  R new bag';
     case 'reveal1':
       return session.playMode === 'manual'
         ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
-        : '1-4 opener  M mirror  \u2190\u2192 step  SPACE next  P manual  R new';
+        : `1-4 opener  M mirror  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
     case 'guess2': {
       const n = session.guess
         ? getBag2Routes(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} select route  SPACE best  R new bag`;
+      return `1-${n} select route  SPACE best  R new bag${nav}`;
     }
     case 'reveal2': {
       if (session.playMode === 'manual') {
@@ -1160,13 +1155,13 @@ function keybindHintForSession(session: Session): string {
       const n = session.guess
         ? getBag2Routes(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} route  \u2190\u2192 step  SPACE next  P manual`;
+      return `1-${n} route  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
     }
     case 'guess3': {
       const n = session.guess
         ? getPcSolutions(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} pick solution  ENTER auto-pick  SPACE skip  R new bag`;
+      return `1-${n} pick  SPACE first  R new bag${nav}`;
     }
     case 'reveal3': {
       if (session.playMode === 'manual') {
@@ -1175,7 +1170,7 @@ function keybindHintForSession(session: Session): string {
       const n = session.guess
         ? getPcSolutions(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} browse  \u2190\u2192 step  SPACE next  P manual`;
+      return `1-${n} solution  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
     }
   }
 }
