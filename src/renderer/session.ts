@@ -47,29 +47,30 @@ import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
 import type { Board } from '../core/srs';
-import { isRevealPhase, type Session } from '../session';
+import { isRevealPhase, PHASE_META, type Session } from '../session';
 
 const FONT = '-apple-system, sans-serif';
 
 // ── Layout constants ──
 
 const TITLE_BAR_H = 36;
+const NAV_BAR_H = 28;
 const KEYBIND_BAR_H = 36;
 
 // Board area (left half).
 // Show the full 20-row playfield so spawn-row pieces are visible in manual
 // mode. At 28px cells this is 280×560 — fits the 640×720 canvas with room
-// for title bar (36), top pad (16), and keybind bar (36).
+// for title bar (36), nav bar (28), top pad (16), and keybind bar (36).
 const BOARD_CELL = 28;
 const BOARD_VISIBLE_ROWS = 20;
 const BOARD_X = 24;
-const BOARD_Y = TITLE_BAR_H + 16;
+const BOARD_Y = TITLE_BAR_H + NAV_BAR_H + 16;
 const BOARD_W = 10 * BOARD_CELL; // 280
 const BOARD_H = BOARD_VISIBLE_ROWS * BOARD_CELL; // 560
 
 // Right panel.
 const PANEL_X = BOARD_X + BOARD_W + 24;
-const PANEL_Y = TITLE_BAR_H + 16;
+const PANEL_Y = TITLE_BAR_H + NAV_BAR_H + 16;
 const PANEL_W = CANVAS_W - PANEL_X - 16;
 const PANEL_LINE_H = 18;
 
@@ -210,6 +211,9 @@ export function renderSession(
   // 2. Title bar (top): in-session stats + app name.
   drawTitleBar(ctx, session);
 
+  // 2b. Navigation bar (below title bar).
+  drawNavBar(ctx, session);
+
   // 3. Live board (left) — reads session.activePiece directly.
   drawLiveBoard(ctx, session);
 
@@ -269,6 +273,77 @@ function drawTitleBar(ctx: CanvasRenderingContext2D, session: Session): void {
   ctx.font = `13px ${FONT}`;
   ctx.textAlign = 'right';
   ctx.fillText('tetris-td practice', CANVAS_W - 16, TITLE_BAR_H / 2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Navigation bar (below title bar)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const NAV_LABELS = ['Bag 1', 'Bag 2', 'Bag 3'] as const;
+
+function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
+  const y = TITLE_BAR_H;
+
+  // Background.
+  ctx.fillStyle = '#0E0E22';
+  ctx.fillRect(0, y, CANVAS_W, NAV_BAR_H);
+
+  // Bottom border.
+  ctx.strokeStyle = COLORS.boardBorder;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, y + NAV_BAR_H + 0.5);
+  ctx.lineTo(CANVAS_W, y + NAV_BAR_H + 0.5);
+  ctx.stroke();
+
+  const currentBag = PHASE_META[session.phase].bag;
+  const tabW = 80;
+  const tabH = NAV_BAR_H - 4;
+  const gap = 8;
+  const totalW = 3 * tabW + 2 * gap;
+  const startX = (CANVAS_W - totalW) / 2;
+
+  for (let i = 0; i < 3; i++) {
+    const bag = (i + 1) as 1 | 2 | 3;
+    const phase = `reveal${bag}` as 'reveal1' | 'reveal2' | 'reveal3';
+    const hasSnapshot = !!session.revealSnapshots[phase];
+    const isActive = currentBag === bag;
+
+    const tx = startX + i * (tabW + gap);
+    const ty = y + 2;
+
+    // Tab background.
+    if (isActive) {
+      ctx.fillStyle = '#2A2A5A';
+    } else if (hasSnapshot) {
+      ctx.fillStyle = '#1A1A3A';
+    } else {
+      ctx.fillStyle = '#0E0E22';
+    }
+    roundRect(ctx, tx, ty, tabW, tabH, 4);
+    ctx.fill();
+
+    // Tab border for active.
+    if (isActive) {
+      ctx.strokeStyle = '#6060C0';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, tx, ty, tabW, tabH, 4);
+      ctx.stroke();
+    }
+
+    // Tab label.
+    ctx.font = `${isActive ? 'bold ' : ''}12px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (isActive) {
+      ctx.fillStyle = COLORS.tabTextActive;
+    } else if (hasSnapshot) {
+      ctx.fillStyle = COLORS.tabText;
+    } else {
+      ctx.fillStyle = '#505070';
+    }
+    ctx.fillText(NAV_LABELS[i], tx + tabW / 2, ty + tabH / 2);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

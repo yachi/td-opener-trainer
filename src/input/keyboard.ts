@@ -34,7 +34,7 @@
  * Waiting for the next rAF tick creates a race with keyup (commit 0ddbe99).
  */
 
-import { isRevealPhase, type Session, type SessionAction } from '../session.ts';
+import { isRevealPhase, PHASE_META, type Session, type SessionAction } from '../session.ts';
 
 // ── DAS/ARR timing (copied from deleted src/play/manual.ts) ──
 const DAS_DELAY = 167; // ms before auto-repeat starts
@@ -106,6 +106,18 @@ export function setupKeyboard(
     if (code === 'Space' || code === 'Enter') {
       e.preventDefault();
       dispatch({ type: 'primary' });
+      return;
+    }
+    if (code === 'BracketLeft') {
+      e.preventDefault();
+      const currentBag = PHASE_META[session.phase].bag;
+      dispatch({ type: 'jumpToBag', bag: (currentBag - 1) as 1 | 2 | 3 });
+      return;
+    }
+    if (code === 'BracketRight') {
+      e.preventDefault();
+      const currentBag = PHASE_META[session.phase].bag;
+      dispatch({ type: 'jumpToBag', bag: (currentBag + 1) as 1 | 2 | 3 });
       return;
     }
     if (

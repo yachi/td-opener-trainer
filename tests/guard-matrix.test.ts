@@ -60,6 +60,7 @@ const ACTION_TYPES = [
   'stepForward', 'stepBackward', 'advancePhase', 'togglePlayMode',
   'selectRoute', 'selectPcSolution', 'browseOpener',
   'movePiece', 'rotatePiece', 'hardDrop', 'hold', 'softDrop',
+  'jumpToBag',
   'primary', 'pick',
 ] as const;
 
@@ -163,6 +164,7 @@ function buildAction(type: ActionType): SessionAction {
     case 'hardDrop':        return { type: 'hardDrop' };
     case 'hold':            return { type: 'hold' };
     case 'softDrop':        return { type: 'softDrop' };
+    case 'jumpToBag':       return { type: 'jumpToBag', bag: 1 };
     case 'primary':         return { type: 'primary' };
     case 'pick':            return { type: 'pick', index: 1 };
   }
@@ -340,6 +342,19 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'change',
+  },
+
+  // ── Navigation ──
+
+  jumpToBag: {
+    // jumpToBag(1): guess1 has no snapshot → identity; reveal1 is same bag → identity;
+    // all later phases have reveal1 snapshot → change (jumps to reveal1).
+    guess1_auto: 'identity', guess1_manual: 'identity',
+    reveal1_auto: 'identity', reveal1_manual: 'identity',
+    guess2_auto: 'change', guess2_manual: 'change',
+    reveal2_auto: 'change', reveal2_manual: 'change',
+    guess3_auto: 'change', guess3_manual: 'change',
+    reveal3_auto: 'change', reveal3_manual: 'change',
   },
 
   // ── Intent actions ──

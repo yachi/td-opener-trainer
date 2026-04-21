@@ -692,3 +692,45 @@ describe('Attach/detach lifecycle', () => {
     expect(dispatch).toHaveBeenCalledTimes(1); // only the initial sync fire
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// §9  Navigation keys — [ and ]
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Navigation: [ and ] keys', () => {
+  test('BracketLeft dispatches jumpToBag with current bag - 1', () => {
+    const { dispatch } = rig(makeSession({ phase: 'reveal2' }));
+    fireKeyDown('BracketLeft');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'jumpToBag', bag: 1 });
+  });
+
+  test('BracketRight dispatches jumpToBag with current bag + 1', () => {
+    const { dispatch } = rig(makeSession({ phase: 'reveal1' }));
+    fireKeyDown('BracketRight');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'jumpToBag', bag: 2 });
+  });
+
+  test('BracketLeft from bag 1 dispatches jumpToBag(0) — reducer handles as no-op', () => {
+    const { dispatch } = rig(makeSession({ phase: 'guess1' }));
+    fireKeyDown('BracketLeft');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'jumpToBag', bag: 0 });
+  });
+
+  test('BracketRight from bag 3 dispatches jumpToBag(4) — reducer handles as no-op', () => {
+    const { dispatch } = rig(makeSession({ phase: 'reveal3' }));
+    fireKeyDown('BracketRight');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'jumpToBag', bag: 4 });
+  });
+
+  test('BracketLeft works in guess phases', () => {
+    const { dispatch } = rig(makeSession({ phase: 'guess2' }));
+    fireKeyDown('BracketLeft');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'jumpToBag', bag: 1 });
+  });
+
+  test('BracketRight works in manual mode', () => {
+    const { dispatch } = rig(makeSession({ phase: 'reveal1', playMode: 'manual' }));
+    fireKeyDown('BracketRight');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'jumpToBag', bag: 2 });
+  });
+});

@@ -65,7 +65,7 @@ interface PhaseMeta {
   bag: 1 | 2 | 3;
 }
 
-const PHASE_META = {
+export const PHASE_META = {
   guess1:  { kind: 'guess',  bag: 1 },
   reveal1: { kind: 'reveal', bag: 1 },
   guess2:  { kind: 'guess',  bag: 2 },
@@ -91,6 +91,14 @@ export interface SessionStats {
   total: number;
   correct: number;
   streak: number;
+}
+
+/** Snapshot saved at each reveal-phase entry for O(1) nav-bar jumps. */
+export interface RevealSnapshot {
+  cachedSteps: Step[];
+  baseBoard: Board;
+  routeGuess: number;
+  pcSolutionIndex: number;
 }
 
 export interface Session {
@@ -137,6 +145,8 @@ export interface Session {
   holdPiece: PieceType | null;
   /** True after the user held on the current step; resets on step advance. */
   holdUsed: boolean;
+  /** Snapshots saved at each reveal-phase entry for O(1) nav-bar jumps. */
+  revealSnapshots: Partial<Record<'reveal1' | 'reveal2' | 'reveal3', RevealSnapshot>>;
 }
 
 /**
@@ -172,6 +182,8 @@ export type SessionAction =
   | { type: 'hardDrop' }
   | { type: 'hold' }
   | { type: 'softDrop' }
+  // ── Navigation ──
+  | { type: 'jumpToBag'; bag: 1 | 2 | 3 }
   // ── Intent actions (keyboard dispatches these; reducer interprets) ──
   | { type: 'primary' }
   | { type: 'pick'; index: number };
@@ -450,6 +462,7 @@ export function createSession(
     activePiece: null,
     holdPiece: null,
     holdUsed: false,
+    revealSnapshots: {},
   };
 }
 
@@ -494,6 +507,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         // Preserve playMode across sessions (user toggle persists in-memory)
         playMode: state.playMode,
         sessionStats: state.sessionStats, // stats persist across sessions
+        // revealSnapshots cleared by createSession (fresh {})
       };
     }
 
@@ -575,6 +589,15 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         activePiece,
         holdPiece: null,
         holdUsed: false,
+        revealSnapshots: {
+          ...state.revealSnapshots,
+          reveal1: {
+            cachedSteps,
+            baseBoard: emptyBoard(),
+            routeGuess: -1,
+            pcSolutionIndex: -1,
+          },
+        },
       };
     }
 
@@ -707,16 +730,26 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         state.playMode === 'manual'
           ? spawnForCurrentStep(routeSteps, 0)
           : null;
+      const baseBoardClone = cloneBoard(seq.bag1FinalBoard);
       return {
         ...state,
         phase: 'reveal2',
         routeGuess: action.routeIndex,
         cachedSteps: routeSteps,
         step: 0,
-        baseBoard: cloneBoard(seq.bag1FinalBoard),
+        baseBoard: baseBoardClone,
         activePiece,
         holdPiece: null,
         holdUsed: false,
+        revealSnapshots: {
+          ...state.revealSnapshots,
+          reveal2: {
+            cachedSteps: routeSteps,
+            baseBoard: baseBoardClone,
+            routeGuess: action.routeIndex,
+            pcSolutionIndex: state.pcSolutionIndex,
+          },
+        },
       };
     }
 
@@ -748,16 +781,26 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           ? spawnForCurrentStep(pcSteps, 0)
           : null;
 
+      const pcBaseBoardClone = cloneBoard(postTstBoard);
       return {
         ...state,
         phase: 'reveal3',
         pcSolutionIndex: action.solutionIndex,
         cachedSteps: pcSteps,
         step: 0,
-        baseBoard: cloneBoard(postTstBoard),
+        baseBoard: pcBaseBoardClone,
         activePiece,
         holdPiece: null,
         holdUsed: false,
+        revealSnapshots: {
+          ...state.revealSnapshots,
+          reveal3: {
+            cachedSteps: pcSteps,
+            baseBoard: pcBaseBoardClone,
+            routeGuess: state.routeGuess,
+            pcSolutionIndex: action.solutionIndex,
+          },
+        },
       };
     }
 
@@ -912,6 +955,30 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         holdPiece: currentType,
         activePiece: spawnPiece(swappedType),
         holdUsed: true,
+      };
+    }
+
+    // ── Navigation — O(1) snapshot-based phase jumps ──
+
+    case 'jumpToBag': {
+      if (action.bag < 1 || action.bag > 3) return state;
+      const targetPhase = `reveal${action.bag}` as 'reveal1' | 'reveal2' | 'reveal3';
+      const snap = state.revealSnapshots[targetPhase];
+      if (!snap) return state;
+      if (state.phase === targetPhase) return state;
+      return {
+        ...state,
+        phase: targetPhase,
+        cachedSteps: snap.cachedSteps,
+        baseBoard: snap.baseBoard,
+        routeGuess: snap.routeGuess,
+        pcSolutionIndex: snap.pcSolutionIndex,
+        step: 0,
+        activePiece: state.playMode === 'manual'
+          ? spawnForCurrentStep(snap.cachedSteps, 0)
+          : null,
+        holdPiece: null,
+        holdUsed: false,
       };
     }
 
