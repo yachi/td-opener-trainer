@@ -279,7 +279,36 @@ function drawTitleBar(ctx: CanvasRenderingContext2D, session: Session): void {
 // Navigation bar (below title bar)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const NAV_LABELS = ['Bag 1', 'Bag 2', 'Bag 3'] as const;
+const NAV_SHORT: Record<OpenerID, string> = {
+  honey_cup: 'HC',
+  ms2: 'MS2',
+  gamushiro: 'Gamu',
+  stray_cannon: 'SC',
+};
+
+function navLabels(session: Session): [string, string, string] {
+  const g = session.guess;
+  // Bag 1: opener short name (+ ✓ if visited)
+  let bag1 = 'Bag 1';
+  if (g) {
+    const short = NAV_SHORT[g.opener];
+    const visited = !!session.revealSnapshots.reveal1;
+    bag1 = visited ? `${short} ✓` : short;
+  }
+  // Bag 2: route position
+  let bag2 = 'Bag 2';
+  if (g && session.routeGuess >= 0) {
+    const total = getBag2Routes(g.opener, g.mirror).length;
+    bag2 = `Rt ${session.routeGuess + 1}/${total}`;
+  }
+  // Bag 3: PC solution position
+  let bag3 = 'Bag 3';
+  if (g && session.pcSolutionIndex >= 0) {
+    const total = getPcSolutions(g.opener, g.mirror).length;
+    bag3 = total > 0 ? `PC ${session.pcSolutionIndex + 1}/${total}` : 'PC —';
+  }
+  return [bag1, bag2, bag3];
+}
 
 function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
   const y = TITLE_BAR_H;
@@ -297,6 +326,7 @@ function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
   ctx.stroke();
 
   const currentBag = PHASE_META[session.phase].bag;
+  const labels = navLabels(session);
   const tabW = 80;
   const tabH = NAV_BAR_H - 4;
   const gap = 8;
@@ -342,7 +372,7 @@ function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
     } else {
       ctx.fillStyle = '#505070';
     }
-    ctx.fillText(NAV_LABELS[i], tx + tabW / 2, ty + tabH / 2);
+    ctx.fillText(labels[i], tx + tabW / 2, ty + tabH / 2);
   }
 }
 

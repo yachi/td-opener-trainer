@@ -321,3 +321,92 @@ describe('§3 invariant safety', () => {
     expect(() => dispatch(s, { type: 'movePiece', dx: 1, dy: 0 })).not.toThrow();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// §4  Causal invalidation — upstream changes clear downstream snapshots
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('§4 causal invalidation', () => {
+  test('browseOpener updates reveal1 snapshot', () => {
+    let s = createSession(HC_BAG1, HC_BAG2);
+    s = dispatch(s, { type: 'setGuess', opener: 'honey_cup', mirror: false });
+    s = dispatch(s, { type: 'submitGuess' });
+    const origSnap = s.revealSnapshots.reveal1!;
+
+    s = dispatch(s, { type: 'browseOpener', opener: 'stray_cannon', mirror: false });
+    expect(s.revealSnapshots.reveal1).toBeDefined();
+    // Snapshot must match current cachedSteps (stray_cannon steps, not HC)
+    expect(s.revealSnapshots.reveal1!.cachedSteps).toBe(s.cachedSteps);
+    expect(s.revealSnapshots.reveal1!.cachedSteps).not.toBe(origSnap.cachedSteps);
+  });
+
+  test('browseOpener clears reveal2 and reveal3 snapshots', () => {
+    const chain = buildFullChain();
+    if (!chain.reveal3) { test.skip; return; }
+
+    // At reveal3, all 3 snapshots exist
+    let s = chain.reveal3;
+    expect(s.revealSnapshots.reveal2).toBeDefined();
+    expect(s.revealSnapshots.reveal3).toBeDefined();
+
+    // Jump to bag 1 and browse to a different opener
+    s = dispatch(s, { type: 'jumpToBag', bag: 1 });
+    s = dispatch(s, { type: 'browseOpener', opener: 'stray_cannon', mirror: false });
+
+    // Downstream snapshots must be cleared
+    expect(s.revealSnapshots.reveal2).toBeUndefined();
+    expect(s.revealSnapshots.reveal3).toBeUndefined();
+  });
+
+  test('toggleMirror in reveal1 auto clears downstream snapshots', () => {
+    const chain = buildFullChain();
+
+    let s = dispatch(chain.reveal2, { type: 'jumpToBag', bag: 1 });
+    expect(s.revealSnapshots.reveal2).toBeDefined();
+
+    // toggleMirror delegates to browseOpener → should clear reveal2
+    s = dispatch(s, { type: 'toggleMirror' });
+    expect(s.revealSnapshots.reveal2).toBeUndefined();
+  });
+
+  test('selectRoute clears reveal3 snapshot', () => {
+    const chain = buildFullChain();
+    if (!chain.reveal3) { test.skip; return; }
+
+    // At reveal3, reveal3 snapshot exists
+    let s = chain.reveal3;
+    expect(s.revealSnapshots.reveal3).toBeDefined();
+
+    // Jump to bag 2, change route
+    s = dispatch(s, { type: 'jumpToBag', bag: 2 });
+    s = dispatch(s, { type: 'selectRoute', routeIndex: 1 });
+
+    // reveal3 must be cleared (different route = different post-TST board)
+    expect(s.revealSnapshots.reveal3).toBeUndefined();
+    // reveal2 must be updated
+    expect(s.revealSnapshots.reveal2).toBeDefined();
+    expect(s.revealSnapshots.reveal2!.routeGuess).toBe(1);
+  });
+
+  test('jumpToBag(2) after browseOpener is no-op (reveal2 cleared)', () => {
+    const chain = buildFullChain();
+
+    let s = dispatch(chain.reveal2, { type: 'jumpToBag', bag: 1 });
+    s = dispatch(s, { type: 'browseOpener', opener: 'stray_cannon', mirror: false });
+    // reveal2 cleared → jumpToBag(2) should be no-op
+    const jumped = dispatch(s, { type: 'jumpToBag', bag: 2 });
+    expect(jumped).toBe(s);
+  });
+
+  test('pick in auto reveal2 clears reveal3 (via selectRoute)', () => {
+    const chain = buildFullChain();
+    if (!chain.reveal3) { test.skip; return; }
+
+    let s = dispatch(chain.reveal3, { type: 'jumpToBag', bag: 2 });
+    expect(s.revealSnapshots.reveal3).toBeDefined();
+
+    // pick(1) in auto reveal2 delegates to selectRoute(1)
+    s = dispatch(s, { type: 'pick', index: 1 });
+    expect(s.revealSnapshots.reveal3).toBeUndefined();
+  });
+});

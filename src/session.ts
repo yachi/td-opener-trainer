@@ -749,6 +749,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             routeGuess: action.routeIndex,
             pcSolutionIndex: state.pcSolutionIndex,
           },
+          reveal3: undefined,
         },
       };
     }
@@ -825,6 +826,14 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         activePiece: null,
         holdPiece: null,
         holdUsed: false,
+        revealSnapshots: {
+          reveal1: {
+            cachedSteps,
+            baseBoard: emptyBoard(),
+            routeGuess: -1,
+            pcSolutionIndex: -1,
+          },
+        },
       };
     }
 
