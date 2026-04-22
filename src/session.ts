@@ -897,8 +897,6 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
 
       // Auto-advance past TST step in reveal2 (system-placed, not user-placed).
       // NOT applied in reveal3 (PC) where intermediate line clears are user-placed.
-      // Auto-advance past TST step in reveal2 (system-placed, not user-placed).
-      // NOT applied in reveal3 (PC) where intermediate line clears are user-placed.
       if (state.phase === 'reveal2') {
         const nextStep = state.cachedSteps[nextStepIdx];
         if (nextStep?.linesCleared) {

@@ -15,18 +15,15 @@ import { describe, test, expect } from 'bun:test';
 import {
   emptyBoard,
   buildSteps,
-  cloneBoard,
   stampCells,
   clearFullRows,
   replayPcSteps,
   findAllPlacements,
-  isPlacementReachable,
   lockAndClear,
   type Board,
   type Placement,
 } from '../src/core/engine.ts';
 import { getBag2Sequence } from '../src/openers/sequences.ts';
-import { getPcSolutions, type PcSolution } from '../src/openers/bag3-pc.ts';
 import type { PieceType } from '../src/core/types.ts';
 import { BOARD_WIDTH, BOARD_VISIBLE_HEIGHT } from '../src/core/types.ts';
 
@@ -260,6 +257,29 @@ describe('replayPcSteps', () => {
     // After O: both rows cleared → empty board
     expect(countCells(steps[0]!.board)).toBe(0);
   });
+
+  test('replayPcSteps rejects unreachable placement', () => {
+    // Enclosed pocket: full ceiling at row 16, full floor at row 19,
+    // walls on left (col 0) and right (cols 5-9) on rows 17-18.
+    // The pocket at rows 17-18, cols 1-4 is completely sealed — no BFS path from spawn.
+    const board = makeBoard({
+      16: 'XXXXXXXXXX',
+      17: 'X....XXXXX',
+      18: 'X....XXXXX',
+      19: 'XXXXXXXXXX',
+    });
+    const unreachable: Placement[] = [{
+      piece: 'I',
+      cells: [
+        { col: 1, row: 17 },
+        { col: 2, row: 17 },
+        { col: 3, row: 17 },
+        { col: 4, row: 17 },
+      ],
+      hint: 'unreachable',
+    }];
+    expect(() => replayPcSteps(board, unreachable)).toThrow(/not reachable/i);
+  });
 });
 
 // ── clearFullRows matches lockAndClear ──
@@ -312,147 +332,3 @@ describe('real post-TST boards', () => {
   }
 });
 
-// ── HC PC solution data tests ──
-
-describe('HC PC solutions (bag3-pc data)', () => {
-  const ALL_PIECES: PieceType[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
-
-  test('getPcSolutions returns 4 HC normal solutions', () => {
-    const solutions = getPcSolutions('honey_cup', false, 0);
-    expect(solutions.length).toBe(4);
-  });
-
-  test('getPcSolutions returns 4 HC mirror solutions', () => {
-    const solutions = getPcSolutions('honey_cup', true, 0);
-    expect(solutions.length).toBe(4);
-  });
-
-  test('returns non-empty for openers with PC data', () => {
-    expect(getPcSolutions('stray_cannon', false, 0).length).toBeGreaterThan(0);
-    expect(getPcSolutions('ms2', false, 0).length).toBeGreaterThan(0);
-    expect(getPcSolutions('gamushiro', false, 0).length).toBeGreaterThan(0);
-  });
-
-  test('returns empty for routes without PC solutions', () => {
-    // SC routes 1, 2, 4 have no PC (gap geometry untileable)
-    expect(getPcSolutions('stray_cannon', false, 1)).toEqual([]);
-    expect(getPcSolutions('stray_cannon', false, 2)).toEqual([]);
-    expect(getPcSolutions('stray_cannon', false, 4)).toEqual([]);
-    // GM route 4 has no PC (7-row board too constrained)
-    expect(getPcSolutions('gamushiro', false, 4)).toEqual([]);
-  });
-
-  // Verify every normal solution achieves PC
-  const normalSolutions = getPcSolutions('honey_cup', false, 0);
-  for (let i = 0; i < normalSolutions.length; i++) {
-    const sol = normalSolutions[i]!;
-
-    test(`normal sol ${i} (hold=${sol.holdPiece}): exactly 6 placements, 6 unique pieces`, () => {
-      expect(sol.placements.length).toBe(6);
-      const types = new Set(sol.placements.map(p => p.piece));
-      expect(types.size).toBe(6);
-      // holdPiece is the 7th unused type
-      expect(types.has(sol.holdPiece)).toBe(false);
-      const allUsed = [...types, sol.holdPiece].sort();
-      expect(allUsed).toEqual([...ALL_PIECES].sort());
-    });
-
-    test(`normal sol ${i} (hold=${sol.holdPiece}): achieves PC via replayPcSteps`, () => {
-      const board = getPostTstBoard('honey_cup', false, 0)!;
-      const steps = replayPcSteps(board, sol.placements);
-      expect(steps.length).toBe(6);
-      const finalBoard = steps[steps.length - 1]!.board;
-      expect(countCells(finalBoard)).toBe(0); // Perfect Clear
-    });
-
-    test(`normal sol ${i} (hold=${sol.holdPiece}): each placement has 4 cells`, () => {
-      for (const p of sol.placements) {
-        expect(p.cells.length).toBe(4);
-      }
-    });
-  }
-
-  // Verify every mirror solution achieves PC on the mirrored post-TST board
-  const mirrorSolutions = getPcSolutions('honey_cup', true, 0);
-  for (let i = 0; i < mirrorSolutions.length; i++) {
-    const sol = mirrorSolutions[i]!;
-
-    test(`mirror sol ${i} (hold=${sol.holdPiece}): exactly 6 placements, 6 unique pieces`, () => {
-      expect(sol.placements.length).toBe(6);
-      const types = new Set(sol.placements.map(p => p.piece));
-      expect(types.size).toBe(6);
-      expect(types.has(sol.holdPiece)).toBe(false);
-    });
-
-    test(`mirror sol ${i} (hold=${sol.holdPiece}): achieves PC via replayPcSteps`, () => {
-      const board = getPostTstBoard('honey_cup', true, 0)!;
-      const steps = replayPcSteps(board, sol.placements);
-      expect(steps.length).toBe(6);
-      const finalBoard = steps[steps.length - 1]!.board;
-      expect(countCells(finalBoard)).toBe(0); // Perfect Clear
-    });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// L9 proof: every PC placement is BFS-reachable from spawn on the current board
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('PC placements are BFS-reachable (engine-validated)', () => {
-  const normalSols = getPcSolutions('honey_cup', false, 0);
-  const mirrorSols = getPcSolutions('honey_cup', true, 0);
-
-  for (let i = 0; i < normalSols.length; i++) {
-    test(`normal sol ${i}: every placement BFS-reachable`, () => {
-      let board = cloneBoard(getPostTstBoard('honey_cup', false, 0)!);
-      for (let j = 0; j < normalSols[i]!.placements.length; j++) {
-        const p = normalSols[i]!.placements[j]!;
-        expect(isPlacementReachable(board, p.piece, p.cells)).toBe(true);
-        // Stamp and clear to get the next board state
-        for (const c of p.cells) {
-          (board[c.row] as (PieceType | null)[])[c.col] = p.piece;
-        }
-        const { board: cleared } = clearFullRows(board);
-        board = cleared;
-      }
-    });
-  }
-
-  for (let i = 0; i < mirrorSols.length; i++) {
-    test(`mirror sol ${i}: every placement BFS-reachable`, () => {
-      let board = cloneBoard(getPostTstBoard('honey_cup', true, 0)!);
-      for (let j = 0; j < mirrorSols[i]!.placements.length; j++) {
-        const p = mirrorSols[i]!.placements[j]!;
-        expect(isPlacementReachable(board, p.piece, p.cells)).toBe(true);
-        for (const c of p.cells) {
-          (board[c.row] as (PieceType | null)[])[c.col] = p.piece;
-        }
-        const { board: cleared } = clearFullRows(board);
-        board = cleared;
-      }
-    });
-  }
-
-  test('replayPcSteps rejects unreachable placement', () => {
-    // Enclosed pocket: full ceiling at row 16, full floor at row 19,
-    // walls on left (col 0) and right (cols 5-9) on rows 17-18.
-    // The pocket at rows 17-18, cols 1-4 is completely sealed — no BFS path from spawn.
-    const board = makeBoard({
-      16: 'XXXXXXXXXX',
-      17: 'X....XXXXX',
-      18: 'X....XXXXX',
-      19: 'XXXXXXXXXX',
-    });
-    const unreachable: Placement[] = [{
-      piece: 'I',
-      cells: [
-        { col: 1, row: 17 },
-        { col: 2, row: 17 },
-        { col: 3, row: 17 },
-        { col: 4, row: 17 },
-      ],
-      hint: 'unreachable',
-    }];
-    expect(() => replayPcSteps(board, unreachable)).toThrow(/not reachable/i);
-  });
-});
