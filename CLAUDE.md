@@ -269,7 +269,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix). 6 phase panels: guess1/reveal1/guess2/reveal2/guess3/reveal3. Nav bar with contextual breadcrumb labels (HC ✓, Rt 3/8, PC 2/4) between title bar and board.
 - `src/renderer/board.ts` — canvas primitives, `COLORS` palette, `drawCell`, `drawPieceInBox`
 - `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. Uses `isRevealPhase()` and `PHASE_META` from session.ts — no hardcoded phase strings. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets). `[`/`]` dispatch `jumpToBag`.
-- `src/openers/bag3-pc.ts` — HC Perfect Clear solutions (route-keyed: routes 0-2 share 4 solutions, routes 3-7 have 1-2 each), `getPcSolutions(opener, mirror, routeIndex)`
+- `src/openers/bag3-pc.ts` — Perfect Clear solutions for all 4 openers (route-keyed), `getPcSolutions(opener, mirror, routeIndex)`. HC: 10 solutions (8 routes). GM: 7 solutions (routes 0-3; route 4 no PC). MS2: 8 solutions (4 routes). SC: 3 solutions (routes 0,3; routes 1,2,4 no PC).
 - `src/app.ts` — thin entry: canvas setup, `setupKeyboard`, frame loop. ~70 LOC.
 
 **Engine (post-L9 backtracking redesign — commit `044cb40`):**
@@ -283,7 +283,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 44 opener×mirror×route combos (25KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
 - Scripts: `test:fast` (19 files, ~15s dev loop), `test:slow` (2 heavy files), `test:ci` (CI=true, full PBT ~60s)
 
-**Tests (25 files, 1299 tests, ~7.6K assertions, ~25s full suite):**
+**Tests (25 files, 1438 tests, ~8.2K assertions, ~28s full suite):**
 - `tests/guard-matrix.test.ts` — 237 tests, declarative guard matrix (18 actions × 12 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
@@ -293,7 +293,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
 - `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
 - `tests/diag-l9-engine-gateway.test.ts` — 7 tests, architecture boundary (session.ts doesn't import raw placement functions), PC manual hardDrop with line clears, reveal2 TST auto-advance
-- `tests/diag-l9-pc-routes.test.ts` — 210 tests, route-specific PC proof: every HC route has solutions (§1), every solution achieves Perfect Clear (§2), every placement BFS-reachable (§3), structural invariants (§4)
+- `tests/diag-l9-pc-routes.test.ts` — 264 tests, route-specific PC proof for all 4 openers: solution counts match expected (§1), every solution achieves Perfect Clear (§2), every placement BFS-reachable (§3), structural invariants (§4)
 - `tests/diag-l9-nav.test.ts` — 29 tests, phase navigation: snapshot saving (§1), jumpToBag semantics (§2), invariant safety (§3), causal invalidation (§4)
 - `tests/diag-l9-snapshot-centralize.test.ts` — 13 tests, centralized deriveSnapshots proof: consistency invariant (§2), SNAPSHOT_DEPS structural (§3), invariant 9b load-bearing (§4)
 - `tests/diag-drill-queue.test.ts` — 169 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
