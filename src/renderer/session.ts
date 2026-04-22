@@ -304,7 +304,7 @@ function navLabels(session: Session): [string, string, string] {
   // Bag 3: PC solution position
   let bag3 = 'Bag 3';
   if (g && session.pcSolutionIndex >= 0) {
-    const total = getPcSolutions(g.opener, g.mirror).length;
+    const total = getPcSolutions(g.opener, g.mirror, session.routeGuess).length;
     bag3 = total > 0 ? `PC ${session.pcSolutionIndex + 1}/${total}` : 'PC —';
   }
   return [bag1, bag2, bag3];
@@ -982,7 +982,7 @@ function drawGuess3Panel(
 
   // List PC solutions.
   if (session.guess) {
-    const solutions = getPcSolutions(session.guess.opener, session.guess.mirror);
+    const solutions = getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess);
     if (solutions.length === 0) {
       drawPanelLine(ctx, 'No PC solutions available', y, '#9999BB');
       y += PANEL_LINE_H;
@@ -1043,7 +1043,7 @@ function drawReveal3Panel(
 
   // Solution info.
   if (session.guess) {
-    const solutions = getPcSolutions(session.guess.opener, session.guess.mirror);
+    const solutions = getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess);
     const sol = solutions[session.pcSolutionIndex];
     if (sol) {
       drawPanelLine(
@@ -1159,7 +1159,7 @@ function keybindHintForSession(session: Session): string {
     }
     case 'guess3': {
       const n = session.guess
-        ? getPcSolutions(session.guess.opener, session.guess.mirror).length
+        ? getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess).length
         : 4;
       return `1-${n} pick  SPACE first  R new bag${nav}`;
     }
@@ -1168,7 +1168,7 @@ function keybindHintForSession(session: Session): string {
         return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
       }
       const n = session.guess
-        ? getPcSolutions(session.guess.opener, session.guess.mirror).length
+        ? getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess).length
         : 4;
       return `1-${n} solution  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
     }

@@ -318,23 +318,23 @@ describe('HC PC solutions (bag3-pc data)', () => {
   const ALL_PIECES: PieceType[] = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
 
   test('getPcSolutions returns 4 HC normal solutions', () => {
-    const solutions = getPcSolutions('honey_cup', false);
+    const solutions = getPcSolutions('honey_cup', false, 0);
     expect(solutions.length).toBe(4);
   });
 
   test('getPcSolutions returns 4 HC mirror solutions', () => {
-    const solutions = getPcSolutions('honey_cup', true);
+    const solutions = getPcSolutions('honey_cup', true, 0);
     expect(solutions.length).toBe(4);
   });
 
   test('returns empty for openers without PC data', () => {
-    expect(getPcSolutions('stray_cannon', false)).toEqual([]);
-    expect(getPcSolutions('ms2', false)).toEqual([]);
-    expect(getPcSolutions('gamushiro', false)).toEqual([]);
+    expect(getPcSolutions('stray_cannon', false, 0)).toEqual([]);
+    expect(getPcSolutions('ms2', false, 0)).toEqual([]);
+    expect(getPcSolutions('gamushiro', false, 0)).toEqual([]);
   });
 
   // Verify every normal solution achieves PC
-  const normalSolutions = getPcSolutions('honey_cup', false);
+  const normalSolutions = getPcSolutions('honey_cup', false, 0);
   for (let i = 0; i < normalSolutions.length; i++) {
     const sol = normalSolutions[i]!;
 
@@ -364,7 +364,7 @@ describe('HC PC solutions (bag3-pc data)', () => {
   }
 
   // Verify every mirror solution achieves PC on the mirrored post-TST board
-  const mirrorSolutions = getPcSolutions('honey_cup', true);
+  const mirrorSolutions = getPcSolutions('honey_cup', true, 0);
   for (let i = 0; i < mirrorSolutions.length; i++) {
     const sol = mirrorSolutions[i]!;
 
@@ -390,8 +390,8 @@ describe('HC PC solutions (bag3-pc data)', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('PC placements are BFS-reachable (engine-validated)', () => {
-  const normalSols = getPcSolutions('honey_cup', false);
-  const mirrorSols = getPcSolutions('honey_cup', true);
+  const normalSols = getPcSolutions('honey_cup', false, 0);
+  const mirrorSols = getPcSolutions('honey_cup', true, 0);
 
   for (let i = 0; i < normalSols.length; i++) {
     test(`normal sol ${i}: every placement BFS-reachable`, () => {

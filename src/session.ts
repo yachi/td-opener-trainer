@@ -262,7 +262,7 @@ export function assertSessionInvariants(s: Session): void {
     if (s.guess === null) {
       throw new InvariantViolation('reveal3 requires a non-null guess', s);
     }
-    const pcSolutions = getPcSolutions(s.guess.opener, s.guess.mirror);
+    const pcSolutions = getPcSolutions(s.guess.opener, s.guess.mirror, s.routeGuess);
     if (s.pcSolutionIndex < 0 || s.pcSolutionIndex >= pcSolutions.length) {
       throw new InvariantViolation(
         `reveal3 pcSolutionIndex (${s.pcSolutionIndex}) out of range [0, ${pcSolutions.length})`,
@@ -645,7 +645,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       // for HC), so we must verify compatibility before entering guess3.
       if (state.phase === 'reveal2') {
         const pcSolutions = state.guess
-          ? getPcSolutions(state.guess.opener, state.guess.mirror)
+          ? getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess)
           : [];
         const restartState = {
           ...createSession(),
@@ -755,7 +755,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       if (state.phase !== 'guess3' && !(state.phase === 'reveal3' && state.playMode === 'auto')) return state;
       if (state.phase === 'reveal3' && state.pcSolutionIndex === action.solutionIndex) return state;
 
-      const pcSolutions = getPcSolutions(state.guess.opener, state.guess.mirror);
+      const pcSolutions = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
       if (
         !Number.isInteger(action.solutionIndex) ||
         action.solutionIndex < 0 ||
@@ -1081,7 +1081,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         }
         case 'guess3': {
           if (state.guess === null) return state;
-          const pcSols = getPcSolutions(state.guess.opener, state.guess.mirror);
+          const pcSols = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
           if (
             !Number.isInteger(action.index) ||
             action.index < 0 ||
@@ -1096,7 +1096,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         }
         case 'reveal3': {
           if (state.playMode !== 'auto' || state.guess === null) return state;
-          const pcSols2 = getPcSolutions(state.guess.opener, state.guess.mirror);
+          const pcSols2 = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
           if (
             !Number.isInteger(action.index) ||
             action.index < 0 ||
