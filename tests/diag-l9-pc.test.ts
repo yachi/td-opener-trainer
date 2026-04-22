@@ -327,10 +327,19 @@ describe('HC PC solutions (bag3-pc data)', () => {
     expect(solutions.length).toBe(4);
   });
 
-  test('returns empty for openers without PC data', () => {
-    expect(getPcSolutions('stray_cannon', false, 0)).toEqual([]);
-    expect(getPcSolutions('ms2', false, 0)).toEqual([]);
-    expect(getPcSolutions('gamushiro', false, 0)).toEqual([]);
+  test('returns non-empty for openers with PC data', () => {
+    expect(getPcSolutions('stray_cannon', false, 0).length).toBeGreaterThan(0);
+    expect(getPcSolutions('ms2', false, 0).length).toBeGreaterThan(0);
+    expect(getPcSolutions('gamushiro', false, 0).length).toBeGreaterThan(0);
+  });
+
+  test('returns empty for routes without PC solutions', () => {
+    // SC routes 1, 2, 4 have no PC (gap geometry untileable)
+    expect(getPcSolutions('stray_cannon', false, 1)).toEqual([]);
+    expect(getPcSolutions('stray_cannon', false, 2)).toEqual([]);
+    expect(getPcSolutions('stray_cannon', false, 4)).toEqual([]);
+    // GM route 4 has no PC (7-row board too constrained)
+    expect(getPcSolutions('gamushiro', false, 4)).toEqual([]);
   });
 
   // Verify every normal solution achieves PC

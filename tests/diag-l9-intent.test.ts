@@ -202,13 +202,15 @@ describe('#2 primary in reveal auto mode', () => {
   });
 
   test('reveal2 auto → advances to a new session (guess1 with fresh bag)', () => {
-    const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
+    // Use Stray Cannon route 1 which has no PC solutions, so
+    // primary from reveal2 skips guess3 and goes to new guess1.
+    const s0 = createSession(bagFor('stray_cannon'), bagFor('stray_cannon'));
     const s1 = apply(
       s0,
-      { type: 'setGuess', opener: 'ms2', mirror: false },
+      { type: 'setGuess', opener: 'stray_cannon', mirror: false },
       { type: 'submitGuess' },
       { type: 'advancePhase' }, // reveal1 → guess2
-      { type: 'selectRoute', routeIndex: 0 }, // guess2 → reveal2
+      { type: 'selectRoute', routeIndex: 1 }, // guess2 → reveal2 (SC route 1, no PC)
       { type: 'primary' }, // reveal2 → newSession
     );
     expect(s1.phase).toBe('guess1');
@@ -268,15 +270,17 @@ describe('#3 primary in reveal manual mode (THE BUG FIX)', () => {
   });
 
   test('reveal2 manual with activePiece null → new session', () => {
-    const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
+    // Use Stray Cannon route 1 which has no PC solutions, so
+    // primary from reveal2 skips guess3 and goes to new guess1.
+    const s0 = createSession(bagFor('stray_cannon'), bagFor('stray_cannon'));
     let s = apply(
       s0,
       { type: 'togglePlayMode' },
-      { type: 'setGuess', opener: 'ms2', mirror: false },
+      { type: 'setGuess', opener: 'stray_cannon', mirror: false },
       { type: 'submitGuess' },
       { type: 'togglePlayMode' }, // back to auto so we can advance
       { type: 'advancePhase' },
-      { type: 'selectRoute', routeIndex: 0 },
+      { type: 'selectRoute', routeIndex: 1 }, // SC route 1, no PC
       { type: 'togglePlayMode' }, // auto → manual in reveal2
     );
     expect(s.phase).toBe('reveal2');
@@ -284,7 +288,7 @@ describe('#3 primary in reveal manual mode (THE BUG FIX)', () => {
     // Force end state.
     s = { ...s, activePiece: null, step: s.cachedSteps.length };
     const s2 = intentReducer(s, { type: 'primary' });
-    // reveal2 advance = new session.
+    // reveal2 advance = new session (no PC for SC route 1).
     expect(s2.phase).toBe('guess1');
   });
 
@@ -473,19 +477,28 @@ describe('#7 pick in reveal phases: browse (auto) vs no-op (manual)', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 describe('#8 smoke: intent-only play reaches every phase', () => {
   test('full cycle using only primary + pick advances through every phase', () => {
+    // Use production sessionReducer (not the local intentReducer proof-of-
+    // concept which only knows 4 phases). The production reducer handles
+    // primary/pick natively since commit 2cf1565.
     const s0 = createSession(bagFor('ms2'), bagFor('ms2'));
     // guess1: pick MS2 and submit
     const s1 = apply(s0, { type: 'pick', index: 3 }, { type: 'primary' });
     expect(s1.phase).toBe('reveal1');
     expect(s1.correct).toBe(true);
     // reveal1: primary → guess2
-    const s2 = intentReducer(s1, { type: 'primary' });
+    const s2 = sessionReducer(s1, { type: 'primary' });
     expect(s2.phase).toBe('guess2');
     // guess2: pick route 0
-    const s3 = intentReducer(s2, { type: 'pick', index: 0 });
+    const s3 = sessionReducer(s2, { type: 'pick', index: 0 });
     expect(s3.phase).toBe('reveal2');
-    // reveal2: primary → new session
-    const s4 = intentReducer(s3, { type: 'primary' });
-    expect(s4.phase).toBe('guess1');
+    // reveal2: primary → guess3 (MS2 route 0 has PC solutions)
+    const s4 = sessionReducer(s3, { type: 'primary' });
+    expect(s4.phase).toBe('guess3');
+    // guess3: primary → reveal3 (auto-selects first PC solution)
+    const s5 = sessionReducer(s4, { type: 'primary' });
+    expect(s5.phase).toBe('reveal3');
+    // reveal3: primary → new session (guess1)
+    const s6 = sessionReducer(s5, { type: 'primary' });
+    expect(s6.phase).toBe('guess1');
   });
 });

@@ -594,15 +594,17 @@ describe('#7 sessionStats are in-memory only', () => {
 // ── #8: New bag on advance past reveal2 ──
 describe('#8 advance past reveal2 generates new bags', () => {
   test('reveal2 → advancePhase yields fresh bag1 & bag2 and resets phase', () => {
-    const bag1A = bagForTargetOpener('ms2', false);
+    // Use Stray Cannon route 1 which has no PC solutions, so
+    // advancePhase from reveal2 skips guess3 and goes to new guess1.
+    const bag1A = bagForTargetOpener('stray_cannon', false);
     const bag2A = bagForTargetOpener('honey_cup', false);
     let s = createSession(bag1A, bag2A);
-    s = dispatch(s, { type: 'setGuess', opener: 'ms2', mirror: false });
+    s = dispatch(s, { type: 'setGuess', opener: 'stray_cannon', mirror: false });
     s = dispatch(s, { type: 'submitGuess' });
     s = dispatch(s, { type: 'advancePhase' }); // reveal1 → guess2
-    s = dispatch(s, { type: 'selectRoute', routeIndex: 0 });
+    s = dispatch(s, { type: 'selectRoute', routeIndex: 1 });
     expect(s.phase).toBe('reveal2');
-    s = dispatch(s, { type: 'advancePhase' }); // reveal2 → new guess1
+    s = dispatch(s, { type: 'advancePhase' }); // reveal2 → new guess1 (no PC for SC route 1)
 
     expect(s.phase).toBe('guess1');
     expect(s.guess).toBeNull();

@@ -472,10 +472,12 @@ describe('#4 activePiece clear: advancePhase / newSession', () => {
   });
 
   test('advancePhase reveal2 → new guess1 clears everything', () => {
-    const bag = bagForTargetOpener('ms2', false);
+    // Use Stray Cannon route 1 which has no PC solutions, so
+    // advancePhase from reveal2 skips guess3 and goes to new guess1.
+    const bag = bagForTargetOpener('stray_cannon', false);
     let s = createSession2(bag, bag);
     s = dispatch(s, { type: 'togglePlayMode' });
-    s = dispatch(s, { type: 'setGuess', opener: 'ms2', mirror: false });
+    s = dispatch(s, { type: 'setGuess', opener: 'stray_cannon', mirror: false });
     s = dispatch(s, { type: 'submitGuess' });
     while (s.step < s.cachedSteps.length) {
       const step = s.cachedSteps[s.step]!;
@@ -483,9 +485,9 @@ describe('#4 activePiece clear: advancePhase / newSession', () => {
       s = dispatch(s, { type: 'hardDrop' });
     }
     s = dispatch(s, { type: 'advancePhase' });
-    s = dispatch(s, { type: 'selectRoute', routeIndex: 0 });
+    s = dispatch(s, { type: 'selectRoute', routeIndex: 1 });
     expect(s.activePiece).not.toBeNull();
-    s = dispatch(s, { type: 'advancePhase' }); // reveal2 → fresh guess1
+    s = dispatch(s, { type: 'advancePhase' }); // reveal2 → fresh guess1 (no PC for SC route 1)
     expect(s.phase).toBe('guess1');
     expect(s.activePiece).toBeNull();
     expect(s.holdPiece).toBeNull();

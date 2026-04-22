@@ -8,6 +8,8 @@
  *   Routes 0-2 (standard post-TST shape): johnbeak.cz fumens via row-mapped solver.
  *   Routes 3-7 (fallback post-TST shapes): computed by bitmask tiling solver +
  *     BFS reachability verification + replayPcSteps confirmation (probe-hc-pc-solve3.ts).
+ *   Gamushiro, MS2, Stray Cannon: computed by bitmask tiling solver +
+ *     BFS reachability verification + replayPcSteps confirmation.
  *
  * PC solutions are ROUTE-SPECIFIC — different Bag 2 routes produce different
  * post-TST board shapes. Routes 0-2 share the same shape and thus the same
@@ -181,6 +183,249 @@ const HC_ROUTE7: PcSolution[] = [
   },
 ];
 
+// ── Gamushiro PC solutions ──
+
+// Routes 0-1 (form_1, form_2): same post-TST shape. Hold=S or Hold=Z.
+const GM_ROUTES_01: PcSolution[] = [
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'L', cells: [{ col: 5, row: 17 }, { col: 6, row: 17 }, { col: 7, row: 17 }, { col: 5, row: 18 }], hint: 'L PC' },
+      { piece: 'O', cells: [{ col: 6, row: 15 }, { col: 7, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }], hint: 'O PC' },
+      { piece: 'Z', cells: [{ col: 5, row: 15 }, { col: 4, row: 16 }, { col: 5, row: 16 }, { col: 4, row: 17 }], hint: 'Z PC' },
+      { piece: 'I', cells: [{ col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }, { col: 4, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 1, row: 16 }, { col: 2, row: 16 }, { col: 3, row: 16 }, { col: 3, row: 17 }], hint: 'J PC' },
+      { piece: 'T', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 3, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'Z',
+    placements: [
+      { piece: 'S', cells: [{ col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }], hint: 'S PC' },
+      { piece: 'L', cells: [{ col: 5, row: 15 }, { col: 6, row: 15 }, { col: 7, row: 15 }, { col: 5, row: 16 }], hint: 'L PC' },
+      { piece: 'I', cells: [{ col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }, { col: 4, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 1, row: 16 }, { col: 2, row: 16 }, { col: 3, row: 16 }, { col: 3, row: 17 }], hint: 'J PC' },
+      { piece: 'O', cells: [{ col: 6, row: 16 }, { col: 7, row: 16 }, { col: 6, row: 17 }, { col: 7, row: 17 }], hint: 'O PC' },
+      { piece: 'T', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 3, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 2 (o_early): different shape. Hold=S or Hold=Z.
+const GM_ROUTE2: PcSolution[] = [
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'J', cells: [{ col: 3, row: 17 }, { col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }], hint: 'J PC' },
+      { piece: 'L', cells: [{ col: 9, row: 15 }, { col: 7, row: 16 }, { col: 8, row: 16 }, { col: 9, row: 16 }], hint: 'L PC' },
+      { piece: 'O', cells: [{ col: 3, row: 15 }, { col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }], hint: 'O PC' },
+      { piece: 'I', cells: [{ col: 5, row: 15 }, { col: 6, row: 15 }, { col: 7, row: 15 }, { col: 8, row: 15 }], hint: 'I PC' },
+      { piece: 'Z', cells: [{ col: 5, row: 16 }, { col: 6, row: 16 }, { col: 6, row: 17 }, { col: 7, row: 17 }], hint: 'Z PC' },
+      { piece: 'T', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 3, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'Z',
+    placements: [
+      { piece: 'S', cells: [{ col: 5, row: 15 }, { col: 5, row: 16 }, { col: 6, row: 16 }, { col: 6, row: 17 }], hint: 'S PC' },
+      { piece: 'I', cells: [{ col: 6, row: 15 }, { col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 3, row: 17 }, { col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }], hint: 'J PC' },
+      { piece: 'O', cells: [{ col: 3, row: 15 }, { col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }], hint: 'O PC' },
+      { piece: 'L', cells: [{ col: 7, row: 16 }, { col: 8, row: 16 }, { col: 9, row: 16 }, { col: 7, row: 17 }], hint: 'L PC' },
+      { piece: 'T', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 3, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 3 (o_mid_right): Hold=Z only.
+const GM_ROUTE3: PcSolution[] = [
+  {
+    holdPiece: 'Z',
+    placements: [
+      { piece: 'S', cells: [{ col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }, { col: 5, row: 18 }], hint: 'S PC' },
+      { piece: 'O', cells: [{ col: 8, row: 15 }, { col: 9, row: 15 }, { col: 8, row: 16 }, { col: 9, row: 16 }], hint: 'O PC' },
+      { piece: 'I', cells: [{ col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }, { col: 4, row: 15 }], hint: 'I PC' },
+      { piece: 'L', cells: [{ col: 5, row: 15 }, { col: 6, row: 15 }, { col: 7, row: 15 }, { col: 5, row: 16 }], hint: 'L PC' },
+      { piece: 'J', cells: [{ col: 1, row: 16 }, { col: 2, row: 16 }, { col: 3, row: 16 }, { col: 3, row: 17 }], hint: 'J PC' },
+      { piece: 'T', cells: [{ col: 2, row: 18 }, { col: 3, row: 18 }, { col: 4, row: 18 }, { col: 3, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 4 (l_early): no PC solutions (7-row board too constrained).
+
+const GM_PC_BY_ROUTE: RoutePcMap = {
+  0: GM_ROUTES_01,
+  1: GM_ROUTES_01,
+  2: GM_ROUTE2,
+  3: GM_ROUTE3,
+  4: [],  // no PC solutions
+};
+
+// ── MS2 PC solutions ──
+
+// Route 0 (setup_a): Hold=S or Hold=Z.
+const MS2_ROUTE0: PcSolution[] = [
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'L', cells: [{ col: 6, row: 17 }, { col: 7, row: 17 }, { col: 8, row: 17 }, { col: 6, row: 18 }], hint: 'L PC' },
+      { piece: 'O', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 7, row: 16 }, { col: 8, row: 16 }], hint: 'O PC' },
+      { piece: 'Z', cells: [{ col: 6, row: 15 }, { col: 5, row: 16 }, { col: 6, row: 16 }, { col: 5, row: 17 }], hint: 'Z PC' },
+      { piece: 'I', cells: [{ col: 2, row: 15 }, { col: 3, row: 15 }, { col: 4, row: 15 }, { col: 5, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 2, row: 16 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }], hint: 'J PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'Z',
+    placements: [
+      { piece: 'S', cells: [{ col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }, { col: 6, row: 18 }], hint: 'S PC' },
+      { piece: 'L', cells: [{ col: 6, row: 15 }, { col: 7, row: 15 }, { col: 8, row: 15 }, { col: 6, row: 16 }], hint: 'L PC' },
+      { piece: 'I', cells: [{ col: 2, row: 15 }, { col: 3, row: 15 }, { col: 4, row: 15 }, { col: 5, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 2, row: 16 }, { col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }], hint: 'J PC' },
+      { piece: 'O', cells: [{ col: 7, row: 16 }, { col: 8, row: 16 }, { col: 7, row: 17 }, { col: 8, row: 17 }], hint: 'O PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 1 (setup_b): Hold=S or Hold=Z.
+const MS2_ROUTE1: PcSolution[] = [
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'J', cells: [{ col: 4, row: 17 }, { col: 5, row: 17 }, { col: 6, row: 17 }, { col: 6, row: 18 }], hint: 'J PC' },
+      { piece: 'L', cells: [{ col: 8, row: 16 }, { col: 9, row: 16 }, { col: 9, row: 17 }, { col: 9, row: 18 }], hint: 'L PC' },
+      { piece: 'I', cells: [{ col: 6, row: 15 }, { col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'I PC' },
+      { piece: 'O', cells: [{ col: 4, row: 15 }, { col: 5, row: 15 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'O PC' },
+      { piece: 'Z', cells: [{ col: 6, row: 16 }, { col: 7, row: 16 }, { col: 7, row: 17 }, { col: 8, row: 17 }], hint: 'Z PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'Z',
+    placements: [
+      { piece: 'J', cells: [{ col: 4, row: 17 }, { col: 5, row: 17 }, { col: 6, row: 17 }, { col: 6, row: 18 }], hint: 'J PC' },
+      { piece: 'I', cells: [{ col: 9, row: 15 }, { col: 9, row: 16 }, { col: 9, row: 17 }, { col: 9, row: 18 }], hint: 'I PC' },
+      { piece: 'S', cells: [{ col: 6, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }, { col: 7, row: 17 }], hint: 'S PC' },
+      { piece: 'O', cells: [{ col: 4, row: 15 }, { col: 5, row: 15 }, { col: 4, row: 16 }, { col: 5, row: 16 }], hint: 'O PC' },
+      { piece: 'L', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 8, row: 16 }, { col: 8, row: 17 }], hint: 'L PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 2 (setup_c): Hold=O, Hold=S, or Hold=Z (3 solutions).
+const MS2_ROUTE2: PcSolution[] = [
+  {
+    holdPiece: 'O',
+    placements: [
+      { piece: 'S', cells: [{ col: 5, row: 16 }, { col: 6, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'S PC' },
+      { piece: 'Z', cells: [{ col: 9, row: 15 }, { col: 8, row: 16 }, { col: 9, row: 16 }, { col: 8, row: 17 }], hint: 'Z PC' },
+      { piece: 'L', cells: [{ col: 4, row: 15 }, { col: 5, row: 15 }, { col: 6, row: 15 }, { col: 4, row: 16 }], hint: 'L PC' },
+      { piece: 'I', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 7, row: 16 }, { col: 7, row: 17 }], hint: 'J PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'L', cells: [{ col: 7, row: 15 }, { col: 7, row: 16 }, { col: 7, row: 17 }, { col: 8, row: 17 }], hint: 'L PC' },
+      { piece: 'O', cells: [{ col: 8, row: 15 }, { col: 9, row: 15 }, { col: 8, row: 16 }, { col: 9, row: 16 }], hint: 'O PC' },
+      { piece: 'Z', cells: [{ col: 6, row: 15 }, { col: 5, row: 16 }, { col: 6, row: 16 }, { col: 5, row: 17 }], hint: 'Z PC' },
+      { piece: 'I', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 4, row: 15 }, { col: 5, row: 15 }, { col: 4, row: 16 }, { col: 4, row: 17 }], hint: 'J PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'Z',
+    placements: [
+      { piece: 'S', cells: [{ col: 5, row: 16 }, { col: 6, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'S PC' },
+      { piece: 'L', cells: [{ col: 4, row: 15 }, { col: 5, row: 15 }, { col: 6, row: 15 }, { col: 4, row: 16 }], hint: 'L PC' },
+      { piece: 'I', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }], hint: 'I PC' },
+      { piece: 'J', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }, { col: 9, row: 16 }], hint: 'J PC' },
+      { piece: 'O', cells: [{ col: 7, row: 16 }, { col: 8, row: 16 }, { col: 7, row: 17 }, { col: 8, row: 17 }], hint: 'O PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 3 (setup_d): Hold=S only.
+const MS2_ROUTE3: PcSolution[] = [
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'J', cells: [{ col: 0, row: 15 }, { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 2, row: 16 }], hint: 'J PC' },
+      { piece: 'I', cells: [{ col: 1, row: 15 }, { col: 2, row: 15 }, { col: 3, row: 15 }, { col: 4, row: 15 }], hint: 'I PC' },
+      { piece: 'O', cells: [{ col: 5, row: 15 }, { col: 6, row: 15 }, { col: 5, row: 16 }, { col: 6, row: 16 }], hint: 'O PC' },
+      { piece: 'L', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }, { col: 7, row: 16 }], hint: 'L PC' },
+      { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z PC' },
+      { piece: 'T', cells: [{ col: 3, row: 18 }, { col: 4, row: 18 }, { col: 5, row: 18 }, { col: 4, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+const MS2_PC_BY_ROUTE: RoutePcMap = {
+  0: MS2_ROUTE0,
+  1: MS2_ROUTE1,
+  2: MS2_ROUTE2,
+  3: MS2_ROUTE3,
+};
+
+// ── Stray Cannon PC solutions ──
+
+// Route 0 (j_before_o): Hold=O or Hold=S.
+const SC_ROUTE0: PcSolution[] = [
+  {
+    holdPiece: 'O',
+    placements: [
+      { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z PC' },
+      { piece: 'J', cells: [{ col: 3, row: 15 }, { col: 4, row: 15 }, { col: 5, row: 15 }, { col: 5, row: 16 }], hint: 'J PC' },
+      { piece: 'I', cells: [{ col: 6, row: 15 }, { col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'I PC' },
+      { piece: 'S', cells: [{ col: 0, row: 15 }, { col: 0, row: 16 }, { col: 1, row: 16 }, { col: 1, row: 17 }], hint: 'S PC' },
+      { piece: 'L', cells: [{ col: 1, row: 15 }, { col: 2, row: 15 }, { col: 2, row: 16 }, { col: 2, row: 17 }], hint: 'L PC' },
+      { piece: 'T', cells: [{ col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 5, row: 19 }], hint: 'T PC' },
+    ],
+  },
+  {
+    holdPiece: 'S',
+    placements: [
+      { piece: 'I', cells: [{ col: 6, row: 15 }, { col: 7, row: 15 }, { col: 8, row: 15 }, { col: 9, row: 15 }], hint: 'I PC' },
+      { piece: 'L', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 0, row: 16 }], hint: 'L PC' },
+      { piece: 'Z', cells: [{ col: 3, row: 16 }, { col: 4, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'Z PC' },
+      { piece: 'J', cells: [{ col: 3, row: 15 }, { col: 4, row: 15 }, { col: 5, row: 15 }, { col: 5, row: 16 }], hint: 'J PC' },
+      { piece: 'O', cells: [{ col: 1, row: 16 }, { col: 2, row: 16 }, { col: 1, row: 17 }, { col: 2, row: 17 }], hint: 'O PC' },
+      { piece: 'T', cells: [{ col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 5, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+// Route 3 (s_before_o_iz_before_j): Hold=I only.
+const SC_ROUTE3: PcSolution[] = [
+  {
+    holdPiece: 'I',
+    placements: [
+      { piece: 'Z', cells: [{ col: 1, row: 16 }, { col: 0, row: 17 }, { col: 1, row: 17 }, { col: 0, row: 18 }], hint: 'Z PC' },
+      { piece: 'O', cells: [{ col: 3, row: 15 }, { col: 4, row: 15 }, { col: 3, row: 16 }, { col: 4, row: 16 }], hint: 'O PC' },
+      { piece: 'L', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 0, row: 16 }], hint: 'L PC' },
+      { piece: 'J', cells: [{ col: 5, row: 15 }, { col: 6, row: 15 }, { col: 7, row: 15 }, { col: 7, row: 16 }], hint: 'J PC' },
+      { piece: 'S', cells: [{ col: 5, row: 16 }, { col: 6, row: 16 }, { col: 4, row: 17 }, { col: 5, row: 17 }], hint: 'S PC' },
+      { piece: 'T', cells: [{ col: 4, row: 18 }, { col: 5, row: 18 }, { col: 6, row: 18 }, { col: 5, row: 19 }], hint: 'T PC' },
+    ],
+  },
+];
+
+const SC_PC_BY_ROUTE: RoutePcMap = {
+  0: SC_ROUTE0,
+  1: [],  // no PC solutions (gap geometry untileable)
+  2: [],  // no PC solutions (gap geometry untileable)
+  3: SC_ROUTE3,
+  4: [],  // no PC solutions (gap geometry untileable)
+};
+
 // ── Route-keyed lookup ──
 
 type RoutePcMap = Record<number, PcSolution[]>;
@@ -198,6 +443,9 @@ const HC_PC_BY_ROUTE: RoutePcMap = {
 
 const PC_DATA: Partial<Record<OpenerID, RoutePcMap>> = {
   honey_cup: HC_PC_BY_ROUTE,
+  gamushiro: GM_PC_BY_ROUTE,
+  ms2: MS2_PC_BY_ROUTE,
+  stray_cannon: SC_PC_BY_ROUTE,
 };
 
 // ── Getter ──
