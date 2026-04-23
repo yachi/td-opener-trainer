@@ -197,6 +197,83 @@ function drawRouteThumbnails(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Welcome screen (shown once before first session)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export function renderWelcome(ctx: CanvasRenderingContext2D, now: number): void {
+  ctx.fillStyle = COLORS.canvasBg;
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  const cx = CANVAS_W / 2;
+
+  // Title.
+  ctx.fillStyle = COLORS.panelHeading;
+  ctx.font = `bold 28px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.fillText('TD Opener Practice', cx, 160);
+
+  // Subtitle.
+  ctx.fillStyle = COLORS.panelText;
+  ctx.font = `16px ${FONT}`;
+  ctx.fillText('Learn 4 Triple-Double Tetris openers', cx, 195);
+
+  // Flow steps.
+  const steps = [
+    '1.  See a bag, pick the right opener (1-4)',
+    '2.  Watch the build step by step',
+    '3.  Practice bag 2 routes and bag 3 PC',
+  ];
+  ctx.font = `15px ${FONT}`;
+  ctx.textAlign = 'left';
+  const stepsX = cx - 160;
+  let y = 260;
+  for (const step of steps) {
+    ctx.fillStyle = COLORS.panelText;
+    ctx.fillText(step, stepsX, y);
+    y += 28;
+  }
+
+  // Keybinds.
+  y += 20;
+  ctx.fillStyle = '#555580';
+  ctx.fillRect(stepsX - 10, y - 14, 340, 1);
+  y += 16;
+
+  const keys: [string, string][] = [
+    ['1-4', 'pick opener'],
+    ['ENTER', 'submit'],
+    ['SPACE', 'next / drop'],
+    ['M', 'mirror'],
+    ['R', 'new bag'],
+  ];
+  ctx.font = `13px ${FONT}`;
+  let kx = stepsX;
+  for (const [key, label] of keys) {
+    ctx.fillStyle = '#7777BB';
+    ctx.fillText(key, kx, y);
+    const kw = ctx.measureText(key).width;
+    ctx.fillStyle = '#555580';
+    ctx.fillText(` ${label}`, kx + kw, y);
+    kx += kw + ctx.measureText(` ${label}`).width + 18;
+    if (kx > stepsX + 320) {
+      kx = stepsX;
+      y += 20;
+    }
+  }
+
+  // "Press SPACE to start" with pulsing opacity.
+  y = CANVAS_H - 80;
+  const pulse = 0.5 + 0.5 * Math.sin(now / 600);
+  ctx.globalAlpha = 0.4 + 0.6 * pulse;
+  ctx.fillStyle = COLORS.panelHeading;
+  ctx.font = `15px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.fillText('Press SPACE to start', cx, y);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Public entry point
 // ═══════════════════════════════════════════════════════════════════════════
 

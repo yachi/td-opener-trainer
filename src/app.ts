@@ -13,9 +13,13 @@ import {
   type Session,
   type SessionAction,
 } from './session.ts';
-import { renderSession } from './renderer/session.ts';
+import { renderSession, renderWelcome } from './renderer/session.ts';
 import { setupKeyboard } from './input/keyboard.ts';
 import { CANVAS_W, CANVAS_H } from './renderer/board.ts';
+
+// ── Welcome screen (shown once before first session) ──
+
+let showWelcome = true;
 
 // ── Canvas bootstrap ──
 
@@ -37,6 +41,13 @@ let session: Session = createSession();
 let dirty = true;
 
 function dispatch(action: SessionAction): void {
+  if (showWelcome) {
+    if (action.type === 'primary') {
+      showWelcome = false;
+      dirty = true;
+    }
+    return;
+  }
   session = sessionReducer(session, action);
   dirty = true;
 }
@@ -55,6 +66,11 @@ function frame(now: number): void {
   // Drive DAS/ARR auto-repeat for held keys (no-op outside manual reveal).
   keyboard.tick(now);
 
+  if (showWelcome) {
+    renderWelcome(ctx!, now);
+    requestAnimationFrame(frame);
+    return;
+  }
   if (dirty) {
     renderSession(ctx!, session);
     dirty = false;
