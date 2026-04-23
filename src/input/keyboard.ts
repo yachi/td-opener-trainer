@@ -111,13 +111,13 @@ export function setupKeyboard(
     if (code === 'BracketLeft') {
       e.preventDefault();
       const currentBag = PHASE_META[session.phase].bag;
-      dispatch({ type: 'jumpToBag', bag: (currentBag - 1) as 1 | 2 | 3 });
+      dispatch({ type: 'jumpToBag', bag: (currentBag - 1) as 1 | 2 | 3 | 4 });
       return;
     }
     if (code === 'BracketRight') {
       e.preventDefault();
       const currentBag = PHASE_META[session.phase].bag;
-      dispatch({ type: 'jumpToBag', bag: (currentBag + 1) as 1 | 2 | 3 });
+      dispatch({ type: 'jumpToBag', bag: (currentBag + 1) as 1 | 2 | 3 | 4 });
       return;
     }
     if (

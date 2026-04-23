@@ -52,17 +52,18 @@ import { getBag2Routes } from './openers/bag2-routes.ts';
 import { getBag2Sequence } from './openers/sequences.ts';
 import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
 import { getPcSolutions } from './openers/bag3-pc.ts';
+import { getDpcSolutions } from './openers/bag4-dpc.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
-export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2' | 'guess3' | 'reveal3';
+export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2' | 'guess3' | 'reveal3' | 'guess4' | 'reveal4';
 export type PlayMode = 'auto' | 'manual';
 
 // ── Phase metadata table (L9: single source of truth for phase properties) ──
 
 interface PhaseMeta {
   kind: 'guess' | 'reveal';
-  bag: 1 | 2 | 3;
+  bag: 1 | 2 | 3 | 4;
 }
 
 export const PHASE_META = {
@@ -72,6 +73,8 @@ export const PHASE_META = {
   reveal2: { kind: 'reveal', bag: 2 },
   guess3:  { kind: 'guess',  bag: 3 },
   reveal3: { kind: 'reveal', bag: 3 },
+  guess4:  { kind: 'guess',  bag: 4 },
+  reveal4: { kind: 'reveal', bag: 4 },
 } as const satisfies Record<Phase, PhaseMeta>;
 
 export function isRevealPhase(phase: Phase): boolean {
@@ -125,6 +128,8 @@ export interface Session {
   routeGuess: number;
   /** PC solution index selected during guess3 (-1 if not yet selected). */
   pcSolutionIndex: number;
+  /** DPC solution index selected during guess4 (-1 if not yet selected). */
+  dpcSolutionIndex: number;
 
   // ── Reframing A+ fields (manual-play in-flight state) ──
   /**
@@ -146,7 +151,7 @@ export interface Session {
   /** True after the user held on the current step; resets on step advance. */
   holdUsed: boolean;
   /** Snapshots saved at each reveal-phase entry for O(1) nav-bar jumps. */
-  revealSnapshots: Partial<Record<'reveal1' | 'reveal2' | 'reveal3', RevealSnapshot>>;
+  revealSnapshots: Partial<Record<'reveal1' | 'reveal2' | 'reveal3' | 'reveal4', RevealSnapshot>>;
 }
 
 /**
@@ -175,6 +180,7 @@ export type SessionAction =
   | { type: 'togglePlayMode' }
   | { type: 'selectRoute'; routeIndex: number }
   | { type: 'selectPcSolution'; solutionIndex: number }
+  | { type: 'selectDpcSolution'; solutionIndex: number }
   | { type: 'browseOpener'; opener: OpenerID; mirror: boolean }
   // ── Reframing A+ manual-play actions ──
   | { type: 'movePiece'; dx: number; dy: number }
@@ -183,7 +189,7 @@ export type SessionAction =
   | { type: 'hold' }
   | { type: 'softDrop' }
   // ── Navigation ──
-  | { type: 'jumpToBag'; bag: 1 | 2 | 3 }
+  | { type: 'jumpToBag'; bag: 1 | 2 | 3 | 4 }
   // ── Intent actions (keyboard dispatches these; reducer interprets) ──
   | { type: 'primary' }
   | { type: 'pick'; index: number };
@@ -348,12 +354,35 @@ export function assertSessionInvariants(s: Session): void {
     }
   }
 
+  // ── 3c. reveal4 dpcSolutionIndex within DPC solutions list ──
+  if (s.phase === 'reveal4') {
+    if (s.guess === null) {
+      throw new InvariantViolation('reveal4 requires a non-null guess', s);
+    }
+    const pcSolutionsForDpcInv = getPcSolutions(s.guess.opener, s.guess.mirror, s.routeGuess);
+    const pcSolForDpcInv = pcSolutionsForDpcInv[s.pcSolutionIndex];
+    const holdForDpcInv = pcSolForDpcInv?.holdPiece;
+    if (!holdForDpcInv) {
+      throw new InvariantViolation(
+        `reveal4 requires a valid PC solution to derive holdPiece (pcSolutionIndex=${s.pcSolutionIndex})`,
+        s,
+      );
+    }
+    const dpcSolutionsInv = getDpcSolutions(holdForDpcInv);
+    if (s.dpcSolutionIndex < 0 || s.dpcSolutionIndex >= dpcSolutionsInv.length) {
+      throw new InvariantViolation(
+        `reveal4 dpcSolutionIndex (${s.dpcSolutionIndex}) out of range [0, ${dpcSolutionsInv.length})`,
+        s,
+      );
+    }
+  }
+
   // ── 9b. Current-phase snapshot consistency ──
   // If a snapshot exists for the current reveal phase, its cachedSteps must
   // be the same object as state.cachedSteps. A mismatch means the snapshot
   // was saved for a different opener/route/PC and is stale.
   if (isRevealPhase(s.phase)) {
-    const key = s.phase as 'reveal1' | 'reveal2' | 'reveal3';
+    const key = s.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
     const snap = s.revealSnapshots[key];
     if (snap && snap.cachedSteps !== s.cachedSteps) {
       throw new InvariantViolation(
@@ -474,6 +503,7 @@ export function createSession(
     cachedSteps: [],
     routeGuess: -1,
     pcSolutionIndex: -1,
+    dpcSolutionIndex: -1,
     activePiece: null,
     holdPiece: null,
     holdUsed: false,
@@ -684,8 +714,38 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           holdUsed: false,
         };
       }
-      // reveal3 → new guess1 with fresh bags (stats carry forward).
+      // reveal3 → guess4 (if DPC solutions exist) or new guess1.
       if (state.phase === 'reveal3') {
+        // Determine the holdPiece from the current PC solution.
+        const pcSolutions = state.guess
+          ? getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess)
+          : [];
+        const pcSol = pcSolutions[state.pcSolutionIndex];
+        const holdAfterPc = pcSol?.holdPiece;
+        const dpcSolutions = holdAfterPc ? getDpcSolutions(holdAfterPc) : [];
+
+        if (dpcSolutions.length > 0) {
+          return {
+            ...state,
+            phase: 'guess4',
+            board: emptyBoard(),
+            baseBoard: emptyBoard(),
+            step: 0,
+            cachedSteps: [],
+            dpcSolutionIndex: -1,
+            activePiece: null,
+            holdPiece: null,
+            holdUsed: false,
+          };
+        }
+        return {
+          ...createSession(),
+          playMode: state.playMode,
+          sessionStats: state.sessionStats,
+        };
+      }
+      // reveal4 → new guess1 with fresh bags (stats carry forward).
+      if (state.phase === 'reveal4') {
         return {
           ...createSession(),
           playMode: state.playMode,
@@ -786,6 +846,49 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         cachedSteps: pcSteps,
         step: 0,
         baseBoard: pcBaseBoardClone,
+        activePiece,
+        holdPiece: null,
+        holdUsed: false,
+      };
+    }
+
+    case 'selectDpcSolution': {
+      if (state.guess === null) return state;
+      if (state.phase !== 'guess4' && !(state.phase === 'reveal4' && state.playMode === 'auto')) return state;
+      if (state.phase === 'reveal4' && state.dpcSolutionIndex === action.solutionIndex) return state;
+
+      // Determine holdPiece from the PC solution that preceded DPC.
+      const pcSolutionsForDpc = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
+      const pcSolForDpc = pcSolutionsForDpc[state.pcSolutionIndex];
+      const holdAfterPcForDpc = pcSolForDpc?.holdPiece;
+      if (!holdAfterPcForDpc) return state;
+
+      const dpcSolutions = getDpcSolutions(holdAfterPcForDpc);
+      if (
+        !Number.isInteger(action.solutionIndex) ||
+        action.solutionIndex < 0 ||
+        action.solutionIndex >= dpcSolutions.length
+      ) {
+        return state;
+      }
+
+      const dpcSolution = dpcSolutions[action.solutionIndex]!;
+      // DPC starts on empty board (post-PC).
+      const dpcBaseBoard = emptyBoard();
+      const dpcSteps = replayPcSteps(dpcBaseBoard, dpcSolution.placements);
+
+      const activePiece =
+        state.playMode === 'manual'
+          ? spawnForCurrentStep(dpcSteps, 0)
+          : null;
+
+      return {
+        ...state,
+        phase: 'reveal4',
+        dpcSolutionIndex: action.solutionIndex,
+        cachedSteps: dpcSteps,
+        step: 0,
+        baseBoard: emptyBoard(),
         activePiece,
         holdPiece: null,
         holdUsed: false,
@@ -947,8 +1050,8 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     // ── Navigation — O(1) snapshot-based phase jumps ──
 
     case 'jumpToBag': {
-      if (action.bag < 1 || action.bag > 3) return state;
-      const targetPhase = `reveal${action.bag}` as 'reveal1' | 'reveal2' | 'reveal3';
+      if (action.bag < 1 || action.bag > 4) return state;
+      const targetPhase = `reveal${action.bag}` as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
       const snap = state.revealSnapshots[targetPhase];
       if (!snap) return state;
       if (state.phase === targetPhase) return state;
@@ -988,6 +1091,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         case 'reveal1':
         case 'reveal2':
         case 'reveal3':
+        case 'reveal4':
           // Manual with an active piece: drop it.
           // Manual at end (activePiece === null) OR auto mode: advance phase.
           if (state.playMode === 'manual' && state.activePiece !== null) {
@@ -1004,6 +1108,10 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         case 'guess3': {
           // Auto-select first PC solution.
           return _rawSessionReducer(state, { type: 'selectPcSolution', solutionIndex: 0 });
+        }
+        case 'guess4': {
+          // SPACE in guess4 = skip (restart). User can also pick with digits.
+          return _rawSessionReducer(state, { type: 'newSession' });
         }
       }
     }
@@ -1107,6 +1215,45 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             solutionIndex: action.index,
           });
         }
+        case 'guess4': {
+          if (state.guess === null) return state;
+          // Determine holdPiece from the PC solution to look up DPC solutions.
+          const pcSolsForDpcPick = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
+          const pcSolForDpcPick = pcSolsForDpcPick[state.pcSolutionIndex];
+          const holdForDpcPick = pcSolForDpcPick?.holdPiece;
+          if (!holdForDpcPick) return state;
+          const dpcSolsForPick = getDpcSolutions(holdForDpcPick);
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= dpcSolsForPick.length
+          ) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
+            type: 'selectDpcSolution',
+            solutionIndex: action.index,
+          });
+        }
+        case 'reveal4': {
+          if (state.playMode !== 'auto' || state.guess === null) return state;
+          const pcSolsForDpcPick2 = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
+          const pcSolForDpcPick2 = pcSolsForDpcPick2[state.pcSolutionIndex];
+          const holdForDpcPick2 = pcSolForDpcPick2?.holdPiece;
+          if (!holdForDpcPick2) return state;
+          const dpcSolsForPick2 = getDpcSolutions(holdForDpcPick2);
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= dpcSolsForPick2.length
+          ) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
+            type: 'selectDpcSolution',
+            solutionIndex: action.index,
+          });
+        }
       }
     }
 
@@ -1154,6 +1301,7 @@ function deriveBoard(state: Session): Session {
  *   reveal1 ← (guess.opener, guess.mirror)
  *   reveal2 ← (routeGuess) + all reveal1 deps
  *   reveal3 ← (pcSolutionIndex) + all reveal2 deps
+ *   reveal4 ← (dpcSolutionIndex) + all reveal3 deps
  *
  * Rules:
  *   SAVE: entering a reveal phase with new cachedSteps → save snapshot
@@ -1168,25 +1316,33 @@ function deriveSnapshots(prev: Session, next: Session, action: SessionAction): S
   let snapshots = next.revealSnapshots;
   let changed = false;
 
-  // CLEAR: opener/mirror changed → clear reveal2 + reveal3
+  // CLEAR: opener/mirror changed → clear reveal2 + reveal3 + reveal4
   const openerChanged =
     prev.guess?.opener !== next.guess?.opener ||
     prev.guess?.mirror !== next.guess?.mirror;
-  if (openerChanged && (snapshots.reveal2 || snapshots.reveal3)) {
-    snapshots = { ...snapshots, reveal2: undefined, reveal3: undefined };
+  if (openerChanged && (snapshots.reveal2 || snapshots.reveal3 || snapshots.reveal4)) {
+    snapshots = { ...snapshots, reveal2: undefined, reveal3: undefined, reveal4: undefined };
     changed = true;
   }
 
-  // CLEAR: routeGuess changed → clear reveal3
-  if (prev.routeGuess !== next.routeGuess && snapshots.reveal3) {
+  // CLEAR: routeGuess changed → clear reveal3 + reveal4
+  if (prev.routeGuess !== next.routeGuess && (snapshots.reveal3 || snapshots.reveal4)) {
     snapshots = changed ? snapshots : { ...snapshots };
     snapshots.reveal3 = undefined;
+    snapshots.reveal4 = undefined;
+    changed = true;
+  }
+
+  // CLEAR: pcSolutionIndex changed → clear reveal4
+  if (prev.pcSolutionIndex !== next.pcSolutionIndex && snapshots.reveal4) {
+    snapshots = changed ? snapshots : { ...snapshots };
+    snapshots.reveal4 = undefined;
     changed = true;
   }
 
   // SAVE: if in a reveal phase with new cachedSteps, save snapshot for current phase
   if (isRevealPhase(next.phase) && next.cachedSteps !== prev.cachedSteps) {
-    const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3';
+    const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
     snapshots = changed ? snapshots : { ...snapshots };
     snapshots[key] = {
       cachedSteps: next.cachedSteps,

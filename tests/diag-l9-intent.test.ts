@@ -74,6 +74,8 @@ function intentReducer(state: Session, action: IntentAction): Session {
 
         case 'reveal1':
         case 'reveal2':
+        case 'reveal3':
+        case 'reveal4':
           // Manual with an active piece: drop it.
           // Manual at end-of-cachedSteps (activePiece === null) OR auto mode:
           // advance to the next phase (THE BUG FIX).
@@ -87,6 +89,14 @@ function intentReducer(state: Session, action: IntentAction): Session {
 
         case 'guess2':
           // Skip route selection → new bag.
+          return intentReducer(state, { type: 'newSession' });
+
+        case 'guess3':
+          // Skip PC selection → select first.
+          return intentReducer(state, { type: 'selectPcSolution', solutionIndex: 0 });
+
+        case 'guess4':
+          // Skip DPC → new session.
           return intentReducer(state, { type: 'newSession' });
 
         default: {
@@ -114,9 +124,21 @@ function intentReducer(state: Session, action: IntentAction): Session {
             type: 'selectRoute',
             routeIndex: action.index,
           });
-        // pick is a no-op in reveal phases.
+        case 'guess3':
+          return intentReducer(state, {
+            type: 'selectPcSolution',
+            solutionIndex: action.index,
+          });
+        case 'guess4':
+          return intentReducer(state, {
+            type: 'selectDpcSolution',
+            solutionIndex: action.index,
+          });
+        // pick is a no-op in reveal phases (manual) or delegates in auto.
         case 'reveal1':
         case 'reveal2':
+        case 'reveal3':
+        case 'reveal4':
           return state;
         default: {
           const _exhaustive: never = state.phase;

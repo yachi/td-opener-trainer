@@ -67,7 +67,7 @@ function assertSessionInvariants(s: Session): void {
   }
 
   // ── 2. reveal phases require non-empty cachedSteps (Bug #2 root) ──
-  if ((s.phase === 'reveal1' || s.phase === 'reveal2') && s.cachedSteps.length === 0) {
+  if ((s.phase === 'reveal1' || s.phase === 'reveal2' || s.phase === 'reveal3' || s.phase === 'reveal4') && s.cachedSteps.length === 0) {
     throw new InvariantViolation(
       `phase=${s.phase} but cachedSteps is empty — invalid transition`,
       s,
@@ -118,7 +118,7 @@ function assertSessionInvariants(s: Session): void {
   //      the user just used hold-with-peek (which can land on a null at
   //      the final step). The relaxation: holdUsed=true permits null active. ──
   const isManualReveal =
-    (s.phase === 'reveal1' || s.phase === 'reveal2') && s.playMode === 'manual';
+    (s.phase === 'reveal1' || s.phase === 'reveal2' || s.phase === 'reveal3' || s.phase === 'reveal4') && s.playMode === 'manual';
   if (
     isManualReveal &&
     s.step < s.cachedSteps.length &&
@@ -153,7 +153,7 @@ function assertSessionInvariants(s: Session): void {
   }
 
   // ── 8. Non-reveal phases have no active piece or hold state ──
-  if (s.phase === 'guess1' || s.phase === 'guess2') {
+  if (s.phase === 'guess1' || s.phase === 'guess2' || s.phase === 'guess3' || s.phase === 'guess4') {
     if (s.activePiece !== null) {
       throw new InvariantViolation(
         `${s.phase} must not have an activePiece`,

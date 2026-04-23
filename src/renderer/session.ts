@@ -46,6 +46,7 @@ import { getBag2Routes } from '../openers/bag2-routes';
 import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
+import { getDpcSolutions } from '../openers/bag4-dpc';
 import type { Board } from '../core/srs';
 import { isRevealPhase, PHASE_META, type Session } from '../session';
 
@@ -314,6 +315,12 @@ export function renderSession(
     case 'reveal3':
       drawReveal3Panel(ctx, session);
       break;
+    case 'guess4':
+      drawGuess4Panel(ctx, session);
+      break;
+    case 'reveal4':
+      drawReveal4Panel(ctx, session);
+      break;
   }
 
   // 5. Keybind bar (bottom).
@@ -363,9 +370,9 @@ const NAV_SHORT: Record<OpenerID, string> = {
   stray_cannon: 'SC',
 };
 
-function navLabels(session: Session): [string, string, string] {
+function navLabels(session: Session): [string, string, string, string] {
   const g = session.guess;
-  // Bag 1: opener short name (+ ✓ if visited)
+  // Bag 1: opener short name (+ checkmark if visited)
   let bag1 = 'Bag 1';
   if (g) {
     const short = NAV_SHORT[g.opener];
@@ -384,7 +391,17 @@ function navLabels(session: Session): [string, string, string] {
     const total = getPcSolutions(g.opener, g.mirror, session.routeGuess).length;
     bag3 = total > 0 ? `PC ${session.pcSolutionIndex + 1}/${total}` : 'PC —';
   }
-  return [bag1, bag2, bag3];
+  // Bag 4: DPC solution position
+  let bag4 = 'Bag 4';
+  if (g && session.dpcSolutionIndex >= 0) {
+    const pcSols = getPcSolutions(g.opener, g.mirror, session.routeGuess);
+    const pcSol = pcSols[session.pcSolutionIndex];
+    if (pcSol) {
+      const total = getDpcSolutions(pcSol.holdPiece).length;
+      bag4 = total > 0 ? `DPC ${session.dpcSolutionIndex + 1}/${total}` : 'DPC —';
+    }
+  }
+  return [bag1, bag2, bag3, bag4];
 }
 
 function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
@@ -404,15 +421,16 @@ function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
 
   const currentBag = PHASE_META[session.phase].bag;
   const labels = navLabels(session);
-  const tabW = 80;
+  const tabCount = 4;
+  const tabW = 70;
   const tabH = NAV_BAR_H - 4;
-  const gap = 8;
-  const totalW = 3 * tabW + 2 * gap;
+  const gap = 6;
+  const totalW = tabCount * tabW + (tabCount - 1) * gap;
   const startX = (CANVAS_W - totalW) / 2;
 
-  for (let i = 0; i < 3; i++) {
-    const bag = (i + 1) as 1 | 2 | 3;
-    const phase = `reveal${bag}` as 'reveal1' | 'reveal2' | 'reveal3';
+  for (let i = 0; i < tabCount; i++) {
+    const bag = (i + 1) as 1 | 2 | 3 | 4;
+    const phase = `reveal${bag}` as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
     const hasSnapshot = !!session.revealSnapshots[phase];
     const isActive = currentBag === bag;
 
@@ -439,7 +457,7 @@ function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
     }
 
     // Tab label.
-    ctx.font = `${isActive ? 'bold ' : ''}12px ${FONT}`;
+    ctx.font = `${isActive ? 'bold ' : ''}11px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (isActive) {
@@ -449,7 +467,7 @@ function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
     } else {
       ctx.fillStyle = '#505070';
     }
-    ctx.fillText(labels[i], tx + tabW / 2, ty + tabH / 2);
+    ctx.fillText(labels[i]!, tx + tabW / 2, ty + tabH / 2);
   }
 }
 
@@ -1176,6 +1194,151 @@ function drawReveal3Panel(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Phase: guess4 (pick DPC solution)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function drawGuess4Panel(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+): void {
+  let y = PANEL_Y;
+  drawPanelHeading(ctx, 'Phase: pick DPC solution', y);
+  y += PANEL_LINE_H + 4;
+
+  // Opener context.
+  if (session.guess) {
+    const def = OPENERS[session.guess.opener];
+    const mirrorLabel = session.guess.mirror ? ' (Mirror)' : '';
+    drawPanelLine(
+      ctx,
+      `${def.nameEn}${mirrorLabel} (post-PC board)`,
+      y,
+      '#CCAA44',
+      true,
+    );
+    y += PANEL_LINE_H + 4;
+  }
+
+  // List DPC solutions.
+  if (session.guess) {
+    const pcSols = getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess);
+    const pcSol = pcSols[session.pcSolutionIndex];
+    const holdForDpc = pcSol?.holdPiece;
+    const solutions = holdForDpc ? getDpcSolutions(holdForDpc) : [];
+
+    if (solutions.length === 0) {
+      drawPanelLine(ctx, 'No DPC solutions available', y, '#9999BB');
+      y += PANEL_LINE_H;
+      y += 6;
+      drawPanelLine(ctx, 'SPACE skip to new bag', y, '#9999BB');
+    } else {
+      drawPanelLine(ctx, 'DPC solutions:', y);
+      y += PANEL_LINE_H;
+      for (let i = 0; i < solutions.length; i++) {
+        const sol = solutions[i]!;
+        const isSelected = session.dpcSolutionIndex === i;
+
+        // Selected highlight bar.
+        if (isSelected) {
+          ctx.fillStyle = COLORS.buttonActive;
+          roundRect(ctx, PANEL_X - 4, y - 2, PANEL_W, PANEL_LINE_H + 2, 4);
+          ctx.fill();
+        }
+
+        const label = `(${i + 1}) ${sol.name}`;
+        drawPanelLine(
+          ctx,
+          label,
+          y,
+          isSelected ? '#FFFFFF' : COLORS.panelText,
+          isSelected,
+        );
+        y += PANEL_LINE_H;
+      }
+      y += 6;
+      drawPanelLine(ctx, '1-9 pick  SPACE skip', y, '#9999BB');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase: reveal4 (DPC step-through)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function drawReveal4Panel(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+): void {
+  let y = PANEL_Y;
+  drawPanelHeading(
+    ctx,
+    `DPC Reveal (${session.playMode})`,
+    y,
+  );
+  y += PANEL_LINE_H + 4;
+
+  // Solution info.
+  if (session.guess) {
+    const pcSols = getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess);
+    const pcSol = pcSols[session.pcSolutionIndex];
+    const holdForDpc = pcSol?.holdPiece;
+    const solutions = holdForDpc ? getDpcSolutions(holdForDpc) : [];
+    const sol = solutions[session.dpcSolutionIndex];
+
+    if (sol) {
+      drawPanelLine(
+        ctx,
+        `DPC ${session.dpcSolutionIndex + 1}/${solutions.length}: ${sol.name}`,
+        y,
+        COLORS.panelHeading,
+        true,
+      );
+      y += PANEL_LINE_H + 4;
+
+      // Hold piece box.
+      drawPanelLine(ctx, 'Hold:', y);
+      y += PANEL_LINE_H;
+      const slotX = PANEL_X;
+      const slotY = y;
+      const slotW = 50;
+      const slotH = 50;
+      ctx.fillStyle = COLORS.statCardBg;
+      ctx.fillRect(slotX, slotY, slotW, slotH);
+      ctx.strokeStyle = COLORS.boardBorder;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(slotX + 0.5, slotY + 0.5, slotW - 1, slotH - 1);
+      drawPieceInBox(ctx, sol.holdPiece, slotX, slotY, slotW, slotH, 10);
+      y += slotH + 8;
+    }
+  }
+
+  // Step counter.
+  const total = session.cachedSteps.length;
+  const atEnd = session.step >= total;
+  drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
+  y += PANEL_LINE_H + 4;
+
+  // "DPC Complete!" banner when all steps are placed.
+  if (atEnd && total > 0) {
+    ctx.fillStyle = COLORS.correct;
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('DPC Complete!', PANEL_X, y);
+    y += 24;
+  }
+
+  // Navigation hint — manual only (auto hints live in keybind bar).
+  if (session.playMode === 'manual') {
+    drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Keybind bar (bottom)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1209,7 +1372,7 @@ function keybindHintForSession(session: Session): string {
   const bag = PHASE_META[session.phase].bag;
   const snaps = session.revealSnapshots;
   const canJumpPrev = bag > 1 && !!(snaps as Record<string, unknown>)[`reveal${bag - 1}`];
-  const canJumpNext = bag < 3 && !!(snaps as Record<string, unknown>)[`reveal${bag + 1}`];
+  const canJumpNext = bag < 4 && !!(snaps as Record<string, unknown>)[`reveal${bag + 1}`];
   const nav = canJumpPrev || canJumpNext ? '  [/] nav' : '';
 
   switch (session.phase) {
@@ -1248,6 +1411,15 @@ function keybindHintForSession(session: Session): string {
         ? getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess).length
         : 4;
       return `1-${n} solution  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+    }
+    case 'guess4': {
+      return `1-9 pick DPC  SPACE skip  R new bag${nav}`;
+    }
+    case 'reveal4': {
+      if (session.playMode === 'manual') {
+        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+      }
+      return `\u2190\u2192 step  SPACE next  P manual  R new${nav}`;
     }
   }
 }

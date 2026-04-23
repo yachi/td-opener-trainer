@@ -104,17 +104,22 @@ const arbAction: fc.Arbitrary<SessionAction> = fc.oneof(
     opener: arbOpener,
     mirror: fc.boolean(),
   }),
-  // navigation + PC (2)
+  // navigation + PC + DPC (3)
   fc.record({
     type: fc.constant('selectPcSolution' as const),
     solutionIndex: fc.integer({ min: -2, max: 5 }),
   }),
   fc.record({
+    type: fc.constant('selectDpcSolution' as const),
+    solutionIndex: fc.integer({ min: -2, max: 5 }),
+  }),
+  fc.record({
     type: fc.constant('jumpToBag' as const),
     bag: fc.oneof(
-      fc.constant(1 as 1 | 2 | 3),
-      fc.constant(2 as 1 | 2 | 3),
-      fc.constant(3 as 1 | 2 | 3),
+      fc.constant(1 as 1 | 2 | 3 | 4),
+      fc.constant(2 as 1 | 2 | 3 | 4),
+      fc.constant(3 as 1 | 2 | 3 | 4),
+      fc.constant(4 as 1 | 2 | 3 | 4),
     ),
   }),
   // intents (2)
@@ -232,11 +237,16 @@ const arbActionNoFreshBags: fc.Arbitrary<SessionAction> = fc.oneof(
     solutionIndex: fc.integer({ min: -2, max: 5 }),
   }),
   fc.record({
+    type: fc.constant('selectDpcSolution' as const),
+    solutionIndex: fc.integer({ min: -2, max: 5 }),
+  }),
+  fc.record({
     type: fc.constant('jumpToBag' as const),
     bag: fc.oneof(
-      fc.constant(1 as 1 | 2 | 3),
-      fc.constant(2 as 1 | 2 | 3),
-      fc.constant(3 as 1 | 2 | 3),
+      fc.constant(1 as 1 | 2 | 3 | 4),
+      fc.constant(2 as 1 | 2 | 3 | 4),
+      fc.constant(3 as 1 | 2 | 3 | 4),
+      fc.constant(4 as 1 | 2 | 3 | 4),
     ),
   }),
   fc.record({
@@ -450,11 +460,17 @@ describe('Property 5: full guess1 → reveal1 → guess2 → reveal2 → newSess
 
           // HC has PC data → goes to guess3; others → restart to guess1.
           if (s.phase === 'guess3') {
-            // Continue through guess3 → reveal3 → guess1
+            // Continue through guess3 → reveal3
             s = sessionReducer(s, { type: 'selectPcSolution', solutionIndex: 0 });
             assertSessionInvariants(s);
             expect(s.phase).toBe('reveal3');
             s = sessionReducer(s, { type: 'advancePhase' });
+            assertSessionInvariants(s);
+          }
+          // After reveal3: guess4 if DPC data exists for holdPiece, else guess1.
+          if (s.phase === 'guess4') {
+            // Skip DPC (SPACE = primary = newSession from guess4).
+            s = sessionReducer(s, { type: 'primary' });
             assertSessionInvariants(s);
           }
           expect(s.phase).toBe('guess1');

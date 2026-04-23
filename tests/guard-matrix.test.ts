@@ -58,7 +58,7 @@ import type { PieceType } from '../src/core/types.ts';
 const ACTION_TYPES = [
   'newSession', 'setGuess', 'toggleMirror', 'submitGuess',
   'stepForward', 'stepBackward', 'advancePhase', 'togglePlayMode',
-  'selectRoute', 'selectPcSolution', 'browseOpener',
+  'selectRoute', 'selectPcSolution', 'selectDpcSolution', 'browseOpener',
   'movePiece', 'rotatePiece', 'hardDrop', 'hold', 'softDrop',
   'jumpToBag',
   'primary', 'pick',
@@ -128,6 +128,22 @@ function buildState(phase: Phase, playMode: PlayMode): Session {
   if (phase === 'reveal3') {
     s = sessionReducer(s, { type: 'selectPcSolution', solutionIndex: 0 }); // → reveal3
   }
+  // guess4/reveal4: reach via HC route 0, PC solution 1 (holdPiece 'O' → DPC data exists).
+  if (phase === 'guess4' || phase === 'reveal4') {
+    const hcBag = bagFor('honey_cup');
+    s = createSession(hcBag, hcBag);
+    s = sessionReducer(s, { type: 'setGuess', opener: 'honey_cup', mirror: false });
+    s = sessionReducer(s, { type: 'submitGuess' });
+    s = sessionReducer(s, { type: 'advancePhase' });
+    s = sessionReducer(s, { type: 'selectRoute', routeIndex: 0 });
+    s = sessionReducer(s, { type: 'advancePhase' });
+    // PC solution 1 has holdPiece 'O' → DPC solutions exist → guess4.
+    s = sessionReducer(s, { type: 'selectPcSolution', solutionIndex: 1 });
+    s = sessionReducer(s, { type: 'advancePhase' }); // reveal3 → guess4
+  }
+  if (phase === 'reveal4') {
+    s = sessionReducer(s, { type: 'selectDpcSolution', solutionIndex: 0 });
+  }
   // Switch playMode LAST so we reach the target phase via normal path first.
   if (s.playMode !== playMode) {
     s = sessionReducer(s, { type: 'togglePlayMode' });
@@ -158,6 +174,7 @@ function buildAction(type: ActionType): SessionAction {
     case 'togglePlayMode':  return { type: 'togglePlayMode' };
     case 'selectRoute':     return { type: 'selectRoute', routeIndex: 1 };
     case 'selectPcSolution': return { type: 'selectPcSolution', solutionIndex: 1 };
+    case 'selectDpcSolution': return { type: 'selectDpcSolution', solutionIndex: 1 };
     case 'browseOpener':    return { type: 'browseOpener', opener: 'stray_cannon', mirror: false };
     case 'movePiece':       return { type: 'movePiece', dx: -1, dy: 0 };
     case 'rotatePiece':     return { type: 'rotatePiece', direction: 1 };
@@ -186,7 +203,7 @@ function buildAction(type: ActionType): SessionAction {
 type Context = `${Phase}_${PlayMode}`;
 type Expectation = 'identity' | 'change';
 
-const ALL_PHASES: Phase[] = ['guess1', 'reveal1', 'guess2', 'reveal2', 'guess3', 'reveal3'];
+const ALL_PHASES: Phase[] = ['guess1', 'reveal1', 'guess2', 'reveal2', 'guess3', 'reveal3', 'guess4', 'reveal4'];
 const ALL_MODES: PlayMode[] = ['auto', 'manual'];
 
 const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
@@ -199,6 +216,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'change', reveal2_manual: 'change',
     guess3_auto: 'change', guess3_manual: 'change',
     reveal3_auto: 'change', reveal3_manual: 'change',
+    guess4_auto: 'change', guess4_manual: 'change',
+    reveal4_auto: 'change', reveal4_manual: 'change',
   },
 
   setGuess: {
@@ -208,6 +227,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   toggleMirror: {
@@ -217,6 +238,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   submitGuess: {
@@ -226,6 +249,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   stepForward: {
@@ -235,6 +260,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'change', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'change', reveal3_manual: 'change',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'change', reveal4_manual: 'change',
   },
 
   stepBackward: {
@@ -247,6 +274,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   advancePhase: {
@@ -256,6 +285,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'change', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'change', reveal3_manual: 'change',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'change', reveal4_manual: 'change',
   },
 
   togglePlayMode: {
@@ -265,6 +296,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'change', reveal2_manual: 'change',
     guess3_auto: 'change', guess3_manual: 'change',
     reveal3_auto: 'change', reveal3_manual: 'change',
+    guess4_auto: 'change', guess4_manual: 'change',
+    reveal4_auto: 'change', reveal4_manual: 'change',
   },
 
   selectRoute: {
@@ -274,6 +307,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'change', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   selectPcSolution: {
@@ -283,6 +318,20 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'change', guess3_manual: 'change',
     reveal3_auto: 'change', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
+  },
+
+  selectDpcSolution: {
+    // selectDpcSolution: accepted in guess4 (both modes) and reveal4 auto.
+    guess1_auto: 'identity', guess1_manual: 'identity',
+    reveal1_auto: 'identity', reveal1_manual: 'identity',
+    guess2_auto: 'identity', guess2_manual: 'identity',
+    reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'change', guess4_manual: 'change',
+    reveal4_auto: 'change', reveal4_manual: 'identity',
   },
 
   browseOpener: {
@@ -292,6 +341,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   // ── Manual-play actions ──
@@ -303,6 +354,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'change',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'change',
   },
 
   rotatePiece: {
@@ -312,6 +365,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'change',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'change',
   },
 
   hardDrop: {
@@ -324,6 +379,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'identity',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
   },
 
   hold: {
@@ -333,6 +390,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'change',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'change',
   },
 
   softDrop: {
@@ -342,6 +401,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'identity', reveal2_manual: 'change',
     guess3_auto: 'identity', guess3_manual: 'identity',
     reveal3_auto: 'identity', reveal3_manual: 'change',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'change',
   },
 
   // ── Navigation ──
@@ -355,6 +416,8 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal2_auto: 'change', reveal2_manual: 'change',
     guess3_auto: 'change', guess3_manual: 'change',
     reveal3_auto: 'change', reveal3_manual: 'change',
+    guess4_auto: 'change', guess4_manual: 'change',
+    reveal4_auto: 'change', reveal4_manual: 'change',
   },
 
   // ── Intent actions ──
@@ -367,12 +430,15 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     // reveal manual: hardDrop (may fail match) → identity
     // guess2: selectRoute(best) → change
     // guess3: selectPcSolution(0) → change
+    // guess4: newSession (skip) → change
     guess1_auto: 'change', guess1_manual: 'change',
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'identity',
     guess3_auto: 'change', guess3_manual: 'change',
     reveal3_auto: 'change', reveal3_manual: 'identity',
+    guess4_auto: 'change', guess4_manual: 'change',
+    reveal4_auto: 'change', reveal4_manual: 'identity',
   },
 
   pick: {
@@ -385,18 +451,29 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     // guess3: selectPcSolution → change
     // reveal3 auto: selectPcSolution → change (pick(1) = solution 1, differs from 0)
     // reveal3 manual: no-op (safe zone)
+    // guess4: selectDpcSolution → change (O-hold DPC data exists)
+    // reveal4 auto: selectDpcSolution → change (can re-pick)
+    // reveal4 manual: no-op (safe zone)
     guess1_auto: 'change', guess1_manual: 'change',
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'change', guess2_manual: 'change',
     reveal2_auto: 'change', reveal2_manual: 'identity',
     guess3_auto: 'change', guess3_manual: 'change',
     reveal3_auto: 'change', reveal3_manual: 'identity',
+    guess4_auto: 'change', guess4_manual: 'change',
+    reveal4_auto: 'change', reveal4_manual: 'identity',
   },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §4  Generated tests from the matrix
+//
+// UNBUILDABLE_PHASES: phases where buildState throws because the underlying
+// data is not yet populated. These are skipped (test.skip) rather than
+// omitted, so they appear in the test output as pending reminders.
 // ═══════════════════════════════════════════════════════════════════════════
+
+const UNBUILDABLE_PHASES: ReadonlySet<Phase> = new Set<Phase>();
 
 describe('Guard matrix: (action × phase × playMode) → identity | change', () => {
   for (const actionType of ACTION_TYPES) {
@@ -406,16 +483,20 @@ describe('Guard matrix: (action × phase × playMode) → identity | change', ()
         for (const mode of ALL_MODES) {
           const ctx: Context = `${phase}_${mode}`;
           const expected = row[ctx];
-          test(`${ctx} → ${expected}`, () => {
-            const state = buildState(phase, mode);
-            const action = buildAction(actionType);
-            const next = sessionReducer(state, action);
-            if (expected === 'identity') {
-              expect(next).toBe(state);
-            } else {
-              expect(next).not.toBe(state);
-            }
-          });
+          if (UNBUILDABLE_PHASES.has(phase)) {
+            test.skip(`${ctx} → ${expected} (DPC data stub)`, () => {});
+          } else {
+            test(`${ctx} → ${expected}`, () => {
+              const state = buildState(phase, mode);
+              const action = buildAction(actionType);
+              const next = sessionReducer(state, action);
+              if (expected === 'identity') {
+                expect(next).toBe(state);
+              } else {
+                expect(next).not.toBe(state);
+              }
+            });
+          }
         }
       }
     });
@@ -593,13 +674,13 @@ describe('Phase metadata: isRevealPhase / isGuessPhase structural coverage', () 
   });
 
   test('reveal phases match hardcoded expectation', () => {
-    const expected = new Set<Phase>(['reveal1', 'reveal2', 'reveal3']);
+    const expected = new Set<Phase>(['reveal1', 'reveal2', 'reveal3', 'reveal4']);
     const actual = new Set(ALL_PHASES.filter(isRevealPhase));
     expect(actual).toEqual(expected);
   });
 
   test('guess phases match hardcoded expectation', () => {
-    const expected = new Set<Phase>(['guess1', 'guess2', 'guess3']);
+    const expected = new Set<Phase>(['guess1', 'guess2', 'guess3', 'guess4']);
     const actual = new Set(ALL_PHASES.filter(isGuessPhase));
     expect(actual).toEqual(expected);
   });

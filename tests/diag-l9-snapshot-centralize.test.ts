@@ -8,6 +8,7 @@
  *   reveal1 ← (guess.opener, guess.mirror)
  *   reveal2 ← (routeGuess) + all reveal1 deps
  *   reveal3 ← (pcSolutionIndex) + all reveal2 deps
+ *   reveal4 ← (dpcSolutionIndex) + all reveal3 deps
  *
  * Rules:
  *   SAVE: if entering a reveal phase (phase changed to revealN), save snapshot
@@ -111,7 +112,8 @@ describe('§3 SNAPSHOT_DEPS structural proof', () => {
     reveal1: (s: Session) => [s.guess?.opener, s.guess?.mirror] as const,
     reveal2: (s: Session) => [s.guess?.opener, s.guess?.mirror, s.routeGuess] as const,
     reveal3: (s: Session) => [s.guess?.opener, s.guess?.mirror, s.routeGuess, s.pcSolutionIndex] as const,
-  } satisfies Record<'reveal1' | 'reveal2' | 'reveal3', (s: Session) => readonly unknown[]>;
+    reveal4: (s: Session) => [s.guess?.opener, s.guess?.mirror, s.routeGuess, s.pcSolutionIndex, s.dpcSolutionIndex] as const,
+  } satisfies Record<'reveal1' | 'reveal2' | 'reveal3' | 'reveal4', (s: Session) => readonly unknown[]>;
 
   function depsChanged(
     key: keyof typeof SNAPSHOT_DEPS,
