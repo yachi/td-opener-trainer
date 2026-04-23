@@ -23,6 +23,7 @@ import fc from 'fast-check';
 
 import {
   createSession,
+  createDpcSession,
   sessionReducer,
   assertSessionInvariants,
   type Session,
@@ -646,5 +647,28 @@ describe('Known-bug assertions', () => {
       // Rejected → activePiece unchanged (reference equality).
       expect(next.activePiece).toBe(s.activePiece);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Property 8 — DPC-direct invariants
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('Property 8: DPC-direct action sequences preserve invariants', () => {
+  test('random sequences from createDpcSession never violate invariants', () => {
+    fc.assert(
+      fc.property(
+        fc.array(arbAction, { minLength: 0, maxLength: 100 }),
+        (actions) => {
+          let s = createDpcSession('O');
+          assertSessionInvariants(s);
+          for (const action of actions) {
+            s = sessionReducer(s, action);
+            assertSessionInvariants(s);
+          }
+          return true;
+        },
+      ),
+    );
   });
 });

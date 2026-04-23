@@ -200,7 +200,7 @@ function drawRouteThumbnails(
 // Welcome screen (shown once before first session)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function renderWelcome(ctx: CanvasRenderingContext2D, now: number): void {
+export function renderWelcome(ctx: CanvasRenderingContext2D, now: number, dpcDirect = false): void {
   ctx.fillStyle = COLORS.canvasBg;
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -261,6 +261,16 @@ export function renderWelcome(ctx: CanvasRenderingContext2D, now: number): void 
     }
   }
 
+  // Mode toggle hint.
+  y += 30;
+  ctx.fillStyle = '#7777BB';
+  ctx.font = `13px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.fillText('D', stepsX, y);
+  const dw = ctx.measureText('D').width;
+  ctx.fillStyle = dpcDirect ? '#BBBB55' : '#555580';
+  ctx.fillText(dpcDirect ? ' DPC practice (active)' : ' DPC practice', stepsX + dw, y);
+
   // "Press SPACE to start" with pulsing opacity.
   y = CANVAS_H - 80;
   const pulse = 0.5 + 0.5 * Math.sin(now / 600);
@@ -268,7 +278,7 @@ export function renderWelcome(ctx: CanvasRenderingContext2D, now: number): void 
   ctx.fillStyle = COLORS.panelHeading;
   ctx.font = `15px ${FONT}`;
   ctx.textAlign = 'center';
-  ctx.fillText('Press SPACE to start', cx, y);
+  ctx.fillText(dpcDirect ? 'Press SPACE for DPC practice' : 'Press SPACE to start', cx, y);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -392,9 +402,11 @@ function navLabels(session: Session): [string, string, string, string] {
   }
   // Bag 4: DPC solution position
   let bag4 = 'Bag 4';
-  if (g && session.dpcSolutionIndex >= 0) {
+  if ((g || session.dpcHoldPiece) && session.dpcSolutionIndex >= 0) {
     const total = getDpcSolutionsForSession(session).length;
     bag4 = total > 0 ? `DPC ${session.dpcSolutionIndex + 1}/${total}` : 'DPC —';
+  } else if (session.dpcHoldPiece && session.dpcSolutionIndex < 0) {
+    bag4 = `DPC (${session.dpcHoldPiece})`;
   }
   return [bag1, bag2, bag3, bag4];
 }
@@ -1200,7 +1212,7 @@ function drawGuess4Panel(
   drawPanelHeading(ctx, 'Phase: pick DPC solution', y);
   y += PANEL_LINE_H + 4;
 
-  // Opener context.
+  // Opener context or DPC-direct label.
   if (session.guess) {
     const def = OPENERS[session.guess.opener];
     const mirrorLabel = session.guess.mirror ? ' (Mirror)' : '';
@@ -1212,10 +1224,13 @@ function drawGuess4Panel(
       true,
     );
     y += PANEL_LINE_H + 4;
+  } else if (session.dpcHoldPiece) {
+    drawPanelLine(ctx, `DPC Practice (Hold: ${session.dpcHoldPiece})`, y, '#CCAA44', true);
+    y += PANEL_LINE_H + 4;
   }
 
   // List DPC solutions.
-  if (session.guess) {
+  if (session.guess || session.dpcHoldPiece) {
     const solutions = getDpcSolutionsForSession(session);
 
     if (solutions.length === 0) {
@@ -1270,7 +1285,7 @@ function drawReveal4Panel(
   y += PANEL_LINE_H + 4;
 
   // Solution info.
-  if (session.guess) {
+  if (session.guess || session.dpcHoldPiece) {
     const solutions = getDpcSolutionsForSession(session);
     const sol = solutions[session.dpcSolutionIndex];
 

@@ -9,6 +9,7 @@
 
 import {
   createSession,
+  createDpcSession,
   sessionReducer,
   type Session,
   type SessionAction,
@@ -20,6 +21,7 @@ import { CANVAS_W, CANVAS_H } from './renderer/board.ts';
 // ── Welcome screen (shown once before first session) ──
 
 let showWelcome = true;
+let dpcDirect = false;
 
 // ── Canvas bootstrap ──
 
@@ -44,6 +46,10 @@ function dispatch(action: SessionAction): void {
   if (showWelcome) {
     if (action.type === 'primary') {
       showWelcome = false;
+      if (dpcDirect) {
+        session = createDpcSession('O');
+        dpcDirect = false;
+      }
       dirty = true;
     }
     return;
@@ -60,6 +66,16 @@ function dispatch(action: SessionAction): void {
 const keyboard = setupKeyboard(dispatch, () => session);
 keyboard.attach();
 
+// D key on welcome screen: toggle DPC-direct mode, then SPACE starts it.
+window.addEventListener('keydown', (e) => {
+  if (!showWelcome) return;
+  if (e.code === 'KeyD') {
+    e.preventDefault();
+    dpcDirect = !dpcDirect;
+    dirty = true;
+  }
+});
+
 // ── Render loop ──
 
 function frame(now: number): void {
@@ -67,7 +83,7 @@ function frame(now: number): void {
   keyboard.tick(now);
 
   if (showWelcome) {
-    renderWelcome(ctx!, now);
+    renderWelcome(ctx!, now, dpcDirect);
     requestAnimationFrame(frame);
     return;
   }

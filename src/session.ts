@@ -105,12 +105,14 @@ export interface RevealSnapshot {
   dpcSolutionIndex: number;
 }
 
+/** True when the session was created via DPC-direct (no opener context). */
+export function isDpcDirectSession(s: Session): boolean {
+  return s.guess === null && s.dpcHoldPiece !== null;
+}
+
 /** Derive DPC solutions available from the current session state. */
 export function getDpcSolutionsForSession(s: Session): DpcSolution[] {
-  if (!s.guess) return [];
-  const pcSols = getPcSolutions(s.guess.opener, s.guess.mirror, s.routeGuess);
-  const hold = pcSols[s.pcSolutionIndex]?.holdPiece;
-  return hold ? getDpcSolutions(hold) : [];
+  return s.dpcHoldPiece ? getDpcSolutions(s.dpcHoldPiece) : [];
 }
 
 export interface Session {
@@ -139,6 +141,9 @@ export interface Session {
   pcSolutionIndex: number;
   /** DPC solution index selected during guess4 (-1 if not yet selected). */
   dpcSolutionIndex: number;
+  /** Hold piece for DPC. Set by advancePhase reveal3→guess4 (normal flow)
+   *  or by createDpcSession (DPC-direct). null when DPC not yet reached. */
+  dpcHoldPiece: PieceType | null;
 
   // ── Reframing A+ fields (manual-play in-flight state) ──
   /**
@@ -316,8 +321,8 @@ export function assertSessionInvariants(s: Session): void {
     );
   }
 
-  // ── 5. null guess implies guess1 phase (all other phases require a guess) ──
-  if (s.guess === null && s.phase !== 'guess1') {
+  // ── 5. null guess implies guess1 or DPC-direct (guess4/reveal4 with dpcHoldPiece) ──
+  if (s.guess === null && s.phase !== 'guess1' && !isDpcDirectSession(s)) {
     throw new InvariantViolation(
       `phase=${s.phase} requires a guess, but guess is null`,
       s,
@@ -365,13 +370,13 @@ export function assertSessionInvariants(s: Session): void {
 
   // ── 3c. reveal4 dpcSolutionIndex within DPC solutions list ──
   if (s.phase === 'reveal4') {
-    if (s.guess === null) {
-      throw new InvariantViolation('reveal4 requires a non-null guess', s);
+    if (s.guess === null && s.dpcHoldPiece === null) {
+      throw new InvariantViolation('reveal4 requires a guess or dpcHoldPiece', s);
     }
     const dpcSolutionsInv = getDpcSolutionsForSession(s);
     if (dpcSolutionsInv.length === 0) {
       throw new InvariantViolation(
-        `reveal4 requires DPC solutions (pcSolutionIndex=${s.pcSolutionIndex})`,
+        `reveal4 requires DPC solutions (dpcHoldPiece=${s.dpcHoldPiece})`,
         s,
       );
     }
@@ -510,11 +515,38 @@ export function createSession(
     routeGuess: -1,
     pcSolutionIndex: -1,
     dpcSolutionIndex: -1,
+    dpcHoldPiece: null,
     activePiece: null,
     holdPiece: null,
     holdUsed: false,
     revealSnapshots: {},
   };
+}
+
+/**
+ * DPC-direct constructor. Returns a session starting at guess4 with
+ * no opener context — the user goes straight to DPC practice.
+ * Delegates to createSession for defaults, overrides only what differs.
+ */
+export function createDpcSession(
+  dpcHold: PieceType,
+  opts?: { playMode?: PlayMode; sessionStats?: SessionStats },
+): Session {
+  return {
+    ...createSession(),
+    phase: 'guess4',
+    playMode: opts?.playMode ?? 'auto',
+    sessionStats: opts?.sessionStats ?? { total: 0, correct: 0, streak: 0 },
+    dpcHoldPiece: dpcHold,
+  };
+}
+
+/** DPC-direct loop: restart at guess4 preserving playMode + stats. */
+function restartDpcDirect(state: Session): Session {
+  return createDpcSession(state.dpcHoldPiece!, {
+    playMode: state.playMode,
+    sessionStats: state.sessionStats,
+  });
 }
 
 /** Spawn the active piece for the current cachedStep, or null. */
@@ -553,6 +585,8 @@ function computePostTstBoard(opener: OpenerID, mirror: boolean, routeIndex: numb
 function _rawSessionReducer(state: Session, action: SessionAction): Session {
   switch (action.type) {
     case 'newSession': {
+      // DPC-direct: loop back to guess4 with same holdPiece.
+      if (isDpcDirectSession(state)) return restartDpcDirect(state);
       return {
         ...createSession(action.bag1, action.bag2),
         // Preserve playMode across sessions (user toggle persists in-memory)
@@ -722,7 +756,12 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       }
       // reveal3 → guess4 (if DPC solutions exist) or new guess1.
       if (state.phase === 'reveal3') {
-        if (getDpcSolutionsForSession(state).length > 0) {
+        // Derive holdPiece from PC solution for the normal flow.
+        const pcSols = state.guess
+          ? getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess)
+          : [];
+        const derivedHold = pcSols[state.pcSolutionIndex]?.holdPiece ?? null;
+        if (derivedHold && getDpcSolutions(derivedHold).length > 0) {
           return {
             ...state,
             phase: 'guess4',
@@ -731,6 +770,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             step: 0,
             cachedSteps: [],
             dpcSolutionIndex: -1,
+            dpcHoldPiece: derivedHold,
             activePiece: null,
             holdPiece: null,
             holdUsed: false,
@@ -742,8 +782,9 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           sessionStats: state.sessionStats,
         };
       }
-      // reveal4 → new guess1 with fresh bags (stats carry forward).
+      // reveal4 → DPC-direct loops back to guess4; normal flow → guess1.
       if (state.phase === 'reveal4') {
+        if (isDpcDirectSession(state)) return restartDpcDirect(state);
         return {
           ...createSession(),
           playMode: state.playMode,
@@ -851,7 +892,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     }
 
     case 'selectDpcSolution': {
-      if (state.guess === null) return state;
+      if (state.guess === null && state.dpcHoldPiece === null) return state;
       if (state.phase !== 'guess4' && !(state.phase === 'reveal4' && state.playMode === 'auto')) return state;
       if (state.phase === 'reveal4' && state.dpcSolutionIndex === action.solutionIndex) return state;
 
@@ -1211,7 +1252,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         case 'guess4':
         case 'reveal4': {
           if (state.phase === 'reveal4' && state.playMode !== 'auto') return state;
-          if (state.guess === null) return state;
+          if (state.guess === null && state.dpcHoldPiece === null) return state;
           const dpcSolsForPick = getDpcSolutionsForSession(state);
           if (
             !Number.isInteger(action.index) ||
