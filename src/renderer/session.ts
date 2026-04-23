@@ -46,9 +46,8 @@ import { getBag2Routes } from '../openers/bag2-routes';
 import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
-import { getDpcSolutions } from '../openers/bag4-dpc';
 import type { Board } from '../core/srs';
-import { isRevealPhase, PHASE_META, type Session } from '../session';
+import { isRevealPhase, PHASE_META, getDpcSolutionsForSession, type Session } from '../session';
 
 const FONT = '-apple-system, sans-serif';
 
@@ -394,12 +393,8 @@ function navLabels(session: Session): [string, string, string, string] {
   // Bag 4: DPC solution position
   let bag4 = 'Bag 4';
   if (g && session.dpcSolutionIndex >= 0) {
-    const pcSols = getPcSolutions(g.opener, g.mirror, session.routeGuess);
-    const pcSol = pcSols[session.pcSolutionIndex];
-    if (pcSol) {
-      const total = getDpcSolutions(pcSol.holdPiece).length;
-      bag4 = total > 0 ? `DPC ${session.dpcSolutionIndex + 1}/${total}` : 'DPC —';
-    }
+    const total = getDpcSolutionsForSession(session).length;
+    bag4 = total > 0 ? `DPC ${session.dpcSolutionIndex + 1}/${total}` : 'DPC —';
   }
   return [bag1, bag2, bag3, bag4];
 }
@@ -1221,10 +1216,7 @@ function drawGuess4Panel(
 
   // List DPC solutions.
   if (session.guess) {
-    const pcSols = getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess);
-    const pcSol = pcSols[session.pcSolutionIndex];
-    const holdForDpc = pcSol?.holdPiece;
-    const solutions = holdForDpc ? getDpcSolutions(holdForDpc) : [];
+    const solutions = getDpcSolutionsForSession(session);
 
     if (solutions.length === 0) {
       drawPanelLine(ctx, 'No DPC solutions available', y, '#9999BB');
@@ -1279,10 +1271,7 @@ function drawReveal4Panel(
 
   // Solution info.
   if (session.guess) {
-    const pcSols = getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess);
-    const pcSol = pcSols[session.pcSolutionIndex];
-    const holdForDpc = pcSol?.holdPiece;
-    const solutions = holdForDpc ? getDpcSolutions(holdForDpc) : [];
+    const solutions = getDpcSolutionsForSession(session);
     const sol = solutions[session.dpcSolutionIndex];
 
     if (sol) {

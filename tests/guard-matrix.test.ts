@@ -467,13 +467,7 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // §4  Generated tests from the matrix
-//
-// UNBUILDABLE_PHASES: phases where buildState throws because the underlying
-// data is not yet populated. These are skipped (test.skip) rather than
-// omitted, so they appear in the test output as pending reminders.
 // ═══════════════════════════════════════════════════════════════════════════
-
-const UNBUILDABLE_PHASES: ReadonlySet<Phase> = new Set<Phase>();
 
 describe('Guard matrix: (action × phase × playMode) → identity | change', () => {
   for (const actionType of ACTION_TYPES) {
@@ -483,20 +477,16 @@ describe('Guard matrix: (action × phase × playMode) → identity | change', ()
         for (const mode of ALL_MODES) {
           const ctx: Context = `${phase}_${mode}`;
           const expected = row[ctx];
-          if (UNBUILDABLE_PHASES.has(phase)) {
-            test.skip(`${ctx} → ${expected} (DPC data stub)`, () => {});
-          } else {
-            test(`${ctx} → ${expected}`, () => {
-              const state = buildState(phase, mode);
-              const action = buildAction(actionType);
-              const next = sessionReducer(state, action);
-              if (expected === 'identity') {
-                expect(next).toBe(state);
-              } else {
-                expect(next).not.toBe(state);
-              }
-            });
-          }
+          test(`${ctx} → ${expected}`, () => {
+            const state = buildState(phase, mode);
+            const action = buildAction(actionType);
+            const next = sessionReducer(state, action);
+            if (expected === 'identity') {
+              expect(next).toBe(state);
+            } else {
+              expect(next).not.toBe(state);
+            }
+          });
         }
       }
     });

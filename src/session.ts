@@ -52,7 +52,7 @@ import { getBag2Routes } from './openers/bag2-routes.ts';
 import { getBag2Sequence } from './openers/sequences.ts';
 import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
 import { getPcSolutions } from './openers/bag3-pc.ts';
-import { getDpcSolutions } from './openers/bag4-dpc.ts';
+import { getDpcSolutions, type DpcSolution } from './openers/bag4-dpc.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
@@ -102,6 +102,15 @@ export interface RevealSnapshot {
   baseBoard: Board;
   routeGuess: number;
   pcSolutionIndex: number;
+  dpcSolutionIndex: number;
+}
+
+/** Derive DPC solutions available from the current session state. */
+export function getDpcSolutionsForSession(s: Session): DpcSolution[] {
+  if (!s.guess) return [];
+  const pcSols = getPcSolutions(s.guess.opener, s.guess.mirror, s.routeGuess);
+  const hold = pcSols[s.pcSolutionIndex]?.holdPiece;
+  return hold ? getDpcSolutions(hold) : [];
 }
 
 export interface Session {
@@ -359,16 +368,13 @@ export function assertSessionInvariants(s: Session): void {
     if (s.guess === null) {
       throw new InvariantViolation('reveal4 requires a non-null guess', s);
     }
-    const pcSolutionsForDpcInv = getPcSolutions(s.guess.opener, s.guess.mirror, s.routeGuess);
-    const pcSolForDpcInv = pcSolutionsForDpcInv[s.pcSolutionIndex];
-    const holdForDpcInv = pcSolForDpcInv?.holdPiece;
-    if (!holdForDpcInv) {
+    const dpcSolutionsInv = getDpcSolutionsForSession(s);
+    if (dpcSolutionsInv.length === 0) {
       throw new InvariantViolation(
-        `reveal4 requires a valid PC solution to derive holdPiece (pcSolutionIndex=${s.pcSolutionIndex})`,
+        `reveal4 requires DPC solutions (pcSolutionIndex=${s.pcSolutionIndex})`,
         s,
       );
     }
-    const dpcSolutionsInv = getDpcSolutions(holdForDpcInv);
     if (s.dpcSolutionIndex < 0 || s.dpcSolutionIndex >= dpcSolutionsInv.length) {
       throw new InvariantViolation(
         `reveal4 dpcSolutionIndex (${s.dpcSolutionIndex}) out of range [0, ${dpcSolutionsInv.length})`,
@@ -716,15 +722,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       }
       // reveal3 → guess4 (if DPC solutions exist) or new guess1.
       if (state.phase === 'reveal3') {
-        // Determine the holdPiece from the current PC solution.
-        const pcSolutions = state.guess
-          ? getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess)
-          : [];
-        const pcSol = pcSolutions[state.pcSolutionIndex];
-        const holdAfterPc = pcSol?.holdPiece;
-        const dpcSolutions = holdAfterPc ? getDpcSolutions(holdAfterPc) : [];
-
-        if (dpcSolutions.length > 0) {
+        if (getDpcSolutionsForSession(state).length > 0) {
           return {
             ...state,
             phase: 'guess4',
@@ -857,13 +855,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       if (state.phase !== 'guess4' && !(state.phase === 'reveal4' && state.playMode === 'auto')) return state;
       if (state.phase === 'reveal4' && state.dpcSolutionIndex === action.solutionIndex) return state;
 
-      // Determine holdPiece from the PC solution that preceded DPC.
-      const pcSolutionsForDpc = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
-      const pcSolForDpc = pcSolutionsForDpc[state.pcSolutionIndex];
-      const holdAfterPcForDpc = pcSolForDpc?.holdPiece;
-      if (!holdAfterPcForDpc) return state;
-
-      const dpcSolutions = getDpcSolutions(holdAfterPcForDpc);
+      const dpcSolutions = getDpcSolutionsForSession(state);
       if (
         !Number.isInteger(action.solutionIndex) ||
         action.solutionIndex < 0 ||
@@ -1062,6 +1054,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         baseBoard: snap.baseBoard,
         routeGuess: snap.routeGuess,
         pcSolutionIndex: snap.pcSolutionIndex,
+        dpcSolutionIndex: snap.dpcSolutionIndex,
         step: 0,
         activePiece: state.playMode === 'manual'
           ? spawnForCurrentStep(snap.cachedSteps, 0)
@@ -1215,37 +1208,15 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             solutionIndex: action.index,
           });
         }
-        case 'guess4': {
+        case 'guess4':
+        case 'reveal4': {
+          if (state.phase === 'reveal4' && state.playMode !== 'auto') return state;
           if (state.guess === null) return state;
-          // Determine holdPiece from the PC solution to look up DPC solutions.
-          const pcSolsForDpcPick = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
-          const pcSolForDpcPick = pcSolsForDpcPick[state.pcSolutionIndex];
-          const holdForDpcPick = pcSolForDpcPick?.holdPiece;
-          if (!holdForDpcPick) return state;
-          const dpcSolsForPick = getDpcSolutions(holdForDpcPick);
+          const dpcSolsForPick = getDpcSolutionsForSession(state);
           if (
             !Number.isInteger(action.index) ||
             action.index < 0 ||
             action.index >= dpcSolsForPick.length
-          ) {
-            return state;
-          }
-          return _rawSessionReducer(state, {
-            type: 'selectDpcSolution',
-            solutionIndex: action.index,
-          });
-        }
-        case 'reveal4': {
-          if (state.playMode !== 'auto' || state.guess === null) return state;
-          const pcSolsForDpcPick2 = getPcSolutions(state.guess.opener, state.guess.mirror, state.routeGuess);
-          const pcSolForDpcPick2 = pcSolsForDpcPick2[state.pcSolutionIndex];
-          const holdForDpcPick2 = pcSolForDpcPick2?.holdPiece;
-          if (!holdForDpcPick2) return state;
-          const dpcSolsForPick2 = getDpcSolutions(holdForDpcPick2);
-          if (
-            !Number.isInteger(action.index) ||
-            action.index < 0 ||
-            action.index >= dpcSolsForPick2.length
           ) {
             return state;
           }
@@ -1349,6 +1320,7 @@ function deriveSnapshots(prev: Session, next: Session, action: SessionAction): S
       baseBoard: next.baseBoard,
       routeGuess: next.routeGuess,
       pcSolutionIndex: next.pcSolutionIndex,
+      dpcSolutionIndex: next.dpcSolutionIndex,
     };
     changed = true;
   }
