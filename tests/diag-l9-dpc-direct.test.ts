@@ -55,7 +55,7 @@ describe('§1 DPC-direct session construction', () => {
   test('getDpcSolutionsForSession reads dpcHoldPiece', () => {
     const s = createDpcSession('O');
     const solutions = getDpcSolutionsForSession(s);
-    expect(solutions.length).toBe(6); // 3 types × 2 mirrors
+    expect(solutions.length).toBe(4); // 2 normals + 2 self-mirrors
   });
 
   test('holdPiece with no DPC data returns empty solutions', () => {
@@ -93,8 +93,9 @@ describe('§2 selectDpcSolution from DPC-direct', () => {
     expect(() => assertSessionInvariants(next)).not.toThrow();
   });
 
-  test('all 6 solutions are selectable', () => {
-    for (let i = 0; i < 6; i++) {
+  test('all O-hold solutions are selectable', () => {
+    const count = getDpcSolutions('O').length; // 4 (2 normals + 2 mirrors)
+    for (let i = 0; i < count; i++) {
       const s = createDpcSession('O');
       const next = dispatch(s, { type: 'selectDpcSolution', solutionIndex: i });
       expect(next.phase).toBe('reveal4');
@@ -106,8 +107,9 @@ describe('§2 selectDpcSolution from DPC-direct', () => {
 
   test('out-of-range solutionIndex is rejected', () => {
     const s = createDpcSession('O');
+    const count = getDpcSolutions('O').length;
     expect(dispatch(s, { type: 'selectDpcSolution', solutionIndex: -1 })).toBe(s);
-    expect(dispatch(s, { type: 'selectDpcSolution', solutionIndex: 6 })).toBe(s);
+    expect(dispatch(s, { type: 'selectDpcSolution', solutionIndex: count })).toBe(s);
     expect(dispatch(s, { type: 'selectDpcSolution', solutionIndex: 99 })).toBe(s);
   });
 });
@@ -204,14 +206,14 @@ describe('§5 existing opener→DPC flow unchanged', () => {
 
   test('getDpcSolutions is independent of opener/route/PC', () => {
     // DPC only needs holdPiece — no opener context
-    const fromO = getDpcSolutions('O');
-    expect(fromO.length).toBe(6);
-    expect(getDpcSolutions('S').length).toBe(0);
-    expect(getDpcSolutions('Z').length).toBe(0);
-    expect(getDpcSolutions('I').length).toBe(0);
+    // Hard Drop wiki data: O=4(2+2), S=2, Z=2(mirror S), I=6(3+3), J=1, L=1(mirror J), T=0
+    expect(getDpcSolutions('O').length).toBe(4);
+    expect(getDpcSolutions('S').length).toBe(2);
+    expect(getDpcSolutions('Z').length).toBe(2);
+    expect(getDpcSolutions('I').length).toBe(6);
+    expect(getDpcSolutions('J').length).toBe(1);
+    expect(getDpcSolutions('L').length).toBe(1);
     expect(getDpcSolutions('T').length).toBe(0);
-    expect(getDpcSolutions('J').length).toBe(0);
-    expect(getDpcSolutions('L').length).toBe(0);
   });
 });
 

@@ -519,8 +519,12 @@ describe('#8 smoke: intent-only play reaches every phase', () => {
     // guess3: primary → reveal3 (auto-selects first PC solution)
     const s5 = sessionReducer(s4, { type: 'primary' });
     expect(s5.phase).toBe('reveal3');
-    // reveal3: primary → new session (guess1)
+    // reveal3: primary → guess4 (DPC) if hold piece has DPC data, else guess1
+    // MS2 holds L, and L-hold has DPC data (mirror of J), so we get guess4
     const s6 = sessionReducer(s5, { type: 'primary' });
-    expect(s6.phase).toBe('guess1');
+    expect(s6.phase).toBe('guess4');
+    // guess4: primary → new session (guess1)
+    const s7 = sessionReducer(s6, { type: 'primary' });
+    expect(s7.phase).toBe('guess1');
   });
 });
