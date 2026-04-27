@@ -57,8 +57,10 @@ describe('§2 every DPC solution clears exactly 2 lines on TSD step', () => {
         expect(tStep).toBeDefined();
         // TSM J SPC and its mirror are TSS (1 line), all others are TSD (2 lines)
         if (sol.name.includes('TSM J SPC')) {
-          // TSM J SPC is a T-Spin Single variant — T doesn't clear 2 lines
-          // (validated separately — the T step clears 0 lines, L step clears 1)
+          // TSM J SPC is a T-Spin Mini — T clears 0 lines, total 1 line cleared
+          expect(tStep!.linesCleared).toBeUndefined();
+          const totalCleared = steps.reduce((sum, s) => sum + (s.linesCleared ?? 0), 0);
+          expect(totalCleared).toBe(1);
         } else {
           expect(tStep!.linesCleared).toBe(2);
         }

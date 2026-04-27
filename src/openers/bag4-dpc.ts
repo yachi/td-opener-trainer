@@ -21,7 +21,7 @@
 import type { PieceType } from '../core/types.ts';
 import { BOARD_WIDTH } from '../core/types.ts';
 import type { RawPlacement } from './placements.ts';
-import { mirrorPiece } from './placements.ts';
+import { mirrorPiece, MIRROR_PIECE_MAP } from './placements.ts';
 
 // ── Types ──
 
@@ -189,14 +189,6 @@ const NORMAL_DATA: Partial<Record<PieceType, DpcSolution[]>> = {
   J: J_NORMALS,
 };
 
-/** Mirror-pair map: S↔Z, J↔L. O/I/T have no pair. */
-const MIRROR_PAIR: Partial<Record<PieceType, PieceType>> = {
-  S: 'Z',
-  Z: 'S',
-  J: 'L',
-  L: 'J',
-};
-
 // ── Getter ──
 
 /**
@@ -219,7 +211,7 @@ export function getDpcSolutions(holdPiece: PieceType): DpcSolution[] {
   }
 
   // Mirror pair: Z from S, L from J
-  const pair = MIRROR_PAIR[holdPiece];
+  const pair = MIRROR_PIECE_MAP[holdPiece];
   if (pair) {
     const pairNormals = NORMAL_DATA[pair];
     if (pairNormals) return pairNormals.map(mirrorDpcSolution);
