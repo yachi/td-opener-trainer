@@ -53,17 +53,18 @@ import { getBag2Sequence } from './openers/sequences.ts';
 import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
 import { getPcSolutions } from './openers/bag3-pc.ts';
 import { getDpcSolutions, type DpcSolution } from './openers/bag4-dpc.ts';
+import { getBag5PcSolution } from './openers/bag5-pc.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
-export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2' | 'guess3' | 'reveal3' | 'guess4' | 'reveal4';
+export type Phase = 'guess1' | 'reveal1' | 'guess2' | 'reveal2' | 'guess3' | 'reveal3' | 'guess4' | 'reveal4' | 'reveal5';
 export type PlayMode = 'auto' | 'manual';
 
 // ── Phase metadata table (L9: single source of truth for phase properties) ──
 
 interface PhaseMeta {
   kind: 'guess' | 'reveal';
-  bag: 1 | 2 | 3 | 4;
+  bag: 1 | 2 | 3 | 4 | 5;
 }
 
 export const PHASE_META = {
@@ -75,6 +76,7 @@ export const PHASE_META = {
   reveal3: { kind: 'reveal', bag: 3 },
   guess4:  { kind: 'guess',  bag: 4 },
   reveal4: { kind: 'reveal', bag: 4 },
+  reveal5: { kind: 'reveal', bag: 5 },
 } as const satisfies Record<Phase, PhaseMeta>;
 
 export function isRevealPhase(phase: Phase): boolean {
@@ -165,7 +167,7 @@ export interface Session {
   /** True after the user held on the current step; resets on step advance. */
   holdUsed: boolean;
   /** Snapshots saved at each reveal-phase entry for O(1) nav-bar jumps. */
-  revealSnapshots: Partial<Record<'reveal1' | 'reveal2' | 'reveal3' | 'reveal4', RevealSnapshot>>;
+  revealSnapshots: Partial<Record<'reveal1' | 'reveal2' | 'reveal3' | 'reveal4' | 'reveal5', RevealSnapshot>>;
 }
 
 /**
@@ -203,7 +205,7 @@ export type SessionAction =
   | { type: 'hold' }
   | { type: 'softDrop' }
   // ── Navigation ──
-  | { type: 'jumpToBag'; bag: 1 | 2 | 3 | 4 }
+  | { type: 'jumpToBag'; bag: 1 | 2 | 3 | 4 | 5 }
   // ── Intent actions (keyboard dispatches these; reducer interprets) ──
   | { type: 'primary' }
   | { type: 'pick'; index: number };
@@ -368,6 +370,20 @@ export function assertSessionInvariants(s: Session): void {
     }
   }
 
+  // ── 3d. reveal5 requires a valid bag 5 PC solution ──
+  if (s.phase === 'reveal5') {
+    if (s.dpcHoldPiece === null) {
+      throw new InvariantViolation('reveal5 requires dpcHoldPiece', s);
+    }
+    const bag5Sol = getBag5PcSolution(s.dpcHoldPiece, s.dpcSolutionIndex);
+    if (!bag5Sol) {
+      throw new InvariantViolation(
+        `reveal5 requires bag5 PC solution (hold=${s.dpcHoldPiece}, dpcIdx=${s.dpcSolutionIndex})`,
+        s,
+      );
+    }
+  }
+
   // ── 3c. reveal4 dpcSolutionIndex within DPC solutions list ──
   if (s.phase === 'reveal4') {
     if (s.guess === null && s.dpcHoldPiece === null) {
@@ -393,7 +409,7 @@ export function assertSessionInvariants(s: Session): void {
   // be the same object as state.cachedSteps. A mismatch means the snapshot
   // was saved for a different opener/route/PC and is stale.
   if (isRevealPhase(s.phase)) {
-    const key = s.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
+    const key = s.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4' | 'reveal5';
     const snap = s.revealSnapshots[key];
     if (snap && snap.cachedSteps !== s.cachedSteps) {
       throw new InvariantViolation(
@@ -782,8 +798,42 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
           sessionStats: state.sessionStats,
         };
       }
-      // reveal4 → DPC-direct loops back to guess4; normal flow → guess1.
+      // reveal4 → reveal5 (if bag 5 PC exists) or restart.
       if (state.phase === 'reveal4') {
+        if (state.dpcHoldPiece) {
+          const bag5Sol = getBag5PcSolution(state.dpcHoldPiece, state.dpcSolutionIndex);
+          if (bag5Sol) {
+            // Compute post-TSD board from the DPC cachedSteps.
+            const postTsdBoard =
+              state.cachedSteps.length > 0
+                ? cloneBoard(state.cachedSteps[state.cachedSteps.length - 1]!.board)
+                : emptyBoard();
+            const pcSteps = replayPcSteps(postTsdBoard, bag5Sol.placements);
+            const activePiece =
+              state.playMode === 'manual'
+                ? spawnForCurrentStep(pcSteps, 0)
+                : null;
+            return {
+              ...state,
+              phase: 'reveal5' as Phase,
+              cachedSteps: pcSteps,
+              step: 0,
+              baseBoard: cloneBoard(postTsdBoard),
+              activePiece,
+              holdPiece: null,
+              holdUsed: false,
+            };
+          }
+        }
+        if (isDpcDirectSession(state)) return restartDpcDirect(state);
+        return {
+          ...createSession(),
+          playMode: state.playMode,
+          sessionStats: state.sessionStats,
+        };
+      }
+      // reveal5 → restart (DPC cycle complete).
+      if (state.phase === 'reveal5') {
         if (isDpcDirectSession(state)) return restartDpcDirect(state);
         return {
           ...createSession(),
@@ -1083,8 +1133,8 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
     // ── Navigation — O(1) snapshot-based phase jumps ──
 
     case 'jumpToBag': {
-      if (action.bag < 1 || action.bag > 4) return state;
-      const targetPhase = `reveal${action.bag}` as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
+      if (action.bag < 1 || action.bag > 5) return state;
+      const targetPhase = `reveal${action.bag}` as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4' | 'reveal5';
       const snap = state.revealSnapshots[targetPhase];
       if (!snap) return state;
       if (state.phase === targetPhase) return state;
@@ -1126,6 +1176,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         case 'reveal2':
         case 'reveal3':
         case 'reveal4':
+        case 'reveal5':
           // Manual with an active piece: drop it.
           // Manual at end (activePiece === null) OR auto mode: advance phase.
           if (state.playMode === 'manual' && state.activePiece !== null) {
@@ -1328,33 +1379,42 @@ function deriveSnapshots(prev: Session, next: Session, action: SessionAction): S
   let snapshots = next.revealSnapshots;
   let changed = false;
 
-  // CLEAR: opener/mirror changed → clear reveal2 + reveal3 + reveal4
+  // CLEAR: opener/mirror changed → clear reveal2 + reveal3 + reveal4 + reveal5
   const openerChanged =
     prev.guess?.opener !== next.guess?.opener ||
     prev.guess?.mirror !== next.guess?.mirror;
-  if (openerChanged && (snapshots.reveal2 || snapshots.reveal3 || snapshots.reveal4)) {
-    snapshots = { ...snapshots, reveal2: undefined, reveal3: undefined, reveal4: undefined };
+  if (openerChanged && (snapshots.reveal2 || snapshots.reveal3 || snapshots.reveal4 || snapshots.reveal5)) {
+    snapshots = { ...snapshots, reveal2: undefined, reveal3: undefined, reveal4: undefined, reveal5: undefined };
     changed = true;
   }
 
-  // CLEAR: routeGuess changed → clear reveal3 + reveal4
-  if (prev.routeGuess !== next.routeGuess && (snapshots.reveal3 || snapshots.reveal4)) {
+  // CLEAR: routeGuess changed → clear reveal3 + reveal4 + reveal5
+  if (prev.routeGuess !== next.routeGuess && (snapshots.reveal3 || snapshots.reveal4 || snapshots.reveal5)) {
     snapshots = changed ? snapshots : { ...snapshots };
     snapshots.reveal3 = undefined;
     snapshots.reveal4 = undefined;
+    snapshots.reveal5 = undefined;
     changed = true;
   }
 
-  // CLEAR: pcSolutionIndex changed → clear reveal4
-  if (prev.pcSolutionIndex !== next.pcSolutionIndex && snapshots.reveal4) {
+  // CLEAR: pcSolutionIndex changed → clear reveal4 + reveal5
+  if (prev.pcSolutionIndex !== next.pcSolutionIndex && (snapshots.reveal4 || snapshots.reveal5)) {
     snapshots = changed ? snapshots : { ...snapshots };
     snapshots.reveal4 = undefined;
+    snapshots.reveal5 = undefined;
+    changed = true;
+  }
+
+  // CLEAR: dpcSolutionIndex changed → clear reveal5
+  if (prev.dpcSolutionIndex !== next.dpcSolutionIndex && snapshots.reveal5) {
+    snapshots = changed ? snapshots : { ...snapshots };
+    snapshots.reveal5 = undefined;
     changed = true;
   }
 
   // SAVE: if in a reveal phase with new cachedSteps, save snapshot for current phase
   if (isRevealPhase(next.phase) && next.cachedSteps !== prev.cachedSteps) {
-    const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
+    const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4' | 'reveal5';
     snapshots = changed ? snapshots : { ...snapshots };
     snapshots[key] = {
       cachedSteps: next.cachedSteps,

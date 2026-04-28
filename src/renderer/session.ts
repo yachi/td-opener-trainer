@@ -46,6 +46,7 @@ import { getBag2Routes } from '../openers/bag2-routes';
 import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
+import { getBag5PcSolution } from '../openers/bag5-pc';
 import type { Board } from '../core/srs';
 import { isRevealPhase, PHASE_META, getDpcSolutionsForSession, type Session } from '../session';
 
@@ -330,6 +331,9 @@ export function renderSession(
     case 'reveal4':
       drawReveal4Panel(ctx, session);
       break;
+    case 'reveal5':
+      drawReveal5Panel(ctx, session);
+      break;
   }
 
   // 5. Keybind bar (bottom).
@@ -379,7 +383,7 @@ const NAV_SHORT: Record<OpenerID, string> = {
   stray_cannon: 'SC',
 };
 
-function navLabels(session: Session): [string, string, string, string] {
+function navLabels(session: Session): [string, string, string, string, string] {
   const g = session.guess;
   // Bag 1: opener short name (+ checkmark if visited)
   let bag1 = 'Bag 1';
@@ -408,7 +412,13 @@ function navLabels(session: Session): [string, string, string, string] {
   } else if (session.dpcHoldPiece && session.dpcSolutionIndex < 0) {
     bag4 = `DPC (${session.dpcHoldPiece})`;
   }
-  return [bag1, bag2, bag3, bag4];
+  // Bag 5: PC completion status
+  let bag5 = 'Bag 5';
+  if (session.dpcHoldPiece && session.dpcSolutionIndex >= 0) {
+    const hasPc = !!getBag5PcSolution(session.dpcHoldPiece, session.dpcSolutionIndex);
+    bag5 = hasPc ? 'PC' : 'PC —';
+  }
+  return [bag1, bag2, bag3, bag4, bag5];
 }
 
 function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
@@ -428,16 +438,16 @@ function drawNavBar(ctx: CanvasRenderingContext2D, session: Session): void {
 
   const currentBag = PHASE_META[session.phase].bag;
   const labels = navLabels(session);
-  const tabCount = 4;
-  const tabW = 70;
+  const tabCount = 5;
+  const tabW = 60;
   const tabH = NAV_BAR_H - 4;
-  const gap = 6;
+  const gap = 4;
   const totalW = tabCount * tabW + (tabCount - 1) * gap;
   const startX = (CANVAS_W - totalW) / 2;
 
   for (let i = 0; i < tabCount; i++) {
-    const bag = (i + 1) as 1 | 2 | 3 | 4;
-    const phase = `reveal${bag}` as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4';
+    const bag = (i + 1) as 1 | 2 | 3 | 4 | 5;
+    const phase = `reveal${bag}` as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4' | 'reveal5';
     const hasSnapshot = !!session.revealSnapshots[phase];
     const isActive = currentBag === bag;
 
@@ -1343,6 +1353,64 @@ function drawReveal4Panel(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Phase: reveal5 (Bag 5 PC step-through — completes DPC cycle)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function drawReveal5Panel(
+  ctx: CanvasRenderingContext2D,
+  session: Session,
+): void {
+  let y = PANEL_Y;
+  drawPanelHeading(
+    ctx,
+    `PC Reveal (${session.playMode})`,
+    y,
+  );
+  y += PANEL_LINE_H + 4;
+
+  // Solution info.
+  if (session.dpcHoldPiece) {
+    const solutions = getDpcSolutionsForSession(session);
+    const dpcSol = solutions[session.dpcSolutionIndex];
+    if (dpcSol) {
+      drawPanelLine(
+        ctx,
+        `After ${dpcSol.name}`,
+        y,
+        COLORS.panelHeading,
+        true,
+      );
+      y += PANEL_LINE_H + 4;
+    }
+  }
+
+  // Step counter.
+  const total = session.cachedSteps.length;
+  const atEnd = session.step >= total;
+  drawPanelLine(ctx, `step ${session.step} / ${total}`, y, COLORS.panelText);
+  y += PANEL_LINE_H + 4;
+
+  // "Perfect Clear!" banner when all steps are placed.
+  if (atEnd && total > 0) {
+    ctx.fillStyle = COLORS.correct;
+    ctx.font = `bold 16px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Perfect Clear!', PANEL_X, y);
+    y += 24;
+  }
+
+  // Navigation hint — manual only.
+  if (session.playMode === 'manual') {
+    drawPanelLine(ctx, '\u2190\u2192 move  \u2193 soft drop', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'Z/X rotate  SPACE hard drop  C hold', y, '#9999BB');
+    y += PANEL_LINE_H;
+    drawPanelLine(ctx, 'P auto \u00b7 R new bag', y, '#9999BB');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Keybind bar (bottom)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1376,7 +1444,7 @@ function keybindHintForSession(session: Session): string {
   const bag = PHASE_META[session.phase].bag;
   const snaps = session.revealSnapshots;
   const canJumpPrev = bag > 1 && !!(snaps as Record<string, unknown>)[`reveal${bag - 1}`];
-  const canJumpNext = bag < 4 && !!(snaps as Record<string, unknown>)[`reveal${bag + 1}`];
+  const canJumpNext = bag < 5 && !!(snaps as Record<string, unknown>)[`reveal${bag + 1}`];
   const nav = canJumpPrev || canJumpNext ? '  [/] nav' : '';
 
   switch (session.phase) {
@@ -1420,6 +1488,12 @@ function keybindHintForSession(session: Session): string {
       return `1-9 pick DPC  SPACE skip  R new bag${nav}`;
     }
     case 'reveal4': {
+      if (session.playMode === 'manual') {
+        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+      }
+      return `\u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+    }
+    case 'reveal5': {
       if (session.playMode === 'manual') {
         return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
       }

@@ -158,6 +158,18 @@ describe('§4 DPC-direct lifecycle', () => {
     }
     expect(s.step).toBe(8);
 
+    // Advance phase → reveal5 (bag 5 PC exists for O-hold Kuruma DPC)
+    s = dispatch(s, { type: 'advancePhase' });
+    expect(s.phase).toBe('reveal5');
+    expect(s.cachedSteps.length).toBe(7);
+    expect(() => assertSessionInvariants(s)).not.toThrow();
+
+    // Step through all 7 PC steps
+    for (let i = 0; i < 7; i++) {
+      s = dispatch(s, { type: 'stepForward' });
+    }
+    expect(s.step).toBe(7);
+
     // Advance phase → loops back to guess4 (DPC-direct)
     s = dispatch(s, { type: 'advancePhase' });
     expect(s.phase).toBe('guess4');
@@ -253,10 +265,11 @@ describe('§6 invariant edge cases', () => {
     expect(() => assertSessionInvariants(bad)).toThrow(InvariantViolation);
   });
 
-  test('all 8 phases have metadata', () => {
-    expect(Object.keys(PHASE_META).length).toBe(8);
+  test('all 9 phases have metadata', () => {
+    expect(Object.keys(PHASE_META).length).toBe(9);
     expect(PHASE_META.guess4).toEqual({ kind: 'guess', bag: 4 });
     expect(PHASE_META.reveal4).toEqual({ kind: 'reveal', bag: 4 });
+    expect(PHASE_META.reveal5).toEqual({ kind: 'reveal', bag: 5 });
   });
 });
 
