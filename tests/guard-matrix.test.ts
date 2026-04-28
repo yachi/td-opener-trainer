@@ -58,7 +58,8 @@ import type { PieceType } from '../src/core/types.ts';
 const ACTION_TYPES = [
   'newSession', 'setGuess', 'toggleMirror', 'submitGuess',
   'stepForward', 'stepBackward', 'advancePhase', 'togglePlayMode',
-  'selectRoute', 'selectPcSolution', 'selectDpcSolution', 'browseOpener',
+  'selectRoute', 'selectPcSolution', 'selectDpcSolution', 'resetDpcHold',
+  'browseOpener',
   'movePiece', 'rotatePiece', 'hardDrop', 'hold', 'softDrop',
   'jumpToBag',
   'primary', 'pick',
@@ -179,6 +180,7 @@ function buildAction(type: ActionType): SessionAction {
     case 'selectRoute':     return { type: 'selectRoute', routeIndex: 1 };
     case 'selectPcSolution': return { type: 'selectPcSolution', solutionIndex: 1 };
     case 'selectDpcSolution': return { type: 'selectDpcSolution', solutionIndex: 1 };
+    case 'resetDpcHold':    return { type: 'resetDpcHold' };
     case 'browseOpener':    return { type: 'browseOpener', opener: 'stray_cannon', mirror: false };
     case 'movePiece':       return { type: 'movePiece', dx: -1, dy: 0 };
     case 'rotatePiece':     return { type: 'rotatePiece', direction: 1 };
@@ -346,6 +348,21 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal3_auto: 'identity', reveal3_manual: 'identity',
     guess4_auto: 'change', guess4_manual: 'change',
     reveal4_auto: 'change', reveal4_manual: 'identity',
+    reveal5_auto: 'identity', reveal5_manual: 'identity',
+  },
+
+  resetDpcHold: {
+    // resetDpcHold: only accepted in DPC-direct sessions. buildState creates
+    // normal-flow sessions (opener context), so identity everywhere here.
+    // DPC-direct coverage in diag-l9-dpc-hold-picker.test.ts §4.
+    guess1_auto: 'identity', guess1_manual: 'identity',
+    reveal1_auto: 'identity', reveal1_manual: 'identity',
+    guess2_auto: 'identity', guess2_manual: 'identity',
+    reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
     reveal5_auto: 'identity', reveal5_manual: 'identity',
   },
 

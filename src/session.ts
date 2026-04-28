@@ -107,10 +107,15 @@ export interface RevealSnapshot {
   dpcSolutionIndex: number;
 }
 
-/** True when the session was created via DPC-direct (no opener context). */
+/** True when the session was created via DPC-direct (no opener context).
+ *  Covers both hold-picker sub-state (null hold at guess4) and
+ *  focused-practice sub-state (set hold). */
 export function isDpcDirectSession(s: Session): boolean {
-  return s.guess === null && s.dpcHoldPiece !== null;
+  return s.guess === null && (s.dpcHoldPiece !== null || s.phase === 'guess4');
 }
+
+/** Valid hold pieces for DPC (all pieces with ≥1 DPC solution). T has 0. */
+export const DPC_HOLD_PIECES: PieceType[] = ['O', 'S', 'Z', 'I', 'J', 'L'];
 
 /** Derive DPC solutions available from the current session state. */
 export function getDpcSolutionsForSession(s: Session): DpcSolution[] {
@@ -173,9 +178,9 @@ export interface Session {
 /**
  * Discriminated union of every reducer action.
  *
- *   - 10 session-level: newSession, setGuess, toggleMirror, submitGuess,
+ *   - 11 session-level: newSession, setGuess, toggleMirror, submitGuess,
  *     stepForward, stepBackward, advancePhase, togglePlayMode, selectRoute,
- *     selectPcSolution
+ *     selectPcSolution, resetDpcHold
  *   - 5 manual-play: movePiece, rotatePiece, hardDrop, hold, softDrop
  *   - 2 intent actions: primary, pick
  *
@@ -197,6 +202,7 @@ export type SessionAction =
   | { type: 'selectRoute'; routeIndex: number }
   | { type: 'selectPcSolution'; solutionIndex: number }
   | { type: 'selectDpcSolution'; solutionIndex: number }
+  | { type: 'resetDpcHold' }
   | { type: 'browseOpener'; opener: OpenerID; mirror: boolean }
   // ── Reframing A+ manual-play actions ──
   | { type: 'movePiece'; dx: number; dy: number }
@@ -545,7 +551,7 @@ export function createSession(
  * Delegates to createSession for defaults, overrides only what differs.
  */
 export function createDpcSession(
-  dpcHold: PieceType,
+  dpcHold: PieceType | null,
   opts?: { playMode?: PlayMode; sessionStats?: SessionStats },
 ): Session {
   return {
@@ -557,9 +563,10 @@ export function createDpcSession(
   };
 }
 
-/** DPC-direct loop: restart at guess4 preserving playMode + stats. */
+/** DPC-direct loop: restart at guess4 preserving playMode + stats + hold.
+ *  When dpcHoldPiece is null (hold picker), restarts to hold picker. */
 function restartDpcDirect(state: Session): Session {
-  return createDpcSession(state.dpcHoldPiece!, {
+  return createDpcSession(state.dpcHoldPiece, {
     playMode: state.playMode,
     sessionStats: state.sessionStats,
   });
@@ -978,6 +985,14 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       };
     }
 
+    case 'resetDpcHold': {
+      if (!isDpcDirectSession(state)) return state;
+      return createDpcSession(null, {
+        playMode: state.playMode,
+        sessionStats: state.sessionStats,
+      });
+    }
+
     case 'browseOpener': {
       if (state.phase !== 'reveal1') return state;
       if (state.playMode !== 'auto') return state;
@@ -1303,6 +1318,18 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         case 'guess4':
         case 'reveal4': {
           if (state.phase === 'reveal4' && state.playMode !== 'auto') return state;
+          // Hold picker sub-state: digit picks a hold piece, not a DPC solution.
+          if (state.phase === 'guess4' && state.dpcHoldPiece === null && state.guess === null) {
+            if (
+              !Number.isInteger(action.index) ||
+              action.index < 0 ||
+              action.index >= DPC_HOLD_PIECES.length
+            ) {
+              return state;
+            }
+            return { ...state, dpcHoldPiece: DPC_HOLD_PIECES[action.index]! };
+          }
+          // Normal DPC solution selection.
           if (state.guess === null && state.dpcHoldPiece === null) return state;
           const dpcSolsForPick = getDpcSolutionsForSession(state);
           if (

@@ -103,6 +103,11 @@ export function setupKeyboard(
       dispatch({ type: 'togglePlayMode' });
       return;
     }
+    if (code === 'KeyD') {
+      e.preventDefault();
+      dispatch({ type: 'resetDpcHold' });
+      return;
+    }
     if (code === 'Space' || code === 'Enter') {
       e.preventDefault();
       dispatch({ type: 'primary' });

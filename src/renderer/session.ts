@@ -48,7 +48,7 @@ import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
 import { getBag5PcSolution } from '../openers/bag5-pc';
 import type { Board } from '../core/srs';
-import { isRevealPhase, PHASE_META, getDpcSolutionsForSession, type Session } from '../session';
+import { isRevealPhase, PHASE_META, getDpcSolutionsForSession, DPC_HOLD_PIECES, type Session } from '../session';
 
 const FONT = '-apple-system, sans-serif';
 
@@ -1219,6 +1219,24 @@ function drawGuess4Panel(
   session: Session,
 ): void {
   let y = PANEL_Y;
+
+  // Hold picker sub-state: user picks which hold piece to practice DPC with.
+  if (session.dpcHoldPiece === null && session.guess === null) {
+    drawPanelHeading(ctx, 'DPC Practice: pick hold piece', y);
+    y += PANEL_LINE_H + 4;
+    drawPanelLine(ctx, 'Hold pieces with DPC solutions:', y);
+    y += PANEL_LINE_H;
+    for (let i = 0; i < DPC_HOLD_PIECES.length; i++) {
+      const hold = DPC_HOLD_PIECES[i]!;
+      const label = `(${i + 1}) ${hold}`;
+      drawPanelLine(ctx, label, y, COLORS.panelText);
+      y += PANEL_LINE_H;
+    }
+    y += 6;
+    drawPanelLine(ctx, '1-6 pick  SPACE skip', y, '#9999BB');
+    return;
+  }
+
   drawPanelHeading(ctx, 'Phase: pick DPC solution', y);
   y += PANEL_LINE_H + 4;
 
@@ -1273,7 +1291,7 @@ function drawGuess4Panel(
         y += PANEL_LINE_H;
       }
       y += 6;
-      drawPanelLine(ctx, '1-9 pick  SPACE skip', y, '#9999BB');
+      drawPanelLine(ctx, '1-9 pick  D change hold  SPACE skip', y, '#9999BB');
     }
   }
 }

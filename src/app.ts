@@ -47,7 +47,7 @@ function dispatch(action: SessionAction): void {
     if (action.type === 'primary') {
       showWelcome = false;
       if (dpcDirect) {
-        session = createDpcSession('O');
+        session = createDpcSession(null);
         dpcDirect = false;
       }
       dirty = true;
