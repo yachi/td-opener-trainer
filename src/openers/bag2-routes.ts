@@ -167,6 +167,41 @@ const HONEY_CUP_BAG2_ROUTES: Bag2Route[] = [
     holdPlacement: null,
     tstStepIndex: -1,
   },
+  // ── Additional fallback routes (wiki boards 5, 7) ──
+  {
+    routeId: 'fb_o_top_right',
+    routeLabel: 'Fallback: O top-right',
+    conditionLabel: 'O before J',
+    condition: { type: 'before', a: 'O', b: 'J' },
+    canSelect: (bag2) => appearsBefore(bag2, 'O', 'J'),
+    placements: [
+      { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
+      { piece: 'O', cells: [{ col: 8, row: 12 }, { col: 9, row: 12 }, { col: 8, row: 13 }, { col: 9, row: 13 }], hint: 'O flat, cols 8-9, top-right' },
+      { piece: 'I', cells: [{ col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }, { col: 0, row: 16 }], hint: 'I vertical, col 0, left wall' },
+      { piece: 'S', cells: [{ col: 2, row: 14 }, { col: 3, row: 14 }, { col: 1, row: 15 }, { col: 2, row: 15 }], hint: 'S flat, cols 1-3' },
+      { piece: 'L', cells: [{ col: 6, row: 14 }, { col: 6, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }], hint: 'L vertical, cols 6-7' },
+      { piece: 'J', cells: [{ col: 8, row: 14 }, { col: 9, row: 14 }, { col: 8, row: 15 }, { col: 8, row: 16 }], hint: 'J vertical, cols 8-9' },
+    ],
+    holdPlacement: null,
+    tstStepIndex: -1,
+  },
+  {
+    routeId: 'fb_o_center',
+    routeLabel: 'Fallback: O center',
+    conditionLabel: 'O before J',
+    condition: { type: 'before', a: 'O', b: 'J' },
+    canSelect: (bag2) => appearsBefore(bag2, 'O', 'J'),
+    placements: [
+      { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
+      { piece: 'O', cells: [{ col: 6, row: 13 }, { col: 7, row: 13 }, { col: 6, row: 14 }, { col: 7, row: 14 }], hint: 'O flat, cols 6-7, mid-right' },
+      { piece: 'I', cells: [{ col: 0, row: 14 }, { col: 1, row: 14 }, { col: 2, row: 14 }, { col: 3, row: 14 }], hint: 'I horizontal, cols 0-3' },
+      { piece: 'S', cells: [{ col: 8, row: 14 }, { col: 9, row: 14 }, { col: 7, row: 15 }, { col: 8, row: 15 }], hint: 'S flat, cols 7-9' },
+      { piece: 'L', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 0, row: 16 }], hint: 'L horizontal, cols 0-2, bottom-left' },
+      { piece: 'J', cells: [{ col: 6, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }, { col: 8, row: 16 }], hint: 'J flat, cols 6-8' },
+    ],
+    holdPlacement: null,
+    tstStepIndex: -1,
+  },
 ];
 
 // MS2 Bag 2
@@ -238,6 +273,23 @@ const MS2_BAG2_ROUTES: Bag2Route[] = [
       { piece: 'J', cells: [{ col: 0, row: 15 }, { col: 1, row: 15 }, { col: 2, row: 15 }, { col: 2, row: 16 }], hint: 'J horizontal, cols 0-2' },
     ],
     holdPlacement: { piece: 'L', cells: [{ col: 6, row: 14 }, { col: 6, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }], hint: 'Hold L, center gap-filler' },
+    tstStepIndex: -1,
+  },
+  // ── Bonus Setup (wiki: 19.05% setup rate, 99.76% PC rate) ──
+  {
+    routeId: 'bonus_setup',
+    routeLabel: 'Bonus Setup (I held)',
+    conditionLabel: 'I before J, L before J',
+    condition: { type: 'and', conditions: [{ type: 'before', a: 'I', b: 'J' }, { type: 'before', a: 'L', b: 'J' }] },
+    canSelect: (bag2) => appearsBefore(bag2, 'I', 'J') && appearsBefore(bag2, 'L', 'J'),
+    placements: [
+      { piece: 'Z', cells: [{ col: 4, row: 16 }, { col: 5, row: 16 }, { col: 5, row: 17 }, { col: 6, row: 17 }], hint: 'Z flat, cols 4-6' },
+      { piece: 'O', cells: [{ col: 8, row: 16 }, { col: 9, row: 16 }, { col: 8, row: 17 }, { col: 9, row: 17 }], hint: 'O flat, cols 8-9, bottom-right' },
+      { piece: 'L', cells: [{ col: 1, row: 13 }, { col: 2, row: 13 }, { col: 3, row: 13 }, { col: 1, row: 14 }], hint: 'L horizontal, cols 1-3, top' },
+      { piece: 'J', cells: [{ col: 2, row: 14 }, { col: 3, row: 14 }, { col: 2, row: 15 }, { col: 2, row: 16 }], hint: 'J vertical, cols 2-3' },
+      { piece: 'S', cells: [{ col: 7, row: 15 }, { col: 8, row: 15 }, { col: 6, row: 16 }, { col: 7, row: 16 }], hint: 'S flat, cols 6-8' },
+    ],
+    holdPlacement: { piece: 'L', cells: [{ col: 0, row: 13 }, { col: 0, row: 14 }, { col: 0, row: 15 }, { col: 1, row: 15 }], hint: 'Hold L, left wall vertical' },
     tstStepIndex: -1,
   },
 ];

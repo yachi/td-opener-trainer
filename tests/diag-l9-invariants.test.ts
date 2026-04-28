@@ -408,8 +408,8 @@ describe('#2 Bug #2: pick/selectRoute bounds check in guess2', () => {
       { type: 'setGuess', opener: 'ms2', mirror: false },
       { type: 'submitGuess' },
       { type: 'advancePhase' },
-      // MS2 has 4 routes. pick(4) = Digit5 = out of bounds.
-      { type: 'pick', index: 4 },
+      // MS2 has 5 routes. pick(5) = Digit6 = out of bounds.
+      { type: 'pick', index: 5 },
     );
     // After Phase 3: this should remain in guess2 (rejected).
     // Pre-Phase-3: it's in reveal2 with empty cachedSteps (BUG).
@@ -423,7 +423,7 @@ describe('#2 Bug #2: pick/selectRoute bounds check in guess2', () => {
       { type: 'setGuess', opener: 'honey_cup', mirror: false },
       { type: 'submitGuess' },
       { type: 'advancePhase' },
-      { type: 'pick', index: 8 },
+      { type: 'pick', index: 10 },
     );
     expect(s.phase).toBe('guess2');
   });

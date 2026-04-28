@@ -52,9 +52,9 @@ function countCells(board: Board): number {
 
 // Expected solution counts per (opener, routeIndex) — normal only, mirror auto-derived.
 const EXPECTED_SOLUTIONS: Record<OpenerID, Record<number, number>> = {
-  honey_cup: { 0: 4, 1: 4, 2: 4, 3: 1, 4: 2, 5: 1, 6: 1, 7: 1 },
+  honey_cup: { 0: 4, 1: 4, 2: 4, 3: 1, 4: 2, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1 },
   gamushiro: { 0: 2, 1: 2, 2: 2, 3: 1, 4: 0 },
-  ms2: { 0: 2, 1: 2, 2: 3, 3: 1 },
+  ms2: { 0: 2, 1: 2, 2: 3, 3: 1, 4: 3 },
   stray_cannon: { 0: 2, 1: 0, 2: 0, 3: 1, 4: 0 },
 };
 
@@ -104,7 +104,7 @@ describe('§2 every PC solution achieves Perfect Clear', () => {
             const board = getPostTstBoard(opener, mirror, ri);
             expect(board).not.toBeNull();
             const steps = replayPcSteps(board!, sol.placements);
-            expect(steps.length).toBe(6);
+            expect(steps.length).toBe(sol.placements.length);
             const finalBoard = steps[steps.length - 1]!.board;
             expect(countCells(finalBoard)).toBe(0);
           });
@@ -164,13 +164,21 @@ describe('§4 PC solution structural invariants', () => {
       for (let si = 0; si < solutions.length; si++) {
         const sol = solutions[si]!;
 
-        test(`${opener} route ${ri} sol ${si}: 6 placements, 6 unique pieces, hold is 7th`, () => {
-          expect(sol.placements.length).toBe(6);
+        test(`${opener} route ${ri} sol ${si}: placements cover all 7 piece types`, () => {
+          // Standard: 6 placements, 6 unique types, hold is 7th
+          // MS2 Bonus (7-piece): 7 placements with duplicate I, hold type also placed
+          const n = sol.placements.length;
+          expect(n === 6 || n === 7).toBe(true);
           const types = new Set(sol.placements.map(p => p.piece));
-          expect(types.size).toBe(6);
-          expect(types.has(sol.holdPiece)).toBe(false);
-          const allUsed = [...types, sol.holdPiece].sort();
-          expect(allUsed).toEqual([...ALL_PIECES].sort());
+          if (n === 6) {
+            expect(types.size).toBe(6);
+            expect(types.has(sol.holdPiece)).toBe(false);
+          } else {
+            // 7-piece: all 7 types placed, hold piece type appears in placed set
+            expect(types.size).toBe(n - 1); // one duplicate
+          }
+          const allTypes = new Set([...types, sol.holdPiece]);
+          expect([...allTypes].sort()).toEqual([...ALL_PIECES].sort());
         });
 
         test(`${opener} route ${ri} sol ${si}: each placement has 4 cells`, () => {

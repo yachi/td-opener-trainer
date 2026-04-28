@@ -364,9 +364,9 @@ describe('#3 bag2 route selection', () => {
   }
 
   test('bestBag2Route agrees with the reducer on a concrete bag2', () => {
-    // MS2 non-mirror, bag2 that forces setup_b: L before I and J.
+    // MS2 non-mirror, bag2 that forces setup_b: L before I and J, but J before I (so bonus_setup doesn't match).
     const bag1 = bagForTargetOpener('ms2', false);
-    const bag2: PieceType[] = ['L', 'Z', 'O', 'S', 'I', 'J', 'T'];
+    const bag2: PieceType[] = ['L', 'Z', 'O', 'S', 'J', 'I', 'T'];
     const best = bestBag2Route('ms2', false, bag2);
     expect(best.routeIndex).toBe(1); // setup_b
     let s = createSession(bag1, bag2);
@@ -683,7 +683,7 @@ describe('#11 cross-product smoke: opener × mirror × route', () => {
           expect(floating.length).toBe(0);
           let cellCount = 0;
           for (const row of s.board) for (const c of row) if (c !== null) cellCount++;
-          expect(cellCount).toBeGreaterThanOrEqual(4 * 6); // at least 6 pieces worth
+          expect(cellCount).toBeGreaterThanOrEqual(4 * 5); // at least 5 pieces worth (MS2 bonus has 22 cells)
           cases++;
         }
       }

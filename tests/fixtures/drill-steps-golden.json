@@ -177,6 +177,50 @@
   },
   {
     "opener": "honey_cup",
+    "mirror": false,
+    "routeId": "fb_o_top_right",
+    "bag1Reduction": 0,
+    "inputCount": 13,
+    "stepHints": [
+      "O bottom-right, cols 8-9",
+      "I flat, cols 0-3, bottom-left",
+      "Z flat, cols 4-6, bridges the gap",
+      "T CW rotation, col 7, creates TST overhang",
+      "L spawn, cols 0-2, on top of I piece",
+      "S spawn, tucks on top of L piece",
+      "J CCW rotation, right wall overhang",
+      "Z flat, cols 4-6",
+      "I vertical, col 0, left wall",
+      "S flat, cols 1-3",
+      "L vertical, cols 6-7",
+      "J vertical, cols 8-9",
+      "O flat, cols 8-9, top-right"
+    ]
+  },
+  {
+    "opener": "honey_cup",
+    "mirror": false,
+    "routeId": "fb_o_center",
+    "bag1Reduction": 0,
+    "inputCount": 13,
+    "stepHints": [
+      "O bottom-right, cols 8-9",
+      "I flat, cols 0-3, bottom-left",
+      "Z flat, cols 4-6, bridges the gap",
+      "T CW rotation, col 7, creates TST overhang",
+      "L spawn, cols 0-2, on top of I piece",
+      "S spawn, tucks on top of L piece",
+      "J CCW rotation, right wall overhang",
+      "Z flat, cols 4-6",
+      "S flat, cols 7-9",
+      "L horizontal, cols 0-2, bottom-left",
+      "I horizontal, cols 0-3",
+      "J flat, cols 6-8",
+      "O flat, cols 6-7, mid-right"
+    ]
+  },
+  {
+    "opener": "honey_cup",
     "mirror": true,
     "routeId": "ideal",
     "bag1Reduction": 0,
@@ -349,6 +393,50 @@
       "S flat, cols 1-3 (mirrored)",
       "O flat, cols 7-8 (mirrored)",
       "L horizontal, cols 7-9, right (mirrored)"
+    ]
+  },
+  {
+    "opener": "honey_cup",
+    "mirror": true,
+    "routeId": "fb_o_top_right",
+    "bag1Reduction": 0,
+    "inputCount": 13,
+    "stepHints": [
+      "O bottom-right, cols 8-9 (mirrored)",
+      "I flat, cols 0-3, bottom-left (mirrored)",
+      "Z flat, cols 4-6, bridges the gap (mirrored)",
+      "T CW rotation, col 7, creates TST overhang (mirrored)",
+      "L spawn, cols 0-2, on top of I piece (mirrored)",
+      "S spawn, tucks on top of L piece (mirrored)",
+      "J CCW rotation, right wall overhang (mirrored)",
+      "Z flat, cols 4-6 (mirrored)",
+      "I vertical, col 0, left wall (mirrored)",
+      "S flat, cols 1-3 (mirrored)",
+      "L vertical, cols 6-7 (mirrored)",
+      "J vertical, cols 8-9 (mirrored)",
+      "O flat, cols 8-9, top-right (mirrored)"
+    ]
+  },
+  {
+    "opener": "honey_cup",
+    "mirror": true,
+    "routeId": "fb_o_center",
+    "bag1Reduction": 0,
+    "inputCount": 13,
+    "stepHints": [
+      "O bottom-right, cols 8-9 (mirrored)",
+      "I flat, cols 0-3, bottom-left (mirrored)",
+      "Z flat, cols 4-6, bridges the gap (mirrored)",
+      "T CW rotation, col 7, creates TST overhang (mirrored)",
+      "L spawn, cols 0-2, on top of I piece (mirrored)",
+      "S spawn, tucks on top of L piece (mirrored)",
+      "J CCW rotation, right wall overhang (mirrored)",
+      "Z flat, cols 4-6 (mirrored)",
+      "S flat, cols 7-9 (mirrored)",
+      "L horizontal, cols 0-2, bottom-left (mirrored)",
+      "I horizontal, cols 0-3 (mirrored)",
+      "J flat, cols 6-8 (mirrored)",
+      "O flat, cols 6-7, mid-right (mirrored)"
     ]
   },
   {
@@ -661,6 +749,27 @@
   },
   {
     "opener": "ms2",
+    "mirror": false,
+    "routeId": "bonus_setup",
+    "bag1Reduction": 0,
+    "inputCount": 12,
+    "stepHints": [
+      "I vertical, col 0, left wall",
+      "T CW rotation, col 7, creates TST overhang",
+      "J spawn, cols 1-3, bottom-left foundation",
+      "S vertical, cols 1-2, stacks on I and J",
+      "Z flat, cols 4-6, center",
+      "O bottom-right, cols 8-9",
+      "Hold L, left wall vertical",
+      "Z flat, cols 4-6",
+      "O flat, cols 8-9, bottom-right",
+      "L horizontal, cols 1-3, top",
+      "J vertical, cols 2-3",
+      "S flat, cols 6-8"
+    ]
+  },
+  {
+    "opener": "ms2",
     "mirror": true,
     "routeId": "setup_a",
     "bag1Reduction": 0,
@@ -745,6 +854,27 @@
       "S flat, cols 7-9, top-right (mirrored)",
       "J horizontal, cols 0-2 (mirrored)",
       "I horizontal, cols 0-3 (mirrored)"
+    ]
+  },
+  {
+    "opener": "ms2",
+    "mirror": true,
+    "routeId": "bonus_setup",
+    "bag1Reduction": 0,
+    "inputCount": 12,
+    "stepHints": [
+      "I vertical, col 0, left wall (mirrored)",
+      "T CW rotation, col 7, creates TST overhang (mirrored)",
+      "J spawn, cols 1-3, bottom-left foundation (mirrored)",
+      "S vertical, cols 1-2, stacks on I and J (mirrored)",
+      "Z flat, cols 4-6, center (mirrored)",
+      "O bottom-right, cols 8-9 (mirrored)",
+      "Hold L, left wall vertical (mirrored)",
+      "Z flat, cols 4-6 (mirrored)",
+      "O flat, cols 8-9, bottom-right (mirrored)",
+      "L horizontal, cols 1-3, top (mirrored)",
+      "J vertical, cols 2-3 (mirrored)",
+      "S flat, cols 6-8 (mirrored)"
     ]
   },
   {
