@@ -269,7 +269,7 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `src/renderer/session.ts` — single phase-aware renderer, reads everything from Session (no static doctrinal reads except rule card + opener name). `drawReveal1Panel` shows user's held piece in manual mode (Bug #1 fix). 9 phase panels: guess1/reveal1/guess2/reveal2/guess3/reveal3/guess4/reveal4/reveal5. Nav bar with 5 contextual breadcrumb tabs (HC ✓, Rt 3/8, PC 2/4, DPC 1/6, PC —). `drawGuess4Panel`: hold picker sub-state shows 6 hold pieces (O,S,Z,I,J,L) with "1-6 pick"; set-hold sub-state lists DPC solutions with "D change hold" hint. `drawReveal4Panel` shows DPC build step-by-step with hold piece and "DPC Complete!" banner. `renderWelcome(ctx, now, dpcDirect)` draws the pre-session welcome screen (title, flow steps, keybinds, D key DPC toggle, pulsing CTA).
 - `src/renderer/board.ts` — canvas primitives, `COLORS` palette, `drawCell`, `drawPieceInBox`
 - `src/input/keyboard.ts` — dumb key→intent mapper. DAS/ARR timing lives here. Uses `isRevealPhase()` and `PHASE_META` from session.ts — no hardcoded phase strings. No phase-specific branching for SPACE/ENTER/digits (those dispatch intents; reducer interprets). `[`/`]` dispatch `jumpToBag`. D key dispatches `resetDpcHold`.
-- `src/openers/bag3-pc.ts` — Perfect Clear solutions for all 4 openers (route-keyed), `getPcSolutions(opener, mirror, routeIndex)`. HC: 10 solutions (8 routes). GM: 7 solutions (routes 0-3; route 4 no PC). MS2: 8 solutions (4 routes). SC: 3 solutions (routes 0,3; routes 1,2,4 no PC).
+- `src/openers/bag3-pc.ts` — Perfect Clear solutions for all 4 openers (route-keyed), `getPcSolutions(opener, mirror, routeIndex)`. HC: 12 solutions (10 routes). GM: 7 solutions (routes 0-3; route 4 no PC). MS2: 11 solutions (5 routes; route 4 bonus has 7-piece solutions with duplicate I). SC: 3 solutions (routes 0,3; routes 1,2,4 no PC).
 - `src/openers/bag4-dpc.ts` — DPC solutions for bags 4-5, `getDpcSolutions(holdPiece)`. Source: Hard Drop wiki DPC_Setups. 8 named setups + mirrors = 16 total. Hold coverage: O(4), S(2), Z(2), I(6), J(1), L(1), T(0). Normals stored for O/S/I/J; Z=mirror(S), L=mirror(J); O/I include self-mirrors. 14 TSD (clear 2 lines, 12 remaining), 2 TSS (J/L-hold TSM J SPC). All BFS-validated via buildSteps + replayPcSteps.
 - `src/openers/bag5-pc.ts` — Bag 5 PC solutions completing the DPC cycle, `getBag5PcSolution(holdPiece, dpcSolutionIndex)`. 8/16 DPC variants have exactly 1 bag 5 PC solution (O: 4, S: 1, Z: 1, I: 2). Shared boards: O-Kuruma = S-Kuruma, O-Kuruma Mirror = Z-Kuruma Mirror. All 7 pieces placed, BFS-validated via replayPcSteps. TSM J SPC variants (J/L-hold) have no bag 5 PC (22-cell post-TSS board needs 8 rows).
 - `src/app.ts` — thin entry: canvas setup, `setupKeyboard`, frame loop, welcome screen gate (`showWelcome` boolean — SPACE dismisses via `primary` intent). ~80 LOC.
@@ -282,10 +282,10 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 **Test infrastructure (L9 speed redesign — commit `c73efe0`, 377s → 18s):**
 - `tests/pbt-config.ts` — fast-check `configureGlobal` preload: dev=50 runs/5s cap, CI=2000 runs/60s cap
 - `scripts/generate-drill-golden.ts` — golden fixture generator for drill-queue (gofmt/rustc/Z3 pattern). Re-run when placement data changes.
-- `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 44 opener×mirror×route combos (25KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
+- `tests/fixtures/drill-steps-golden.json` — precomputed `buildSteps` output for all 50 opener×mirror×route combos (28KB). Source of truth = placement data, NOT code output. If code diverges, investigate — don't regenerate.
 - Scripts: `test:fast` (19 files, ~15s dev loop), `test:slow` (2 heavy files), `test:ci` (CI=true, full PBT ~60s)
 
-**Tests (29 files, 1700 tests, ~8.8K assertions, ~45s full suite):**
+**Tests (29 files, 1766 tests, ~9.0K assertions, ~40s full suite):**
 - `tests/guard-matrix.test.ts` — 399 tests, declarative guard matrix (21 actions × 16 contexts) + edge cases + phase metadata structural tests. Compile-time completeness: adding a new action without guard spec OR a new phase without PHASE_META entry is a type error.
 - `tests/diag-l9-session.test.ts` — 46 tests, Session reducer core actions (Phase 2.5 empirical proof for `9f4d8ae`)
 - `tests/diag-l9-manual.test.ts` — 45 tests, manual-play actions (Phase 2.5 for Reframing A+ `a02012e`)
@@ -295,13 +295,13 @@ If not resting, the placement order is wrong. Use permutation solver to find val
 - `tests/diag-l9-stamp.test.ts` — 66 tests, historical stamp proof (retained; local inline `stampSteps` still exercises the cell-data contract)
 - `tests/diag-l9-board-oracle.test.ts` — 88 tests, assembled board occupancy vs wiki pfrow data
 - `tests/diag-l9-engine-gateway.test.ts` — 7 tests, architecture boundary (session.ts doesn't import raw placement functions), PC manual hardDrop with line clears, reveal2 TST auto-advance
-- `tests/diag-l9-pc-routes.test.ts` — 264 tests, route-specific PC proof for all 4 openers: solution counts match expected (§1), every solution achieves Perfect Clear (§2), every placement BFS-reachable (§3), structural invariants (§4)
+- `tests/diag-l9-pc-routes.test.ts` — 300 tests, route-specific PC proof for all 4 openers: solution counts match expected (§1), every solution achieves Perfect Clear (§2), every placement BFS-reachable (§3), structural invariants including 7-piece MS2 Bonus (§4)
 - `tests/diag-l9-dpc-data.test.ts` — 44 tests, Hard Drop DPC data proof: solution counts per hold (§1), TSD validation (§2), BFS reachability (§3), mirror symmetry S↔Z/J↔L/O+I self-mirror (§4)
 - `tests/diag-l9-bag5-pc.test.ts` — 44 tests, bag 5 PC proof: solution existence (§1), Perfect Clear achieved (§2), BFS reachability (§3), all 7 pieces used (§4), shared board references (§5)
 - `tests/diag-l9-dpc-hold-picker.test.ts` — 30 tests, DPC hold picker proof: createDpcSession(null) (§1), isDpcDirectSession widened (§2), pick sets hold (§3), resetDpcHold (§4), full lifecycle (§5), invariants (§6), edge cases (§7)
 - `tests/diag-l9-nav.test.ts` — 29 tests, phase navigation: snapshot saving (§1), jumpToBag semantics (§2), invariant safety (§3), causal invalidation (§4)
 - `tests/diag-l9-snapshot-centralize.test.ts` — 13 tests, centralized deriveSnapshots proof: consistency invariant (§2), SNAPSHOT_DEPS structural (§3), invariant 9b load-bearing (§4)
-- `tests/diag-drill-queue.test.ts` — 169 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
+- `tests/diag-drill-queue.test.ts` — 175 tests, drill-queue ordering. Diag 4 uses golden fixture (was 131s×2 DFS exhaustion, now <1s fixture read).
 - `tests/keyboard.test.ts` — 73 tests, input→dispatch mapping + DAS/ARR timing + nav keys (browser-free)
 - `tests/render-contract.test.ts` — 44 tests, recording canvas proxy verifies state→render contract (browser-free)
 - `tests/acceptance.test.ts` — gravity, cell count, wiki oracle (uses `route.bag1Reduction` metadata)
