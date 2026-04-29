@@ -15,6 +15,11 @@
  * All setups BFS-validated via replayPcSteps. TSD setups clear 2 lines,
  * leaving 12 cells for bag 5 to complete PC.
  *
+ * T-hold has 0 solutions: the only wiki T-hold setup (OSZ Ball) requires
+ * 180° rotation for S placement, which standard SRS (CW/CCW only) cannot reach.
+ * OSZ Ball also scores 0% T-Spin chance (worst of all DPC setups), and the
+ * bag 3 PC solver never naturally holds T. Re-open if 180° SRS is ever added.
+ *
  * Parallel to bag3-pc.ts in structure.
  */
 

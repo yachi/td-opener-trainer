@@ -115,7 +115,8 @@ export function isDpcDirectSession(s: Session): boolean {
   return s.guess === null && (s.dpcHoldPiece !== null || s.phase === 'guess4');
 }
 
-/** Valid hold pieces for DPC (all pieces with ≥1 DPC solution). T has 0. */
+/** Valid hold pieces for DPC (all pieces with ≥1 DPC solution).
+ *  T excluded: only wiki T-hold setup (OSZ Ball) requires 180° rotation. */
 export const DPC_HOLD_PIECES: PieceType[] = ['O', 'S', 'Z', 'I', 'J', 'L'];
 
 /** Derive DPC solutions available from the current session state. */
