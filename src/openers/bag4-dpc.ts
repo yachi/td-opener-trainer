@@ -15,10 +15,11 @@
  * All setups BFS-validated via replayPcSteps. TSD setups clear 2 lines,
  * leaving 12 cells for bag 5 to complete PC.
  *
- * T-hold has 0 solutions: the only wiki T-hold setup (OSZ Ball) requires
- * 180° rotation for S placement, which standard SRS (CW/CCW only) cannot reach.
- * OSZ Ball also scores 0% T-Spin chance (worst of all DPC setups), and the
- * bag 3 PC solver never naturally holds T. Re-open if 180° SRS is ever added.
+ * T-hold has 0 solutions: tested 99 variants from Hard Drop (OSZ Ball) and
+ * tetristemplate.info (Intai Cannon, O→L, L→O+L→S, L→O+S→L, Gasho TSD).
+ * All fail standard SRS BFS — setups have intermediate line clears during the
+ * 7-piece build phase, shifting cell positions so ≥1 piece becomes unreachable.
+ * OSZ Ball additionally requires 180° rotation. Bag 3 PC never naturally holds T.
  *
  * Parallel to bag3-pc.ts in structure.
  */
