@@ -53,7 +53,7 @@ import { getBag2Sequence } from './openers/sequences.ts';
 import { OPENERS, bestOpener, bestBag2Route } from './openers/decision.ts';
 import { getPcSolutions } from './openers/bag3-pc.ts';
 import { getDpcSolutions, type DpcSolution } from './openers/bag4-dpc.ts';
-import { getBag5PcSolution } from './openers/bag5-pc.ts';
+import { getBag5PcSolution, getBag5PcSolutions } from './openers/bag5-pc.ts';
 
 // ── Public types ──────────────────────────────────────────────────────────
 
@@ -105,6 +105,7 @@ export interface RevealSnapshot {
   routeGuess: number;
   pcSolutionIndex: number;
   dpcSolutionIndex: number;
+  bag5PcSolutionIndex: number;
 }
 
 /** True when the session was created via DPC-direct (no opener context).
@@ -148,6 +149,8 @@ export interface Session {
   pcSolutionIndex: number;
   /** DPC solution index selected during guess4 (-1 if not yet selected). */
   dpcSolutionIndex: number;
+  /** Bag 5 PC solution index selected in reveal5 (-1 if not yet selected). */
+  bag5PcSolutionIndex: number;
   /** Hold piece for DPC. Set by advancePhase reveal3→guess4 (normal flow)
    *  or by createDpcSession (DPC-direct). null when DPC not yet reached. */
   dpcHoldPiece: PieceType | null;
@@ -178,9 +181,9 @@ export interface Session {
 /**
  * Discriminated union of every reducer action.
  *
- *   - 11 session-level: newSession, setGuess, toggleMirror, submitGuess,
+ *   - 12 session-level: newSession, setGuess, toggleMirror, submitGuess,
  *     stepForward, stepBackward, advancePhase, togglePlayMode, selectRoute,
- *     selectPcSolution, resetDpcHold
+ *     selectPcSolution, selectBag5PcSolution, resetDpcHold
  *   - 5 manual-play: movePiece, rotatePiece, hardDrop, hold, softDrop
  *   - 2 intent actions: primary, pick
  *
@@ -202,6 +205,7 @@ export type SessionAction =
   | { type: 'selectRoute'; routeIndex: number }
   | { type: 'selectPcSolution'; solutionIndex: number }
   | { type: 'selectDpcSolution'; solutionIndex: number }
+  | { type: 'selectBag5PcSolution'; solutionIndex: number }
   | { type: 'resetDpcHold' }
   | { type: 'browseOpener'; opener: OpenerID; mirror: boolean }
   // ── Reframing A+ manual-play actions ──
@@ -376,15 +380,21 @@ export function assertSessionInvariants(s: Session): void {
     }
   }
 
-  // ── 3d. reveal5 requires a valid bag 5 PC solution ──
+  // ── 3d. reveal5 requires a valid bag 5 PC solution index ──
   if (s.phase === 'reveal5') {
     if (s.dpcHoldPiece === null) {
       throw new InvariantViolation('reveal5 requires dpcHoldPiece', s);
     }
-    const bag5Sol = getBag5PcSolution(s.dpcHoldPiece, s.dpcSolutionIndex);
-    if (!bag5Sol) {
+    const bag5Sols = getBag5PcSolutions(s.dpcHoldPiece, s.dpcSolutionIndex);
+    if (bag5Sols.length === 0) {
       throw new InvariantViolation(
-        `reveal5 requires bag5 PC solution (hold=${s.dpcHoldPiece}, dpcIdx=${s.dpcSolutionIndex})`,
+        `reveal5 requires bag5 PC solutions (hold=${s.dpcHoldPiece}, dpcIdx=${s.dpcSolutionIndex})`,
+        s,
+      );
+    }
+    if (s.bag5PcSolutionIndex < 0 || s.bag5PcSolutionIndex >= bag5Sols.length) {
+      throw new InvariantViolation(
+        `reveal5 bag5PcSolutionIndex (${s.bag5PcSolutionIndex}) out of range [0, ${bag5Sols.length})`,
         s,
       );
     }
@@ -537,6 +547,7 @@ export function createSession(
     routeGuess: -1,
     pcSolutionIndex: -1,
     dpcSolutionIndex: -1,
+    bag5PcSolutionIndex: -1,
     dpcHoldPiece: null,
     activePiece: null,
     holdPiece: null,
@@ -808,8 +819,9 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
       // reveal4 → reveal5 (if bag 5 PC exists) or restart.
       if (state.phase === 'reveal4') {
         if (state.dpcHoldPiece) {
-          const bag5Sol = getBag5PcSolution(state.dpcHoldPiece, state.dpcSolutionIndex);
-          if (bag5Sol) {
+          const bag5Sols = getBag5PcSolutions(state.dpcHoldPiece, state.dpcSolutionIndex);
+          if (bag5Sols.length > 0) {
+            const bag5Sol = bag5Sols[0]!;
             // Compute post-TSD board from the DPC cachedSteps.
             const postTsdBoard =
               state.cachedSteps.length > 0
@@ -826,6 +838,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
               cachedSteps: pcSteps,
               step: 0,
               baseBoard: cloneBoard(postTsdBoard),
+              bag5PcSolutionIndex: 0,
               activePiece,
               holdPiece: null,
               holdUsed: false,
@@ -980,6 +993,41 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         step: 0,
         baseBoard: emptyBoard(),
         activePiece,
+        holdPiece: null,
+        holdUsed: false,
+      };
+    }
+
+    case 'selectBag5PcSolution': {
+      if (state.phase !== 'reveal5' || state.playMode !== 'auto') return state;
+      if (state.bag5PcSolutionIndex === action.solutionIndex) return state;
+      if (!state.dpcHoldPiece) return state;
+
+      const bag5Sols = getBag5PcSolutions(state.dpcHoldPiece, state.dpcSolutionIndex);
+      if (
+        !Number.isInteger(action.solutionIndex) ||
+        action.solutionIndex < 0 ||
+        action.solutionIndex >= bag5Sols.length
+      ) {
+        return state;
+      }
+
+      const solution = bag5Sols[action.solutionIndex]!;
+      // Recompute post-TSD board from the DPC solution.
+      const dpcSolutions = getDpcSolutionsForSession(state);
+      const dpcSol = dpcSolutions[state.dpcSolutionIndex];
+      if (!dpcSol) return state;
+      const postTsdBoard = replayPcSteps(emptyBoard(), dpcSol.placements);
+      const postTsdFinal = cloneBoard(postTsdBoard[postTsdBoard.length - 1]!.board);
+      const pcSteps = replayPcSteps(postTsdFinal, solution.placements);
+
+      return {
+        ...state,
+        bag5PcSolutionIndex: action.solutionIndex,
+        cachedSteps: pcSteps,
+        step: 0,
+        baseBoard: cloneBoard(postTsdFinal),
+        activePiece: null,
         holdPiece: null,
         holdUsed: false,
       };
@@ -1161,6 +1209,7 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
         routeGuess: snap.routeGuess,
         pcSolutionIndex: snap.pcSolutionIndex,
         dpcSolutionIndex: snap.dpcSolutionIndex,
+        bag5PcSolutionIndex: snap.bag5PcSolutionIndex,
         step: 0,
         activePiece: state.playMode === 'manual'
           ? spawnForCurrentStep(snap.cachedSteps, 0)
@@ -1344,6 +1393,21 @@ function _rawSessionReducer(state: Session, action: SessionAction): Session {
             solutionIndex: action.index,
           });
         }
+        case 'reveal5': {
+          if (state.playMode !== 'auto' || !state.dpcHoldPiece) return state;
+          const bag5SolsForPick = getBag5PcSolutions(state.dpcHoldPiece, state.dpcSolutionIndex);
+          if (
+            !Number.isInteger(action.index) ||
+            action.index < 0 ||
+            action.index >= bag5SolsForPick.length
+          ) {
+            return state;
+          }
+          return _rawSessionReducer(state, {
+            type: 'selectBag5PcSolution',
+            solutionIndex: action.index,
+          });
+        }
       }
     }
 
@@ -1392,6 +1456,7 @@ function deriveBoard(state: Session): Session {
  *   reveal2 ← (routeGuess) + all reveal1 deps
  *   reveal3 ← (pcSolutionIndex) + all reveal2 deps
  *   reveal4 ← (dpcSolutionIndex) + all reveal3 deps
+ *   reveal5 ← (bag5PcSolutionIndex, dpcSolutionIndex) + all reveal4 deps
  *
  * Rules:
  *   SAVE: entering a reveal phase with new cachedSteps → save snapshot
@@ -1439,6 +1504,13 @@ function deriveSnapshots(prev: Session, next: Session, action: SessionAction): S
     changed = true;
   }
 
+  // CLEAR: bag5PcSolutionIndex changed → clear reveal5 (re-select within reveal5)
+  if (prev.bag5PcSolutionIndex !== next.bag5PcSolutionIndex && snapshots.reveal5) {
+    snapshots = changed ? snapshots : { ...snapshots };
+    snapshots.reveal5 = undefined;
+    changed = true;
+  }
+
   // SAVE: if in a reveal phase with new cachedSteps, save snapshot for current phase
   if (isRevealPhase(next.phase) && next.cachedSteps !== prev.cachedSteps) {
     const key = next.phase as 'reveal1' | 'reveal2' | 'reveal3' | 'reveal4' | 'reveal5';
@@ -1449,6 +1521,7 @@ function deriveSnapshots(prev: Session, next: Session, action: SessionAction): S
       routeGuess: next.routeGuess,
       pcSolutionIndex: next.pcSolutionIndex,
       dpcSolutionIndex: next.dpcSolutionIndex,
+      bag5PcSolutionIndex: next.bag5PcSolutionIndex,
     };
     changed = true;
   }

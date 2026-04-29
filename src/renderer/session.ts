@@ -46,7 +46,7 @@ import { getBag2Routes } from '../openers/bag2-routes';
 import { getBag2Sequence } from '../openers/sequences';
 import { getBag3Hint } from '../openers/bag3-hints';
 import { getPcSolutions } from '../openers/bag3-pc';
-import { getBag5PcSolution } from '../openers/bag5-pc';
+import { getBag5PcSolution, getBag5PcSolutions } from '../openers/bag5-pc';
 import type { Board } from '../core/srs';
 import { isRevealPhase, PHASE_META, getDpcSolutionsForSession, DPC_HOLD_PIECES, type Session } from '../session';
 
@@ -412,11 +412,17 @@ function navLabels(session: Session): [string, string, string, string, string] {
   } else if (session.dpcHoldPiece && session.dpcSolutionIndex < 0) {
     bag4 = `DPC (${session.dpcHoldPiece})`;
   }
-  // Bag 5: PC completion status
+  // Bag 5: PC solution position
   let bag5 = 'Bag 5';
   if (session.dpcHoldPiece && session.dpcSolutionIndex >= 0) {
-    const hasPc = !!getBag5PcSolution(session.dpcHoldPiece, session.dpcSolutionIndex);
-    bag5 = hasPc ? 'PC' : 'PC —';
+    const bag5Sols = getBag5PcSolutions(session.dpcHoldPiece, session.dpcSolutionIndex);
+    if (bag5Sols.length === 0) {
+      bag5 = 'PC —';
+    } else if (session.bag5PcSolutionIndex >= 0) {
+      bag5 = `PC ${session.bag5PcSolutionIndex + 1}/${bag5Sols.length}`;
+    } else {
+      bag5 = 'PC';
+    }
   }
   return [bag1, bag2, bag3, bag4, bag5];
 }
@@ -1400,6 +1406,17 @@ function drawReveal5Panel(
       );
       y += PANEL_LINE_H + 4;
     }
+    // Solution counter (like reveal3 shows "Solution 1/3").
+    const bag5Sols = getBag5PcSolutions(session.dpcHoldPiece, session.dpcSolutionIndex);
+    if (bag5Sols.length > 1) {
+      drawPanelLine(
+        ctx,
+        `Solution ${session.bag5PcSolutionIndex + 1}/${bag5Sols.length}`,
+        y,
+        COLORS.panelText,
+      );
+      y += PANEL_LINE_H + 4;
+    }
   }
 
   // Step counter.
@@ -1515,7 +1532,11 @@ function keybindHintForSession(session: Session): string {
       if (session.playMode === 'manual') {
         return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
       }
-      return `\u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+      const bag5N = session.dpcHoldPiece
+        ? getBag5PcSolutions(session.dpcHoldPiece, session.dpcSolutionIndex).length
+        : 1;
+      const solHint = bag5N > 1 ? `1-${bag5N} solution  ` : '';
+      return `${solHint}\u2190\u2192 step  SPACE next  P manual  R new${nav}`;
     }
   }
 }

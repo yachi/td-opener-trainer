@@ -58,7 +58,7 @@ import type { PieceType } from '../src/core/types.ts';
 const ACTION_TYPES = [
   'newSession', 'setGuess', 'toggleMirror', 'submitGuess',
   'stepForward', 'stepBackward', 'advancePhase', 'togglePlayMode',
-  'selectRoute', 'selectPcSolution', 'selectDpcSolution', 'resetDpcHold',
+  'selectRoute', 'selectPcSolution', 'selectDpcSolution', 'selectBag5PcSolution', 'resetDpcHold',
   'browseOpener',
   'movePiece', 'rotatePiece', 'hardDrop', 'hold', 'softDrop',
   'jumpToBag',
@@ -180,6 +180,7 @@ function buildAction(type: ActionType): SessionAction {
     case 'selectRoute':     return { type: 'selectRoute', routeIndex: 1 };
     case 'selectPcSolution': return { type: 'selectPcSolution', solutionIndex: 1 };
     case 'selectDpcSolution': return { type: 'selectDpcSolution', solutionIndex: 1 };
+    case 'selectBag5PcSolution': return { type: 'selectBag5PcSolution', solutionIndex: 1 };
     case 'resetDpcHold':    return { type: 'resetDpcHold' };
     case 'browseOpener':    return { type: 'browseOpener', opener: 'stray_cannon', mirror: false };
     case 'movePiece':       return { type: 'movePiece', dx: -1, dy: 0 };
@@ -351,6 +352,19 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal5_auto: 'identity', reveal5_manual: 'identity',
   },
 
+  selectBag5PcSolution: {
+    // selectBag5PcSolution: accepted in reveal5 auto only (re-pick PC solution).
+    guess1_auto: 'identity', guess1_manual: 'identity',
+    reveal1_auto: 'identity', reveal1_manual: 'identity',
+    guess2_auto: 'identity', guess2_manual: 'identity',
+    reveal2_auto: 'identity', reveal2_manual: 'identity',
+    guess3_auto: 'identity', guess3_manual: 'identity',
+    reveal3_auto: 'identity', reveal3_manual: 'identity',
+    guess4_auto: 'identity', guess4_manual: 'identity',
+    reveal4_auto: 'identity', reveal4_manual: 'identity',
+    reveal5_auto: 'change', reveal5_manual: 'identity',
+  },
+
   resetDpcHold: {
     // resetDpcHold: only accepted in DPC-direct sessions. buildState creates
     // normal-flow sessions (opener context), so identity everywhere here.
@@ -494,7 +508,7 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     // guess4: selectDpcSolution → change (O-hold DPC data exists)
     // reveal4 auto: selectDpcSolution → change (can re-pick)
     // reveal4/5 manual: no-op (safe zone)
-    // reveal5: no pick support (single solution) → identity
+    // reveal5 auto: selectBag5PcSolution → change (pick(1) = solution 1, if multiple exist)
     guess1_auto: 'change', guess1_manual: 'change',
     reveal1_auto: 'change', reveal1_manual: 'identity',
     guess2_auto: 'change', guess2_manual: 'change',
@@ -503,7 +517,7 @@ const GUARD_MATRIX: Record<ActionType, Record<Context, Expectation>> = {
     reveal3_auto: 'change', reveal3_manual: 'identity',
     guess4_auto: 'change', guess4_manual: 'change',
     reveal4_auto: 'change', reveal4_manual: 'identity',
-    reveal5_auto: 'identity', reveal5_manual: 'identity',
+    reveal5_auto: 'change', reveal5_manual: 'identity',
   },
 };
 
