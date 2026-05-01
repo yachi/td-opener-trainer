@@ -1481,62 +1481,63 @@ function keybindHintForSession(session: Session): string {
   const canJumpPrev = bag > 1 && !!(snaps as Record<string, unknown>)[`reveal${bag - 1}`];
   const canJumpNext = bag < 5 && !!(snaps as Record<string, unknown>)[`reveal${bag + 1}`];
   const nav = canJumpPrev || canJumpNext ? '  [/] nav' : '';
+  const esc = '  ESC menu';
 
   switch (session.phase) {
     case 'guess1':
-      return '1/2/3/4 opener  M mirror  ENTER submit  R new bag';
+      return `1/2/3/4 opener  M mirror  ENTER submit  R new bag${esc}`;
     case 'reveal1':
       return session.playMode === 'manual'
-        ? '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new'
-        : `1-4 opener  M mirror  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+        ? `\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new${esc}`
+        : `1-4 opener  M mirror  \u2190\u2192 step  SPACE next  P manual  R new${nav}${esc}`;
     case 'guess2': {
       const n = session.guess
         ? getBag2Routes(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} select route  SPACE best  R new bag${nav}`;
+      return `1-${n} select route  SPACE best  R new bag${nav}${esc}`;
     }
     case 'reveal2': {
       if (session.playMode === 'manual') {
-        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+        return `\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new${esc}`;
       }
       const n = session.guess
         ? getBag2Routes(session.guess.opener, session.guess.mirror).length
         : 4;
-      return `1-${n} route  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+      return `1-${n} route  \u2190\u2192 step  SPACE next  P manual  R new${nav}${esc}`;
     }
     case 'guess3': {
       const n = session.guess
         ? getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess).length
         : 4;
-      return `1-${n} pick  SPACE first  R new bag${nav}`;
+      return `1-${n} pick  SPACE first  R new bag${nav}${esc}`;
     }
     case 'reveal3': {
       if (session.playMode === 'manual') {
-        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+        return `\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new${esc}`;
       }
       const n = session.guess
         ? getPcSolutions(session.guess.opener, session.guess.mirror, session.routeGuess).length
         : 4;
-      return `1-${n} solution  \u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+      return `1-${n} solution  \u2190\u2192 step  SPACE next  P manual  R new${nav}${esc}`;
     }
     case 'guess4': {
-      return `1-9 pick DPC  SPACE skip  R new bag${nav}`;
+      return `1-9 pick DPC  SPACE skip  R new bag${nav}${esc}`;
     }
     case 'reveal4': {
       if (session.playMode === 'manual') {
-        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+        return `\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new${esc}`;
       }
-      return `\u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+      return `\u2190\u2192 step  SPACE next  P manual  R new${nav}${esc}`;
     }
     case 'reveal5': {
       if (session.playMode === 'manual') {
-        return '\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new';
+        return `\u2190\u2192 move  Z/X rotate  SPACE drop  C hold  P auto  R new${esc}`;
       }
       const bag5N = session.dpcHoldPiece
         ? getBag5PcSolutions(session.dpcHoldPiece, session.dpcSolutionIndex).length
         : 1;
       const solHint = bag5N > 1 ? `1-${bag5N} solution  ` : '';
-      return `${solHint}\u2190\u2192 step  SPACE next  P manual  R new${nav}`;
+      return `${solHint}\u2190\u2192 step  SPACE next  P manual  R new${nav}${esc}`;
     }
   }
 }

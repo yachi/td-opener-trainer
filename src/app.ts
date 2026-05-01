@@ -76,6 +76,17 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// Escape key: return to welcome screen from any session.
+window.addEventListener('keydown', (e) => {
+  if (showWelcome) return;
+  if (e.code === 'Escape') {
+    e.preventDefault();
+    showWelcome = true;
+    session = createSession();
+    dirty = true;
+  }
+});
+
 // ── Render loop ──
 
 function frame(now: number): void {
